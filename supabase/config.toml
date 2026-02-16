@@ -2,3 +2,6 @@ project_id = "wbtpefszwywgmnqssrgx"
 
 [functions.alert-ingest]
 verify_jwt = false
+
+[functions.alert-escalation-worker]
+verify_jwt = false
