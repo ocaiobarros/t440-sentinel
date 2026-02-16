@@ -806,7 +806,7 @@
   "refresh": "4m",
   "schemaVersion": 39,
   "style": "dark",
-  "tags": ["idrac", "dell", "zabbix", "noc", "flowbix"],
+  "tags": ["idrac", "dell", "zabbix", "noc", "flowpulse"],
   "templating": {
     "list": [
       {
@@ -848,8 +848,8 @@
   "time": { "from": "now-6h", "to": "now" },
   "timepicker": {},
   "timezone": "browser",
-  "title": "FLOWBIX | iDRAC — T440-MDP",
-  "uid": "flowbix-idrac-t440",
+  "title": "FLOWPULSE | iDRAC — T440-MDP",
+  "uid": "flowpulse-idrac-t440",
   "version": 1,
   "weekStart": ""
 }
