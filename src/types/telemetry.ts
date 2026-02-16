@@ -1,7 +1,9 @@
 /**
- * Canonical telemetry envelope.
+ * Canonical telemetry envelope — v1.
  * One payload serves stat, gauge, timeseries, table, and text widgets.
  */
+
+export const TELEMETRY_CONTRACT_VERSION = 1;
 
 export type TelemetryType = "stat" | "gauge" | "timeseries" | "table" | "text";
 
@@ -13,7 +15,7 @@ export interface TelemetryPoint {
 export interface TelemetryStatData {
   value: number;
   unit?: string;
-  trend?: number;        // delta vs previous
+  trend?: number;
   min?: number;
   max?: number;
 }
@@ -23,7 +25,7 @@ export interface TelemetryGaugeData {
   min?: number;
   max?: number;
   unit?: string;
-  thresholds?: number[]; // e.g. [60, 80, 95]
+  thresholds?: number[];
 }
 
 export interface TelemetryTimeseriesData {
@@ -49,13 +51,15 @@ export type TelemetryData =
   | TelemetryTableData
   | TelemetryTextData;
 
+/** Canonical envelope — what producers send to the Reactor */
 export interface TelemetryEnvelope {
   tenant_id: string;
   dashboard_id: string;
-  key: string;            // dedupe-stable key, e.g. "zbx:host=123:item=456:avg1m"
+  key: string;            // dedupe-stable, e.g. "zbx:host=123:item=456:avg1m"
   type: TelemetryType;
   data: TelemetryData;
-  ts: number;             // epoch ms
+  ts: number;             // epoch ms (server sets if missing)
+  v: number;              // contract version
   meta?: Record<string, unknown>;
 }
 
@@ -66,4 +70,14 @@ export interface TelemetryBroadcast {
   type: TelemetryType;
   data: TelemetryData;
   ts: number;
+  v: number;
+}
+
+/** Replay response shape */
+export interface TelemetryReplayEntry {
+  key: string;
+  type: TelemetryType;
+  data: TelemetryData;
+  ts: number;
+  v: number;
 }

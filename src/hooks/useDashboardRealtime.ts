@@ -7,6 +7,7 @@ export interface TelemetryCacheEntry {
   type: TelemetryType;
   data: TelemetryData;
   ts: number;
+  v: number;
   receivedAt: number;
 }
 
@@ -23,8 +24,9 @@ interface UseDashboardRealtimeOptions {
 /**
  * Hook: 1 Realtime channel per dashboard.
  * - Receives DATA_UPDATE broadcasts from the Reactor
- * - Maintains a per-key cache with ts-based dedup (drop older)
+ * - Maintains a per-key cache with ts-based dedup (drop older — monotonic guaranteed by backend)
  * - Throttled flush to avoid render storms
+ * - Supports warm start via seedCache() from replay endpoint
  */
 export function useDashboardRealtime({
   dashboardId,
@@ -42,7 +44,7 @@ export function useDashboardRealtime({
     const cache = cacheRef.current;
     const existing = cache.get(payload.key);
 
-    // Drop older timestamps (anti-drift)
+    // Drop older timestamps (backend guarantees monotonic per key)
     if (existing && existing.ts >= payload.ts) return;
 
     cache.set(payload.key, {
@@ -50,6 +52,7 @@ export function useDashboardRealtime({
       type: payload.type,
       data: payload.data,
       ts: payload.ts,
+      v: payload.v ?? 1,
       receivedAt: Date.now(),
     });
 
@@ -63,7 +66,6 @@ export function useDashboardRealtime({
     const interval = setInterval(() => {
       if (dirtyRef.current) {
         dirtyRef.current = false;
-        // Send a shallow copy so consumers can detect change
         onUpdateRef.current(new Map(cacheRef.current));
       }
     }, flushIntervalMs);
@@ -90,7 +92,7 @@ export function useDashboardRealtime({
     };
   }, [enabled, dashboardId, handleBroadcast]);
 
-  /** Seed cache from initial snapshot (e.g. from TanStack Query) */
+  /** Seed cache from replay or initial snapshot. Only updates if ts is newer. */
   const seedCache = useCallback(
     (entries: TelemetryCacheEntry[]) => {
       const cache = cacheRef.current;
