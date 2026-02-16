@@ -79,7 +79,7 @@ const Index = () => {
         {/* Footer */}
         <div className="text-center py-4">
           <p className="text-[10px] font-mono text-muted-foreground/50">
-            FLOWBIX | iDRAC — T440-MDP • Datasource: Zabbix-MDP • Refresh: 4min
+            FLOWPULSE | iDRAC — T440-MDP • Datasource: Zabbix-MDP • Refresh: 4min
           </p>
         </div>
       </div>

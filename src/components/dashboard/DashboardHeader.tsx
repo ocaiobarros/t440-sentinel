@@ -23,7 +23,7 @@ const DashboardHeader = () => {
           </div>
           <div>
             <h1 className="font-display text-xl font-bold tracking-wider">
-              <span className="text-neon-green text-glow-green">FLOWBIX</span>
+              <span className="text-neon-green text-glow-green">FLOWPULSE</span>
               <span className="text-muted-foreground mx-2">|</span>
               <span className="text-foreground">iDRAC</span>
               <span className="text-muted-foreground mx-2">—</span>
