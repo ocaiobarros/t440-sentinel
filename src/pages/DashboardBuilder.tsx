@@ -189,16 +189,16 @@ export default function DashboardBuilder() {
   // CRITICAL: We ONLY update widget positions on drag/resize STOP events.
   // We do NOT use onLayoutChange because it fires on every width recalculation
   // (e.g. when sidebar opens/closes), which would corrupt saved widget sizes.
-  const isDraggingRef = useRef(false);
-  const dragTimerRef = useRef<ReturnType<typeof setTimeout>>();
+  // Track drag/resize to distinguish from clicks.
+  // We use a counter that increments on start and check on click.
+  const interactionCountRef = useRef(0);
+  const clickInteractionRef = useRef(0);
 
   const handleDragResizeStart = useCallback(() => {
-    isDraggingRef.current = true;
-    if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
+    interactionCountRef.current += 1;
   }, []);
 
   const handleDragStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
-    // Only update position, preserve original width/height from config
     setConfig((prev) => ({
       ...prev,
       widgets: prev.widgets.map((w) => {
@@ -206,11 +206,9 @@ export default function DashboardBuilder() {
         return { ...w, x: newItem.x, y: newItem.y };
       }),
     }));
-    dragTimerRef.current = setTimeout(() => { isDraggingRef.current = false; }, 200);
   }, []);
 
   const handleResizeStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
-    // Update both position AND size on explicit user resize
     setConfig((prev) => ({
       ...prev,
       widgets: prev.widgets.map((w) => {
@@ -218,12 +216,17 @@ export default function DashboardBuilder() {
         return { ...w, x: newItem.x, y: newItem.y, w: newItem.w, h: newItem.h };
       }),
     }));
-    dragTimerRef.current = setTimeout(() => { isDraggingRef.current = false; }, 200);
   }, []);
 
-  // Click handler — opens sidebar to config panel on explicit click (not after drag/resize)
+  // On mousedown on widget, snapshot the interaction counter.
+  // On click, if counter changed → was a drag, suppress. Otherwise open config.
+  const handleWidgetMouseDown = useCallback(() => {
+    clickInteractionRef.current = interactionCountRef.current;
+  }, []);
+
   const handleWidgetClick = useCallback((widgetId: string) => {
-    if (isDraggingRef.current) return;
+    if (clickInteractionRef.current !== interactionCountRef.current) return; // drag/resize happened
+    console.log("Widget clicked for edit:", widgetId);
     setSelectedWidgetId(widgetId);
     setSidebarMode("config");
     setSidebarOpen(true);
@@ -478,7 +481,7 @@ export default function DashboardBuilder() {
                 useCSSTransforms
               >
                 {config.widgets.map((widget) => (
-                  <div key={widget.id}>
+                  <div key={widget.id} onMouseDown={handleWidgetMouseDown}>
                     <WidgetPreviewCard
                       widget={widget}
                       isSelected={selectedWidgetId === widget.id}
