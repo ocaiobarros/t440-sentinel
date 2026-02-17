@@ -1,7 +1,7 @@
-import { motion } from "framer-motion";
+import { motion, useSpring, useTransform } from "framer-motion";
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
-import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
+import { extractRawValue } from "@/lib/telemetry-utils";
 
 interface Props {
   telemetryKey: string;
@@ -23,12 +23,19 @@ export default function ProgressWidget({ telemetryKey, title, cache, config }: P
   // Use color map for thresholds or just default
   let barColor = defaultColor;
   if (colorMap) {
-    // Find the highest threshold key that the value exceeds
     const thresholds = Object.keys(colorMap).map(Number).filter(n => !isNaN(n)).sort((a, b) => b - a);
     for (const t of thresholds) {
-      if (numValue >= t) { barColor = colorMap[String(t)]; break; }
+      if (numValue >= t) { 
+        const entry = colorMap[String(t)];
+        barColor = typeof entry === "string" ? entry : (entry as any)?.color || defaultColor;
+        break; 
+      }
     }
   }
+
+  // Smooth animation
+  const springPct = useSpring(pct, { stiffness: 80, damping: 20 });
+  const widthStr = useTransform(springPct, (v) => `${v}%`);
 
   return (
     <motion.div
@@ -47,11 +54,9 @@ export default function ProgressWidget({ telemetryKey, title, cache, config }: P
       <div className="h-3 rounded-full bg-muted overflow-hidden">
         <motion.div
           className="h-full rounded-full"
-          initial={{ width: 0 }}
-          animate={{ width: `${pct}%` }}
-          transition={{ duration: 0.6, ease: "easeOut" }}
           style={{
-            background: barColor,
+            width: widthStr,
+            background: `linear-gradient(90deg, ${barColor}CC, ${barColor})`,
             boxShadow: `0 0 8px ${barColor}80`,
           }}
         />

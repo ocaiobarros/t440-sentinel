@@ -107,8 +107,8 @@ export interface ImageHotspot {
   size?: number;
   /** Shape of the hotspot */
   shape?: "circle" | "square" | "bar-h" | "bar-v";
-  /** Color mapping: value→color pairs (e.g., { "0": "#39FF14", "1": "#FF4444" }) */
-  color_map?: Record<string, string>;
+  /** Color mapping: value→color or value→{color, label} */
+  color_map?: Record<string, unknown>;
   /** Default color when no match */
   default_color?: string;
 }

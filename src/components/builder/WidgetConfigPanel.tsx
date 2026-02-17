@@ -5,6 +5,7 @@ import { getIconNames } from "./DynamicIcon";
 import DynamicIcon from "./DynamicIcon";
 import ImageUploader from "./ImageUploader";
 import HotspotEditor from "./HotspotEditor";
+import InfraIconBrowser from "./InfraIconBrowser";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -16,6 +17,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Trash2, X, Search, Palette, Type, Sparkles, Database, Settings2, ImageIcon } from "lucide-react";
 import ZabbixItemBrowser from "./ZabbixItemBrowser";
 import ColorMapEditor from "./ColorMapEditor";
+import { Icon } from "@iconify/react";
 
 interface Props {
   widget: WidgetConfig;
@@ -270,12 +272,24 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
             {widget.style.icon && (
               <div className="flex items-center justify-between glass-card rounded-md p-2">
                 <div className="flex items-center gap-2">
-                  <DynamicIcon name={widget.style.icon} className="w-5 h-5" style={{ color: widget.style.iconColor }} />
+                  {widget.style.icon.includes(":") ? (
+                    <Icon icon={widget.style.icon} className="w-5 h-5" style={{ color: widget.style.iconColor }} />
+                  ) : (
+                    <DynamicIcon name={widget.style.icon} className="w-5 h-5" style={{ color: widget.style.iconColor }} />
+                  )}
                   <span className="text-xs text-muted-foreground">{widget.style.icon}</span>
                 </div>
                 <Button variant="ghost" size="sm" onClick={() => updateStyle({ icon: undefined })} className="h-6 text-[9px]">Remover</Button>
               </div>
             )}
+
+            {/* Infrastructure icons */}
+            <div className="border-t border-border/20 pt-3">
+              <InfraIconBrowser
+                selectedIcon={widget.style.icon}
+                onSelect={(iconId) => updateStyle({ icon: iconId })}
+              />
+            </div>
           </TabsContent>
 
           {/* ── IMAGE TAB ── */}
