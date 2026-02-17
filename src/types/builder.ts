@@ -114,15 +114,17 @@ export interface ImageHotspot {
 }
 
 export const WIDGET_TYPES = [
-  { type: "stat", label: "Stat", icon: "Hash", description: "Valor numérico com unidade e trend", minW: 2, minH: 2 },
-  { type: "gauge", label: "Gauge", icon: "Gauge", description: "Indicador semicircular com min/max", minW: 2, minH: 3 },
-  { type: "timeseries", label: "Timeseries", icon: "TrendingUp", description: "Gráfico de linha temporal", minW: 3, minH: 3 },
-  { type: "table", label: "Tabela", icon: "Table2", description: "Tabela de dados com colunas", minW: 3, minH: 3 },
-  { type: "text", label: "Texto", icon: "Type", description: "Texto livre ou markdown", minW: 2, minH: 2 },
-  { type: "status", label: "Status", icon: "CircleDot", description: "Indicador de status com glow", minW: 2, minH: 2 },
-  { type: "progress", label: "Barra", icon: "BarChart3", description: "Barra de progresso horizontal", minW: 3, minH: 2 },
-  { type: "icon-value", label: "Ícone+Valor", icon: "Zap", description: "Ícone grande com valor", minW: 2, minH: 2 },
-  { type: "image-map", label: "Image Map", icon: "Image", description: "Imagem interativa com LEDs mapeados", minW: 4, minH: 4 },
+  { type: "stat", label: "Stat", icon: "Hash", description: "Valor numérico com unidade e trend", minW: 2, minH: 1 },
+  { type: "gauge", label: "Gauge", icon: "Gauge", description: "Indicador semicircular com min/max", minW: 2, minH: 2 },
+  { type: "timeseries", label: "Timeseries", icon: "TrendingUp", description: "Gráfico de linha temporal", minW: 3, minH: 2 },
+  { type: "table", label: "Tabela", icon: "Table2", description: "Tabela de dados com colunas", minW: 3, minH: 2 },
+  { type: "text", label: "Texto", icon: "Type", description: "Texto livre ou markdown", minW: 2, minH: 1 },
+  { type: "status", label: "Status LED", icon: "CircleDot", description: "LED de status com color_map customizado", minW: 1, minH: 1 },
+  { type: "progress", label: "Barra %", icon: "BarChart3", description: "Barra de progresso horizontal", minW: 2, minH: 1 },
+  { type: "icon-value", label: "Ícone+Valor", icon: "Zap", description: "Ícone dinâmico com valor e cor", minW: 2, minH: 1 },
+  { type: "image-map", label: "Image Map", icon: "Image", description: "Imagem interativa com LEDs mapeados", minW: 3, minH: 3 },
+  { type: "traffic-light", label: "Semáforo", icon: "AlertTriangle", description: "Semáforo 3 estados com color_map", minW: 1, minH: 2 },
+  { type: "label", label: "Label", icon: "Tag", description: "Label estático para organização", minW: 1, minH: 1 },
 ] as const;
 
 export const GLOW_PRESETS = [

@@ -98,12 +98,32 @@ interface TelemetryPayload {
 /* ─── Adapters: transform Zabbix data → telemetry ── */
 function adaptItemToStat(items: Array<Record<string, string>>, cfg: WidgetPollConfig): TelemetryPayload[] {
   const valueField = cfg.adapter.value_field || "lastvalue";
+  const isStatusType = ["status", "icon-value", "progress"].includes(cfg.widget_type);
+  
   return items.map((item) => {
-    const rawValue = parseFloat(item[valueField] || "0");
+    const rawStr = item[valueField] || "0";
+    const rawValue = parseFloat(rawStr);
     const key = cfg.adapter.telemetry_key || `zbx:item:${item.itemid}`;
+    
+    // For status-like widgets, send the raw string value so color_map can match it
+    if (isStatusType) {
+      return {
+        tenant_id: "",
+        dashboard_id: "",
+        key,
+        type: "stat",
+        data: {
+          value: rawStr,
+          unit: item.units || "",
+        },
+        ts: Date.now(),
+        v: 1,
+      };
+    }
+    
     return {
-      tenant_id: "", // filled later
-      dashboard_id: "", // filled later
+      tenant_id: "",
+      dashboard_id: "",
       key,
       type: cfg.widget_type === "gauge" ? "gauge" : "stat",
       data: {

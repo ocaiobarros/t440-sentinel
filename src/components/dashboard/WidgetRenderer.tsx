@@ -6,6 +6,11 @@ import TimeseriesWidget from "./widgets/TimeseriesWidget";
 import TableWidget from "./widgets/TableWidget";
 import TextWidget from "./widgets/TextWidget";
 import ImageMapWidget from "./widgets/ImageMapWidget";
+import StatusWidget from "./widgets/StatusWidget";
+import ProgressWidget from "./widgets/ProgressWidget";
+import IconValueWidget from "./widgets/IconValueWidget";
+import TrafficLightWidget from "./widgets/TrafficLightWidget";
+import LabelWidget from "./widgets/LabelWidget";
 
 interface Props {
   widgetType: string;
@@ -27,6 +32,16 @@ export default function WidgetRenderer({ widgetType, telemetryKey, title, cache,
       return <TableWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
     case "text":
       return <TextWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
+    case "status":
+      return <StatusWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+    case "progress":
+      return <ProgressWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+    case "icon-value":
+      return <IconValueWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+    case "traffic-light":
+      return <TrafficLightWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+    case "label":
+      return <LabelWidget title={title} config={config} />;
     case "image-map":
       return (
         <ImageMapWidget

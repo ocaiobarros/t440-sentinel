@@ -155,6 +155,12 @@ export default function DashboardView() {
             ) : (
               dashboard.widgets.map((widget, i) => {
                 const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
+                // Merge config.extra fields into top-level config for widget access
+                const mergedConfig = {
+                  ...(widget.config as Record<string, unknown>),
+                  ...((widget.config as any)?.extra || {}),
+                  style: (widget.config as any)?.style,
+                };
                 return (
                   <motion.div
                     key={widget.id}
@@ -175,7 +181,7 @@ export default function DashboardView() {
                       telemetryKey={telemetryKey}
                       title={widget.title}
                       cache={telemetryCache}
-                      config={widget.config as Record<string, unknown>}
+                      config={mergedConfig}
                     />
                   </motion.div>
                 );

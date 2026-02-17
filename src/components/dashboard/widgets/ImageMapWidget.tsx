@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { ImageHotspot } from "@/types/builder";
+import { getMappedStatus, extractRawValue } from "@/lib/telemetry-utils";
 
 interface Props {
   imageUrl: string;
@@ -9,41 +10,25 @@ interface Props {
   title: string;
 }
 
-function getHotspotColor(hotspot: ImageHotspot, cache: Map<string, TelemetryCacheEntry>): string {
-  if (!hotspot.telemetry_key) return hotspot.default_color || "#39FF14";
+function getHotspotColor(hotspot: ImageHotspot, cache: Map<string, TelemetryCacheEntry>): { color: string; isCritical: boolean; rawValue: string | null } {
+  if (!hotspot.telemetry_key) {
+    return { color: hotspot.default_color || "#555555", isCritical: false, rawValue: null };
+  }
 
   const entry = cache.get(hotspot.telemetry_key);
-  if (!entry || !entry.data) return hotspot.default_color || "#555555";
-
-  const value = typeof entry.data === "object" && entry.data !== null && "value" in (entry.data as any)
-    ? String((entry.data as any).value)
-    : String(entry.data);
-
-  // Check color_map
-  if (hotspot.color_map && hotspot.color_map[value]) {
-    return hotspot.color_map[value];
+  if (!entry || !entry.data) {
+    return { color: hotspot.default_color || "#555555", isCritical: false, rawValue: null };
   }
 
-  // Numeric thresholds: green < 70, amber 70-90, red > 90
-  const num = parseFloat(value);
-  if (!isNaN(num)) {
-    if (num > 90) return "#FF4444";
-    if (num > 70) return "#FFBF00";
-    return "#39FF14";
-  }
-
-  // String status mapping
-  const lower = value.toLowerCase();
-  if (["ok", "up", "online", "1", "true", "running"].includes(lower)) return "#39FF14";
-  if (["warning", "degraded", "2"].includes(lower)) return "#FFBF00";
-  if (["critical", "down", "offline", "0", "false", "error"].includes(lower)) return "#FF4444";
-
-  return hotspot.default_color || "#39FF14";
+  const rawValue = extractRawValue(entry.data);
+  // Use ONLY the user's color_map — no automatic assumptions
+  const status = getMappedStatus(rawValue, hotspot.color_map, hotspot.default_color || "#555555");
+  return { color: status.color, isCritical: status.isCritical, rawValue };
 }
 
 export default function ImageMapWidget({ imageUrl, hotspots, cache, title }: Props) {
   const hotspotColors = useMemo(
-    () => hotspots.map((h) => ({ ...h, color: getHotspotColor(h, cache) })),
+    () => hotspots.map((h) => ({ ...h, ...getHotspotColor(h, cache) })),
     [hotspots, cache],
   );
 
@@ -71,9 +56,9 @@ export default function ImageMapWidget({ imageUrl, hotspots, cache, title }: Pro
               borderRadius: h.shape === "circle" ? "50%" : h.shape === "square" ? "2px" : "1px",
               backgroundColor: h.color,
               boxShadow: `0 0 ${(h.size || 12)}px ${h.color}, 0 0 ${(h.size || 12) * 2}px ${h.color}40`,
-              animation: h.color === "#FF4444" ? "pulseRed 1.5s ease-in-out infinite" : undefined,
+              animation: h.isCritical ? "pulseRed 1.5s ease-in-out infinite" : undefined,
             }}
-            title={`${h.label}: ${cache.get(h.telemetry_key)?.data ? JSON.stringify((cache.get(h.telemetry_key)!.data as any)?.value ?? cache.get(h.telemetry_key)!.data) : "sem dados"}`}
+            title={`${h.label}: ${h.rawValue ?? "sem dados"}`}
           />
         ))}
       </div>

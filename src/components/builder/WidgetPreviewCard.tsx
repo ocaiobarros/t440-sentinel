@@ -173,6 +173,20 @@ function renderTypePreview(widget: WidgetConfig) {
           )}
         </div>
       );
+    case "traffic-light":
+      return (
+        <div className="flex flex-col gap-1 items-center">
+          {["#FF4444", "#FFBF00", "#39FF14"].map((c, i) => (
+            <div key={i} className="w-3 h-3 rounded-full" style={{ background: i === 2 ? c : `${c}30` }} />
+          ))}
+        </div>
+      );
+    case "label":
+      return (
+        <span className="text-[10px] font-display uppercase tracking-widest text-muted-foreground">
+          {widget.title}
+        </span>
+      );
     default:
       return <span className="text-xs text-muted-foreground">Widget</span>;
   }

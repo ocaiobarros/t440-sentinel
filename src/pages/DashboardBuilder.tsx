@@ -218,7 +218,14 @@ export default function DashboardBuilder() {
           height: w.h,
           query: w.query as any,
           adapter: w.adapter as any,
-          config: { style: w.style, extra: w.extra, imageUrl: w.extra?.imageUrl, hotspots: w.extra?.hotspots } as any,
+          config: {
+            style: w.style,
+            extra: w.extra,
+            imageUrl: w.extra?.imageUrl,
+            hotspots: w.extra?.hotspots,
+            color_map: w.extra?.color_map,
+            default_color: w.extra?.default_color,
+          } as any,
           created_by: userId,
         }));
         const { error: wErr } = await supabase.from("widgets").insert(widgetRows);
