@@ -4,10 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import WidgetRenderer from "@/components/dashboard/WidgetRenderer";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff } from "lucide-react";
+import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff } from "lucide-react";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useEffect, useState } from "react";
+import { useCallback, useState } from "react";
+import { useAudioAlert } from "@/hooks/useAudioAlert";
 
 /** Grid: 12 columns, each row = 80px height */
 const COL_WIDTH_PERCENT = 100 / 12;
@@ -17,6 +18,11 @@ export default function DashboardView() {
   const { dashboardId } = useParams<{ dashboardId: string }>();
   const navigate = useNavigate();
   const [isPolling, setIsPolling] = useState(false);
+  const { muted, toggleMute, playBeep } = useAudioAlert();
+
+  const handleCritical = useCallback((widgetId: string) => {
+    playBeep(widgetId);
+  }, [playBeep]);
 
   // If no dashboardId in URL, fetch the user's default dashboard
   const { data: defaultDashId } = useQuery({
@@ -107,6 +113,17 @@ export default function DashboardView() {
               <span className="font-mono">{telemetryCache.size} keys</span>
             </div>
 
+            {/* Audio control */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleMute}
+              className={`h-7 w-7 ${muted ? "text-muted-foreground" : "text-neon-amber"}`}
+              title={muted ? "Ativar alertas sonoros" : "Silenciar alertas"}
+            >
+              {muted ? <VolumeOff className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+            </Button>
+
             <Button
               variant="outline"
               size="sm"
@@ -178,10 +195,12 @@ export default function DashboardView() {
                   >
                     <WidgetRenderer
                       widgetType={widget.widget_type}
+                      widgetId={widget.id}
                       telemetryKey={telemetryKey}
                       title={widget.title}
                       cache={telemetryCache}
                       config={mergedConfig}
+                      onCritical={handleCritical}
                     />
                   </motion.div>
                 );

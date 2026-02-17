@@ -199,6 +199,22 @@
     50% { box-shadow: 0 0 8px hsl(43 100% 50% / 0.6), 0 0 24px hsl(43 100% 50% / 0.3); }
   }
 
+  /* Critical pulsing border for alert widgets */
+  .critical-pulse {
+    animation: criticalPulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes criticalPulse {
+    0%, 100% {
+      box-shadow: 0 0 4px hsl(0 100% 50% / 0.3), 0 0 12px hsl(0 100% 50% / 0.15), inset 0 0 4px hsl(0 100% 50% / 0.05);
+      border-color: hsl(0 100% 40% / 0.5);
+    }
+    50% {
+      box-shadow: 0 0 10px hsl(0 100% 50% / 0.6), 0 0 30px hsl(0 100% 50% / 0.3), inset 0 0 8px hsl(0 100% 50% / 0.1);
+      border-color: hsl(0 100% 50% / 0.8);
+    }
+  }
+
   /* Hex pattern */
   .hex-border {
     clip-path: polygon(4% 0%, 96% 0%, 100% 50%, 96% 100%, 4% 100%, 0% 50%);
