@@ -112,7 +112,7 @@ export default function DashboardView() {
             {/* Realtime status */}
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               {hasData ? (
-                <Wifi className="w-3 h-3 text-neon-green" />
+                <Wifi className="w-3 h-3 text-primary" />
               ) : (
                 <WifiOff className="w-3 h-3 text-muted-foreground/50" />
               )}
@@ -124,7 +124,7 @@ export default function DashboardView() {
               variant="ghost"
               size="icon"
               onClick={toggleMute}
-              className={`h-7 w-7 ${muted ? "text-muted-foreground" : "text-neon-amber"}`}
+              className={`h-7 w-7 ${muted ? "text-muted-foreground" : "text-primary"}`}
               title={muted ? "Ativar alertas sonoros" : "Silenciar alertas"}
             >
               {muted ? <VolumeOff className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
@@ -197,7 +197,7 @@ export default function DashboardView() {
                         top: `${widget.position_y * ROW_HEIGHT}px`,
                         width: `${widget.width * COL_WIDTH_PERCENT}%`,
                         height: `${widget.height * ROW_HEIGHT}px`,
-                        padding: isCompact ? "2px" : "4px",
+                        padding: isCompact ? "2px" : "3px",
                         contain: "layout style paint",
                       }}
                     >

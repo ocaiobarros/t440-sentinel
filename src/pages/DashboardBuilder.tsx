@@ -284,7 +284,7 @@ export default function DashboardBuilder() {
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="h-5 w-px bg-border/50" />
-          <span className="text-xs font-display font-bold text-neon-green truncate max-w-[200px]">
+          <span className="text-xs font-display font-bold text-primary truncate max-w-[200px]">
             {config.name || "Novo Dashboard"}
           </span>
         </div>
@@ -307,7 +307,7 @@ export default function DashboardBuilder() {
             size="sm"
             onClick={() => saveMutation.mutate()}
             disabled={saveMutation.isPending}
-            className="gap-1.5 text-xs h-8 bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
+            className="gap-1.5 text-xs h-8 bg-primary/20 text-primary border border-primary/30 hover:bg-primary/30"
           >
             <Save className="w-3.5 h-3.5" />
             {saveMutation.isPending ? "Salvando…" : "Salvar"}
@@ -331,7 +331,7 @@ export default function DashboardBuilder() {
                 <button
                   onClick={() => setSidebarMode("widgets")}
                   className={`flex-1 py-2 text-[9px] font-display uppercase flex items-center justify-center gap-1 transition-colors ${
-                    sidebarMode === "widgets" ? "text-neon-green border-b-2 border-neon-green" : "text-muted-foreground hover:text-foreground"
+                    sidebarMode === "widgets" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <Layers className="w-3 h-3" />
@@ -340,7 +340,7 @@ export default function DashboardBuilder() {
                 <button
                   onClick={() => setSidebarMode("settings")}
                   className={`flex-1 py-2 text-[9px] font-display uppercase flex items-center justify-center gap-1 transition-colors ${
-                    sidebarMode === "settings" ? "text-neon-green border-b-2 border-neon-green" : "text-muted-foreground hover:text-foreground"
+                    sidebarMode === "settings" ? "text-primary border-b-2 border-primary" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   <Settings2 className="w-3 h-3" />
@@ -410,7 +410,7 @@ export default function DashboardBuilder() {
                   animate={{ opacity: 1, y: 0 }}
                   className="glass-card-elevated rounded-xl p-8 text-center max-w-md"
                 >
-                  <Layers className="w-8 h-8 text-neon-green mx-auto mb-3" />
+                  <Layers className="w-8 h-8 text-primary mx-auto mb-3" />
                   <h2 className="text-sm font-display font-bold text-foreground mb-2">Canvas Vazio</h2>
                   <p className="text-xs text-muted-foreground">
                     Clique nos widgets à esquerda para adicionar ao dashboard. Arraste e redimensione livremente.
@@ -427,7 +427,7 @@ export default function DashboardBuilder() {
                 isDraggable
                 isResizable
                 compactType="vertical"
-                margin={[8, 8]}
+                margin={[6, 6]}
                 containerPadding={[0, 0]}
                 useCSSTransforms
               >
