@@ -162,13 +162,11 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, onSele
             <SelectValue placeholder={loadingGroups ? "Carregando…" : "Selecionar grupo"} />
           </SelectTrigger>
           <SelectContent>
-           <ScrollArea className="max-h-[200px]">
               {groups.map((g) => (
                 <SelectItem key={g.groupid} value={g.groupid} className="text-xs whitespace-nowrap">
                   {g.name}
                 </SelectItem>
               ))}
-            </ScrollArea>
           </SelectContent>
         </Select>
       </div>
@@ -183,13 +181,11 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, onSele
             <SelectValue placeholder={loadingHosts ? "Carregando…" : "Selecionar host"} />
           </SelectTrigger>
           <SelectContent>
-           <ScrollArea className="max-h-[200px]">
               {hosts.map((h) => (
                 <SelectItem key={h.hostid} value={h.hostid} className="text-xs whitespace-nowrap">
                   {h.name || h.host}
                 </SelectItem>
               ))}
-            </ScrollArea>
           </SelectContent>
         </Select>
       </div>
