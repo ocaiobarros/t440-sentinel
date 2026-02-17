@@ -1,5 +1,5 @@
-import { useState, useCallback, useMemo, useRef } from "react";
-import { Responsive, WidthProvider, type Layout } from "react-grid-layout";
+import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { Responsive, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { useNavigate, useParams } from "react-router-dom";
@@ -21,8 +21,6 @@ import {
   Layers, Undo2, Redo2,
 } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 const DEFAULT_CONFIG: DashboardConfig = {
   name: "Novo Dashboard",
@@ -54,6 +52,20 @@ export default function DashboardBuilder() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [history, setHistory] = useState<DashboardConfig[]>([]);
   const [historyIdx, setHistoryIdx] = useState(-1);
+
+  // Manual width measurement for the grid canvas — replaces WidthProvider
+  const canvasRef = useRef<HTMLDivElement>(null);
+  const [canvasWidth, setCanvasWidth] = useState(0);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const measure = () => setCanvasWidth(el.offsetWidth);
+    measure();
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
 
   const selectedWidget = useMemo(
     () => config.widgets.find((w) => w.id === selectedWidgetId) ?? null,
@@ -173,7 +185,10 @@ export default function DashboardBuilder() {
     }
   }, [selectedWidgetId, pushHistory]);
 
-  // Track drag/resize to suppress click events that would open config panel
+  // ─── Drag / Resize handling ───
+  // CRITICAL: We ONLY update widget positions on drag/resize STOP events.
+  // We do NOT use onLayoutChange because it fires on every width recalculation
+  // (e.g. when sidebar opens/closes), which would corrupt saved widget sizes.
   const isDraggingRef = useRef(false);
   const dragTimerRef = useRef<ReturnType<typeof setTimeout>>();
 
@@ -182,29 +197,36 @@ export default function DashboardBuilder() {
     if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
   }, []);
 
-  const handleDragResizeStop = useCallback(() => {
-    // Delay clearing the flag so the click event fires first and gets suppressed
-    dragTimerRef.current = setTimeout(() => {
-      isDraggingRef.current = false;
-    }, 200);
-  }, []);
-
-  const handleWidgetClick = useCallback((widgetId: string) => {
-    if (isDraggingRef.current) return; // suppress click after drag/resize
-    setSelectedWidgetId(widgetId);
-    setSidebarMode("config");
-    setSidebarOpen(true);
-  }, []);
-
-  const handleLayoutChange = useCallback((layout: Layout[]) => {
+  const handleDragStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
+    // Only update position, preserve original width/height from config
     setConfig((prev) => ({
       ...prev,
       widgets: prev.widgets.map((w) => {
-        const l = layout.find((item) => item.i === w.id);
-        if (!l) return w;
-        return { ...w, x: l.x, y: l.y, w: l.w, h: l.h };
+        if (w.id !== newItem.i) return w;
+        return { ...w, x: newItem.x, y: newItem.y };
       }),
     }));
+    dragTimerRef.current = setTimeout(() => { isDraggingRef.current = false; }, 200);
+  }, []);
+
+  const handleResizeStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
+    // Update both position AND size on explicit user resize
+    setConfig((prev) => ({
+      ...prev,
+      widgets: prev.widgets.map((w) => {
+        if (w.id !== newItem.i) return w;
+        return { ...w, x: newItem.x, y: newItem.y, w: newItem.w, h: newItem.h };
+      }),
+    }));
+    dragTimerRef.current = setTimeout(() => { isDraggingRef.current = false; }, 200);
+  }, []);
+
+  // Click handler — NEVER auto-opens the sidebar. Only switches content if already open.
+  const handleWidgetClick = useCallback((widgetId: string) => {
+    if (isDraggingRef.current) return;
+    setSelectedWidgetId(widgetId);
+    setSidebarMode("config");
+    // Do NOT call setSidebarOpen(true) — user controls sidebar manually
   }, []);
 
   // Save mutation
@@ -220,7 +242,6 @@ export default function DashboardBuilder() {
       let dashId = config.id;
 
       if (dashId) {
-        // Update
         await supabase.from("dashboards").update({
           name: config.name,
           description: config.description,
@@ -228,7 +249,6 @@ export default function DashboardBuilder() {
           settings: config.settings as any,
         }).eq("id", dashId);
       } else {
-        // Create
         const { data, error } = await supabase.from("dashboards").insert({
           tenant_id: tenantId,
           name: config.name,
@@ -283,7 +303,7 @@ export default function DashboardBuilder() {
     },
   });
 
-  // Grid layout items
+  // Grid layout items — built from config (source of truth), never from onLayoutChange
   const gridLayout: Layout[] = config.widgets.map((w) => ({
     i: w.id,
     x: w.x,
@@ -418,15 +438,13 @@ export default function DashboardBuilder() {
         >
           {/* Ambient glow — hidden for light themes */}
           {config.settings.ambientGlow !== false && !isLightTheme && (
-            <>
-              <div
-                className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full blur-[120px] pointer-events-none"
-                style={{ background: `var(--category-glow, ${config.settings.ambientGlowColor || "#39FF14"}08)` }}
-              />
-            </>
+            <div
+              className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full blur-[120px] pointer-events-none"
+              style={{ background: `var(--category-glow, ${config.settings.ambientGlowColor || "#39FF14"}08)` }}
+            />
           )}
 
-          <div className="p-4 relative z-10">
+          <div ref={canvasRef} className="p-4 relative z-10" style={{ width: '100%' }}>
             {config.widgets.length === 0 ? (
               <div className="flex items-center justify-center min-h-[50vh]">
                 <motion.div
@@ -441,17 +459,17 @@ export default function DashboardBuilder() {
                   </p>
                 </motion.div>
               </div>
-            ) : (
-              <ResponsiveGridLayout
+            ) : canvasWidth > 0 ? (
+              <Responsive
+                width={canvasWidth}
                 layouts={{ lg: gridLayout }}
                 breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
                 cols={{ lg: config.settings.cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
                 rowHeight={config.settings.rowHeight}
-                onLayoutChange={handleLayoutChange}
                 onDragStart={handleDragResizeStart}
-                onDragStop={handleDragResizeStop}
+                onDragStop={handleDragStop}
                 onResizeStart={handleDragResizeStart}
-                onResizeStop={handleDragResizeStop}
+                onResizeStop={handleResizeStop}
                 isDraggable
                 isResizable
                 compactType="vertical"
@@ -468,30 +486,11 @@ export default function DashboardBuilder() {
                     />
                   </div>
                 ))}
-              </ResponsiveGridLayout>
-            )}
+              </Responsive>
+            ) : null}
           </div>
         </main>
-
-        {/* ── Right Config Panel (when widget selected on wider screens) ── */}
-        <AnimatePresence>
-          {selectedWidget && !sidebarOpen && (
-            <motion.aside
-              initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 450, opacity: 1 }}
-              exit={{ width: 0, opacity: 0 }}
-              className="border-l border-border/30 bg-card/50 flex-shrink-0 overflow-hidden overflow-y-auto"
-            >
-              <WidgetConfigPanel
-                widget={selectedWidget}
-                onUpdate={updateWidget}
-                onDelete={deleteWidget}
-                connectionId={config.zabbix_connection_id}
-                onClose={() => setSelectedWidgetId(null)}
-              />
-            </motion.aside>
-          )}
-        </AnimatePresence>
+        {/* Right config panel REMOVED — config only lives in left sidebar */}
       </div>
     </div>
   );
