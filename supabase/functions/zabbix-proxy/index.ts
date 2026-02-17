@@ -71,20 +71,29 @@ function hexToBytes(hex: string): Uint8Array {
 
 /* ─── Zabbix JSON-RPC ────────────────────────────── */
 
+/** Build the JSON-RPC endpoint, avoiding double /api_jsonrpc.php */
+function buildApiUrl(base: string): string {
+  const trimmed = base.replace(/\/+$/, "");
+  if (trimmed.endsWith("/api_jsonrpc.php")) return trimmed;
+  return `${trimmed}/api_jsonrpc.php`;
+}
+
 async function zabbixLogin(
   url: string,
   username: string,
   password: string,
 ): Promise<string> {
-  const res = await fetch(`${url}/api_jsonrpc.php`, {
+  const endpoint = buildApiUrl(url);
+  const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Connection": "keep-alive" },
     body: JSON.stringify({
       jsonrpc: "2.0",
       method: "user.login",
       params: { username, password },
       id: 1,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   const data = await res.json();
@@ -120,9 +129,10 @@ async function zabbixCall(
     throw new Error(`Method "${method}" is not allowed. Allowed: ${allowed.join(", ")}`);
   }
 
-  const res = await fetch(`${url}/api_jsonrpc.php`, {
+  const endpoint = buildApiUrl(url);
+  const res = await fetch(endpoint, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", "Connection": "keep-alive" },
     body: JSON.stringify({
       jsonrpc: "2.0",
       method,
@@ -130,7 +140,13 @@ async function zabbixCall(
       auth: authToken,
       id: 2,
     }),
+    signal: AbortSignal.timeout(30_000),
   });
+
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`Zabbix HTTP ${res.status}: ${txt.slice(0, 500)}`);
+  }
 
   const data = await res.json();
   if (data.error) {
