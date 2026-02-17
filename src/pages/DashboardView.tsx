@@ -110,7 +110,7 @@ export default function DashboardView() {
 
   return (
     <div
-      className={`min-h-screen grid-pattern scanlines relative p-4 md:p-6 lg:p-8 ${isLightTheme ? 'text-foreground' : ''}`}
+      className={`min-h-screen grid-pattern scanlines relative p-2 md:p-3 lg:p-4 ${isLightTheme ? 'text-foreground' : ''}`}
       data-theme-category={themeCategory}
       style={{ background: 'var(--category-bg, linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%))' }}
     >
@@ -134,7 +134,7 @@ export default function DashboardView() {
         </>
       )}
 
-      <div className="max-w-[1600px] mx-auto relative z-10">
+      <div className="w-full relative z-10">
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -10 }}

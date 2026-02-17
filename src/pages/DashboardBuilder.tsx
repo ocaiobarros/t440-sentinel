@@ -428,7 +428,7 @@ export default function DashboardBuilder() {
                 isDraggable
                 isResizable
                 compactType="vertical"
-                margin={[6, 6]}
+                margin={[4, 4]}
                 containerPadding={[0, 0]}
                 useCSSTransforms
               >
