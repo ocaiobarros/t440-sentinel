@@ -1,18 +1,20 @@
-import { lazy, Suspense, useMemo } from "react";
+import { useMemo } from "react";
 import { icons, type LucideProps } from "lucide-react";
+import { Icon } from "@iconify/react";
 
 interface Props extends Omit<LucideProps, "ref"> {
   name: string;
 }
 
-/** Render any lucide icon by name string */
+/** Render any lucide icon by name string, or @iconify icon if it contains ":" */
 export default function DynamicIcon({ name, ...props }: Props) {
-  const Icon = useMemo(() => {
-    // Try exact match first, then PascalCase conversion
+  const isIconify = name.includes(":");
+
+  const LucideIcon = useMemo(() => {
+    if (isIconify) return null;
     const key = name as keyof typeof icons;
     if (icons[key]) return icons[key];
 
-    // Try converting kebab-case to PascalCase
     const pascal = name
       .split(/[-_\s]+/)
       .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
@@ -20,13 +22,18 @@ export default function DynamicIcon({ name, ...props }: Props) {
     if (icons[pascal]) return icons[pascal];
 
     return null;
-  }, [name]);
+  }, [name, isIconify]);
 
-  if (!Icon) {
+  if (isIconify) {
+    const { className, style } = props;
+    return <Icon icon={name} className={className as string} style={style} />;
+  }
+
+  if (!LucideIcon) {
     return <span className="inline-block w-4 h-4 rounded-full bg-muted-foreground/20" />;
   }
 
-  return <Icon {...props} />;
+  return <LucideIcon {...props} />;
 }
 
 /** Get all available icon names */

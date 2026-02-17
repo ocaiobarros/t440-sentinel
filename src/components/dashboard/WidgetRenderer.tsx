@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { ImageHotspot } from "@/types/builder";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
+import WidgetSkeleton from "./widgets/WidgetSkeleton";
 import StatWidget from "./widgets/StatWidget";
 import GaugeWidget from "./widgets/GaugeWidget";
 import TimeseriesWidget from "./widgets/TimeseriesWidget";
@@ -27,9 +28,8 @@ interface Props {
 export default function WidgetRenderer({ widgetType, widgetId, telemetryKey, title, cache, config, onCritical }: Props) {
   const prevCriticalRef = useRef(false);
 
-  // Detect critical state changes and fire callback
   const entry = cache.get(telemetryKey);
-  const colorMap = config?.color_map as Record<string, string> | undefined;
+  const colorMap = config?.color_map as Record<string, unknown> | undefined;
 
   useEffect(() => {
     if (!entry || !colorMap || !widgetId || !onCritical) return;
@@ -41,7 +41,6 @@ export default function WidgetRenderer({ widgetType, widgetId, telemetryKey, tit
     prevCriticalRef.current = status.isCritical;
   }, [entry?.ts, colorMap, widgetId, onCritical]);
 
-  // Check if currently critical for border
   const isCritical = (() => {
     if (!entry || !colorMap) return false;
     const rawValue = extractRawValue(entry.data);
@@ -50,12 +49,18 @@ export default function WidgetRenderer({ widgetType, widgetId, telemetryKey, tit
 
   const wrapperClass = isCritical ? "h-full critical-pulse rounded-lg border border-destructive/50" : "h-full";
 
+  // Show skeleton if no data yet for data-driven widgets
+  const needsData = !["label", "text"].includes(widgetType);
+  if (needsData && !entry) {
+    return <div className="h-full"><WidgetSkeleton type={widgetType} /></div>;
+  }
+
   const inner = (() => {
     switch (widgetType) {
       case "stat":
         return <StatWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
       case "gauge":
-        return <GaugeWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
+        return <GaugeWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
       case "timeseries":
         return <TimeseriesWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
       case "table":

@@ -9,6 +9,29 @@ export interface MappedStatus {
   isCritical: boolean;
 }
 
+/** Color map entry with optional label */
+export interface ColorMapEntry {
+  color: string;
+  label?: string;
+}
+
+/**
+ * Parse color_map which can be:
+ * - Record<string, string>  (legacy: value → hex color)
+ * - Record<string, { color: string; label?: string }>  (new: value → { color, label })
+ */
+function parseColorMap(colorMap: Record<string, unknown>): Record<string, ColorMapEntry> {
+  const result: Record<string, ColorMapEntry> = {};
+  for (const [key, val] of Object.entries(colorMap)) {
+    if (typeof val === "string") {
+      result[key] = { color: val };
+    } else if (val && typeof val === "object" && "color" in (val as Record<string, unknown>)) {
+      result[key] = val as ColorMapEntry;
+    }
+  }
+  return result;
+}
+
 /**
  * Pure lookup: value → color from the user's color_map.
  * If no match, returns the fallback color + "UNKNOWN" label.
@@ -16,7 +39,7 @@ export interface MappedStatus {
  */
 export function getMappedStatus(
   value: unknown,
-  colorMap: Record<string, string> | undefined,
+  colorMap: Record<string, unknown> | undefined,
   defaultColor = "#A0A0A0",
   defaultLabel = "N/A",
 ): MappedStatus {
@@ -27,12 +50,13 @@ export function getMappedStatus(
   const normalized = String(value).trim();
 
   if (colorMap) {
-    const matchedColor = colorMap[normalized];
-    if (matchedColor) {
+    const parsed = parseColorMap(colorMap);
+    const entry = parsed[normalized];
+    if (entry) {
       return {
-        color: matchedColor,
-        label: normalized,
-        isCritical: matchedColor.toLowerCase() === "#ff4444" || matchedColor.toLowerCase() === "#8b0000",
+        color: entry.color,
+        label: entry.label || normalized,
+        isCritical: entry.color.toLowerCase() === "#ff4444" || entry.color.toLowerCase() === "#8b0000",
       };
     }
   }
