@@ -20,14 +20,23 @@ function hexToBytes(hex: string): Uint8Array {
   return bytes;
 }
 
+/** Derive a valid 256-bit AES key from any string (hex or passphrase) */
+async function deriveAesKey(secret: string, usage: KeyUsage[]): Promise<CryptoKey> {
+  // If it's a valid 64-char hex string (256-bit), use directly
+  if (/^[0-9a-fA-F]{64}$/.test(secret)) {
+    return crypto.subtle.importKey("raw", hexToBytes(secret), { name: "AES-GCM" }, false, usage);
+  }
+  // Otherwise, SHA-256 hash it to get exactly 32 bytes
+  const encoded = new TextEncoder().encode(secret);
+  const hash = await crypto.subtle.digest("SHA-256", encoded);
+  return crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, usage);
+}
+
 async function encryptPassword(
   plaintext: string,
-  encryptionKeyHex: string,
+  encryptionKeyRaw: string,
 ): Promise<{ ciphertext: string; iv: string; tag: string }> {
-  const keyBytes = hexToBytes(encryptionKeyHex);
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt"],
-  );
+  const cryptoKey = await deriveAesKey(encryptionKeyRaw, ["encrypt"]);
 
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const encoded = new TextEncoder().encode(plaintext);
@@ -49,12 +58,9 @@ async function encryptPassword(
 }
 
 async function decryptPassword(
-  ciphertext: string, iv: string, tag: string, encryptionKeyHex: string,
+  ciphertext: string, iv: string, tag: string, encryptionKeyRaw: string,
 ): Promise<string> {
-  const keyBytes = hexToBytes(encryptionKeyHex);
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw", keyBytes, { name: "AES-GCM" }, false, ["decrypt"],
-  );
+  const cryptoKey = await deriveAesKey(encryptionKeyRaw, ["decrypt"]);
   const ivBytes = hexToBytes(iv);
   const ciphertextBytes = hexToBytes(ciphertext);
   const tagBytes = hexToBytes(tag);

@@ -34,14 +34,14 @@ async function decryptPassword(
   tag: string,
   encryptionKey: string,
 ): Promise<string> {
-  const keyBytes = hexToBytes(encryptionKey);
-  const cryptoKey = await crypto.subtle.importKey(
-    "raw",
-    keyBytes,
-    { name: "AES-GCM" },
-    false,
-    ["decrypt"],
-  );
+  // Derive valid 256-bit key from any input
+  let cryptoKey: CryptoKey;
+  if (/^[0-9a-fA-F]{64}$/.test(encryptionKey)) {
+    cryptoKey = await crypto.subtle.importKey("raw", hexToBytes(encryptionKey), { name: "AES-GCM" }, false, ["decrypt"]);
+  } else {
+    const hash = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(encryptionKey));
+    cryptoKey = await crypto.subtle.importKey("raw", hash, { name: "AES-GCM" }, false, ["decrypt"]);
+  }
 
   const ivBytes = hexToBytes(iv);
   const ciphertextBytes = hexToBytes(ciphertext);
