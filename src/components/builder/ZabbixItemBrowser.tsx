@@ -5,24 +5,19 @@ import Fuse from "fuse.js";
 import { supabase } from "@/integrations/supabase/client";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Search, Server, FolderTree, Activity, ChevronDown, Check, ChevronRight } from "lucide-react";
+import { Search, Server, FolderTree, Activity, ChevronDown, Check, ChevronRight, Plus } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getNavCache, setNavCache } from "@/lib/metadata-cache";
 
 interface ZabbixItemBrowserProps {
   connectionId: string | null;
   selectedItemId?: string;
-  /** Pre-select group on mount */
   initialGroupId?: string;
-  /** Pre-select host on mount */
   initialHostId?: string;
-  /** Display names for breadcrumb */
   initialGroupName?: string;
   initialHostName?: string;
   initialItemName?: string;
-  /** Enable multi-select mode (shows '+' button) */
   multiSelect?: boolean;
-  /** IDs of already-selected series items */
   selectedSeries?: string[];
   onSelectItem: (item: { itemid: string; key_: string; name: string; lastvalue?: string; units?: string }, context: { groupId: string; hostId: string; groupName: string; hostName: string }) => void;
 }
@@ -175,7 +170,6 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
   const queryClient = useQueryClient();
   const initializedRef = useRef(false);
 
-  // Sync initial values when they change (e.g. opening a different widget)
   useEffect(() => {
     if (initialGroupId && !initializedRef.current) {
       setSelectedGroup(initialGroupId);
@@ -239,7 +233,6 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
     select: (d) => (d as ZabbixItem[]) || [],
   });
 
-  // Reset downstream only on user-initiated changes (not initial load)
   const handleGroupChange = useCallback((groupId: string) => {
     setSelectedGroup(groupId);
     setSelectedHost("");
@@ -251,7 +244,6 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
     setItemSearch("");
   }, []);
 
-  // Fuzzy search for items
   const fuse = useMemo(() => new Fuse(items, FUSE_OPTIONS), [items]);
   const filteredItems = useMemo(() => {
     if (!itemSearch.trim()) return items;
@@ -261,14 +253,12 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
   const virtualizer = useVirtualizer({
     count: filteredItems.length,
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 52,
+    estimateSize: () => 36, // compact rows
     overscan: 5,
   });
 
-  // Resolve display names
   const groupName = groups.find(g => g.groupid === selectedGroup)?.name || initialGroupName || "";
   const hostName = hosts.find(h => h.hostid === selectedHost)?.name || initialHostName || "";
-  const selectedItemName = items.find(i => i.itemid === selectedItemId)?.name || initialItemName || "";
 
   const handleSelect = useCallback((item: ZabbixItem) => {
     onSelectItem(item, {
@@ -282,6 +272,8 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
   const groupOptions = useMemo(() => groups.map((g) => ({ id: g.groupid, label: g.name })), [groups]);
   const hostOptions = useMemo(() => hosts.map((h) => ({ id: h.hostid, label: h.name || h.host })), [hosts]);
 
+  const selectedSeriesSet = useMemo(() => new Set(selectedSeries || []), [selectedSeries]);
+
   const error = groupsError ? (groupsError as Error).message : null;
 
   if (!connectionId) {
@@ -293,99 +285,77 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {error && (
         <div className="text-[9px] text-neon-red p-2 border border-neon-red/30 rounded-md bg-neon-red/5">{error}</div>
       )}
 
-      {/* Breadcrumb — active path */}
-      {(groupName || hostName || selectedItemName) && (
-        <div className="flex items-center gap-1 text-[9px] font-mono px-2 py-1.5 rounded-md bg-primary/5 border border-primary/20 overflow-hidden">
-          <span className="text-primary">📍</span>
-          {groupName && <span className="text-muted-foreground truncate max-w-[30%]">{groupName}</span>}
-          {hostName && <><ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0" /><span className="text-foreground truncate max-w-[30%]">{hostName}</span></>}
-          {selectedItemName && <><ChevronRight className="w-3 h-3 text-muted-foreground/50 shrink-0" /><span className="text-primary truncate max-w-[30%]">{selectedItemName}</span></>}
+      {/* Breadcrumb — compact fixed line */}
+      {(groupName || hostName) && (
+        <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground overflow-hidden">
+          <span className="text-primary/60">📍</span>
+          {groupName && <span className="truncate max-w-[40%]">{groupName}</span>}
+          {hostName && <><ChevronRight className="w-2.5 h-2.5 shrink-0 text-muted-foreground/40" /><span className="text-foreground truncate max-w-[40%]">{hostName}</span></>}
         </div>
       )}
 
-      {/* Host Group — Virtualized */}
-      <VirtualSelect
-        items={groupOptions}
-        value={selectedGroup}
-        onChange={handleGroupChange}
-        placeholder="Selecionar grupo"
-        isLoading={loadingGroups && groups.length === 0}
-        icon={FolderTree}
-        label="Grupo de Hosts"
-      />
+      {/* Dropdowns */}
+      <VirtualSelect items={groupOptions} value={selectedGroup} onChange={handleGroupChange} placeholder="Selecionar grupo" isLoading={loadingGroups && groups.length === 0} icon={FolderTree} label="Grupo de Hosts" />
+      <VirtualSelect items={hostOptions} value={selectedHost} onChange={handleHostChange} placeholder={!selectedGroup ? "Selecione um grupo primeiro" : "Selecionar host"} isLoading={loadingHosts && hosts.length === 0} icon={Server} label="Host" />
 
-      {/* Host — Virtualized */}
-      <VirtualSelect
-        items={hostOptions}
-        value={selectedHost}
-        onChange={handleHostChange}
-        placeholder={!selectedGroup ? "Selecione um grupo primeiro" : "Selecionar host"}
-        isLoading={loadingHosts && hosts.length === 0}
-        icon={Server}
-        label="Host"
-      />
-
-      {/* Items — Virtualized List with Fuzzy Search */}
+      {/* Items — Compact Virtualized List */}
       {selectedHost && (
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <Activity className="w-3 h-3" /> Item ({filteredItems.length})
+            <Activity className="w-3 h-3" /> Itens ({filteredItems.length})
           </Label>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-            <Input
-              value={itemSearch}
-              onChange={(e) => setItemSearch(e.target.value)}
-              placeholder="Busca fuzzy…"
-              className="h-7 text-xs pl-7"
-            />
+            <Input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Busca fuzzy…" className="h-7 text-xs pl-7" />
           </div>
 
           {loadingItems ? (
             <div className="space-y-1">
               {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-10 w-full rounded bg-muted/30" />
+                <Skeleton key={i} className="h-8 w-full rounded bg-muted/30" />
               ))}
             </div>
           ) : (
-            <div
-              ref={parentRef}
-              className="h-[400px] border border-border/30 rounded-md overflow-auto"
-            >
+            <div ref={parentRef} className="h-[320px] border border-border/30 rounded-md overflow-auto">
               <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
                 {virtualizer.getVirtualItems().map((vRow) => {
                   const item = filteredItems[vRow.index];
-                  const isSelected = selectedItemId === item.itemid;
-                  const isInSeries = multiSelect && selectedSeries?.includes(item.itemid);
+                  const isInSeries = multiSelect && selectedSeriesSet.has(item.itemid);
+                  const isSingleSelected = !multiSelect && selectedItemId === item.itemid;
+
                   return (
                     <button
                       key={item.itemid}
                       ref={virtualizer.measureElement}
                       data-index={vRow.index}
                       onClick={() => handleSelect(item)}
-                      className={`absolute left-0 w-full text-left p-1.5 transition-all text-[9px] ${
-                        isSelected || isInSeries
-                          ? "bg-primary/15 border border-primary/40 text-primary"
-                          : "hover:bg-accent/40 border border-transparent"
+                      className={`absolute left-0 w-full text-left px-2 py-1 transition-colors text-[9px] flex items-center gap-2 group ${
+                        isInSeries || isSingleSelected
+                          ? "border-l-2 border-l-primary bg-transparent"
+                          : "border-l-2 border-l-transparent hover:bg-accent/20"
                       }`}
                       style={{ top: `${vRow.start}px`, height: `${vRow.size}px` }}
                     >
-                      <div className="flex items-center gap-1">
-                        {isInSeries && <Check className="w-3 h-3 text-primary shrink-0" />}
-                        {multiSelect && !isInSeries && <span className="text-[9px] text-muted-foreground/60 shrink-0 w-3 text-center">+</span>}
-                        <span className="font-medium whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</span>
-                      </div>
-                      <div className="flex items-center justify-between text-muted-foreground mt-0.5 whitespace-nowrap">
-                        <span className="font-mono overflow-hidden text-ellipsis max-w-[60%]">{item.key_}</span>
-                        <span className="font-mono text-primary/70">
+                      {/* Content */}
+                      <div className="flex-1 min-w-0">
+                        <span className="font-medium truncate block">{item.name}</span>
+                        <span className="font-mono text-muted-foreground/60 truncate block text-[8px]">
                           {item.lastvalue !== undefined ? `${item.lastvalue}${item.units || ""}` : "—"}
                         </span>
                       </div>
+                      {/* Action icon */}
+                      {multiSelect && (
+                        isInSeries ? (
+                          <Check className="w-3.5 h-3.5 text-primary shrink-0" />
+                        ) : (
+                          <Plus className="w-3.5 h-3.5 text-muted-foreground/40 group-hover:text-primary shrink-0 transition-colors" />
+                        )
+                      )}
                     </button>
                   );
                 })}

@@ -9,6 +9,7 @@ interface SeriesConfig {
   name: string;
   key_: string;
   color: string;
+  alias?: string;
 }
 
 interface Props {
@@ -28,30 +29,48 @@ const TIME_RANGE_LABELS: Record<string, string> = {
   "30d": "Last 30d",
 };
 
+/** Round timestamp to nearest minute for alignment across series */
+function roundToMinute(ts: number): number {
+  return Math.round(ts / 60000) * 60000;
+}
+
 function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
   const series = (config?.series as SeriesConfig[]) || [];
   const timeRange = (config?.time_range as string) || "";
   const isMultiSeries = series.length > 1;
 
-  // For single series, use the main telemetryKey
   const { data } = useWidgetData({ telemetryKey, cache });
   const ts = data as TelemetryTimeseriesData | null;
 
-  // For multi-series, gather data from cache for each series key
+  // Build display key mapping: itemid → alias or name
+  const seriesDisplayMap = useMemo(() => {
+    const map = new Map<string, { displayName: string; color: string }>();
+    series.forEach((s) => {
+      map.set(s.itemid, {
+        displayName: s.alias?.trim() || s.name,
+        color: s.color,
+      });
+    });
+    return map;
+  }, [series]);
+
+  // For multi-series: merge all series data aligned by rounded timestamp
   const multiData = useMemo(() => {
     if (!isMultiSeries) return null;
     const allPoints: Map<number, Record<string, number>> = new Map();
-    
+
     series.forEach((s) => {
       const key = `zbx:item:${s.itemid}`;
       const entry = cache.get(key);
       if (!entry) return;
       const tsData = entry.data as TelemetryTimeseriesData | null;
       if (!tsData?.points) return;
+      const displayName = seriesDisplayMap.get(s.itemid)?.displayName || s.name;
       for (const p of tsData.points) {
-        const existing = allPoints.get(p.ts) || {};
-        existing[s.itemid] = p.value;
-        allPoints.set(p.ts, existing);
+        const rounded = roundToMinute(p.ts);
+        const existing = allPoints.get(rounded) || {};
+        existing[displayName] = p.value;
+        allPoints.set(rounded, existing);
       }
     });
 
@@ -61,7 +80,7 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
         time: new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         ...values,
       }));
-  }, [isMultiSeries, series, cache]);
+  }, [isMultiSeries, series, cache, seriesDisplayMap]);
 
   const singleChartData = useMemo(
     () =>
@@ -93,12 +112,15 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
             <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
                 {isMultiSeries ? (
-                  series.map((s) => (
-                    <linearGradient key={s.itemid} id={`grad-${s.itemid}`} x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
-                      <stop offset="95%" stopColor={s.color} stopOpacity={0} />
-                    </linearGradient>
-                  ))
+                  series.map((s) => {
+                    const dn = seriesDisplayMap.get(s.itemid)?.displayName || s.name;
+                    return (
+                      <linearGradient key={s.itemid} id={`grad-${s.itemid}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
+                        <stop offset="95%" stopColor={s.color} stopOpacity={0} />
+                      </linearGradient>
+                    );
+                  })
                 ) : (
                   <linearGradient id={`grad-${telemetryKey}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
@@ -107,7 +129,7 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
                 )}
               </defs>
               <XAxis dataKey="time" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
+              <YAxis domain={["auto", "auto"]} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{
                   background: "hsl(var(--card))",
@@ -120,18 +142,22 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
               />
               {isMultiSeries ? (
                 <>
-                  {series.map((s) => (
-                    <Area
-                      key={s.itemid}
-                      type="monotone"
-                      dataKey={s.itemid}
-                      name={s.name}
-                      stroke={s.color}
-                      strokeWidth={2}
-                      fill={`url(#grad-${s.itemid})`}
-                      isAnimationActive={false}
-                    />
-                  ))}
+                  {series.map((s) => {
+                    const dn = seriesDisplayMap.get(s.itemid)?.displayName || s.name;
+                    return (
+                      <Area
+                        key={s.itemid}
+                        type="monotone"
+                        dataKey={dn}
+                        name={dn}
+                        stroke={s.color}
+                        strokeWidth={2}
+                        fill={`url(#grad-${s.itemid})`}
+                        isAnimationActive={false}
+                        connectNulls={true}
+                      />
+                    );
+                  })}
                   <Legend
                     wrapperStyle={{ fontSize: 9, fontFamily: "monospace" }}
                     iconType="line"
@@ -146,6 +172,7 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
                   strokeWidth={2}
                   fill={`url(#grad-${telemetryKey})`}
                   isAnimationActive={false}
+                  connectNulls={true}
                 />
               )}
             </AreaChart>

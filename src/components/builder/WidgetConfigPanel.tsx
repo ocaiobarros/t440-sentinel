@@ -375,25 +375,34 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
                 🔗 Navegar Zabbix
               </Label>
 
-              {/* Multi-series chips */}
-              {((widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string }>) || []).length > 0 && (
-                <div className="flex flex-wrap gap-1 mb-1">
-                  {((widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string }>) || []).map((s, idx) => (
-                    <div key={s.itemid} className="flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[8px] font-mono border border-border/40 bg-accent/20">
-                      <div className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-                      <span className="truncate max-w-[120px]">{s.name}</span>
+              {/* Multi-series chips with alias input */}
+              {((widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string; alias?: string }>) || []).length > 0 && (
+                <div className="space-y-1 mb-2 p-2 rounded-md border border-border/30 bg-accent/5">
+                  <span className="text-[8px] text-muted-foreground uppercase tracking-wider">Séries selecionadas ({((widget.extra?.series as Array<unknown>) || []).length}/5)</span>
+                  {((widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string; alias?: string }>) || []).map((s, idx) => (
+                    <div key={s.itemid} className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ background: s.color }} />
+                      <Input
+                        value={s.alias ?? ""}
+                        onChange={(e) => {
+                          const series = [...((widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string; alias?: string }>) || [])];
+                          series[idx] = { ...series[idx], alias: e.target.value };
+                          onUpdate({ ...widget, extra: { ...widget.extra, series } });
+                        }}
+                        placeholder={s.name}
+                        className="h-5 text-[9px] flex-1 min-w-0 px-1.5 border-border/30"
+                      />
                       <button
                         type="button"
                         onClick={() => {
-                          const series = ((widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string }>) || []).filter((_, i) => i !== idx);
+                          const series = ((widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string; alias?: string }>) || []).filter((_, i) => i !== idx);
                           const telemetryKeys = series.map((s) => `zbx:item:${s.itemid}`);
-                          onUpdate({
-                            ...widget,
-                            extra: { ...widget.extra, series, telemetry_keys: telemetryKeys },
-                          });
+                          onUpdate({ ...widget, extra: { ...widget.extra, series, telemetry_keys: telemetryKeys } });
                         }}
-                        className="text-muted-foreground hover:text-destructive"
-                      >×</button>
+                        className="text-muted-foreground hover:text-destructive text-[10px] shrink-0"
+                      >
+                        <X className="w-3 h-3" />
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -413,9 +422,16 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
                   // For timeseries multi-select: add to series array
                   if (widget.widget_type === "timeseries") {
                     const SERIES_COLORS = ["#3B82F6", "#22C55E", "#F59E0B", "#EF4444", "#8B5CF6", "#06B6D4", "#EC4899", "#F97316"];
-                    const existingSeries = (widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string }>) || [];
-                    // If already exists, don't add duplicate
-                    if (existingSeries.some(s => s.itemid === item.itemid)) return;
+                    const existingSeries = (widget.extra?.series as Array<{ itemid: string; name: string; key_: string; color: string; alias?: string }>) || [];
+                    // Toggle: if already exists, remove it
+                    if (existingSeries.some(s => s.itemid === item.itemid)) {
+                      const filtered = existingSeries.filter(s => s.itemid !== item.itemid);
+                      const telemetryKeys = filtered.map(s => `zbx:item:${s.itemid}`);
+                      onUpdate({ ...widget, extra: { ...widget.extra, series: filtered, telemetry_keys: telemetryKeys } });
+                      return;
+                    }
+                    // Limit to 5
+                    if (existingSeries.length >= 5) return;
                     const newSeries = [...existingSeries, {
                       itemid: item.itemid,
                       name: item.name,
