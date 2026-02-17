@@ -29,8 +29,10 @@ interface Dashboard {
 
 export function useDashboardData(dashboardId: string | null, pollIntervalOverride?: number) {
   const [telemetryCache, setTelemetryCache] = useState<Map<string, TelemetryCacheEntry>>(new Map());
+  const [isPollingActive, setIsPollingActive] = useState(false);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inflightRef = useRef(false); // congestion control
+  const dashboardRef = useRef<Dashboard | null>(null);
 
   // Fetch dashboard + widgets from DB
   const { data: dashboard, isLoading, error } = useQuery({
@@ -115,9 +117,15 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     }).catch(() => {});
   }, [dashboardId]);
 
-  // Poll Zabbix periodically with congestion control
+  // Keep ref in sync so pollNow doesn't need dashboard as dependency
+  useEffect(() => {
+    dashboardRef.current = dashboard ?? null;
+  }, [dashboard]);
+
+  // Poll Zabbix with congestion control — stable reference
   const pollNow = useCallback(async () => {
-    if (!dashboard?.zabbix_connection_id || !dashboard.widgets.length) return;
+    const dash = dashboardRef.current;
+    if (!dash?.zabbix_connection_id || !dash.widgets.length) return;
 
     // Congestion control: skip if previous request is still in-flight
     if (inflightRef.current) {
@@ -128,17 +136,18 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     const { data: session } = await supabase.auth.getSession();
     if (!session?.session?.access_token) return;
 
-    const widgetConfigs = dashboard.widgets.map((w) => ({
+    const widgetConfigs = dash.widgets.map((w) => ({
       widget_id: w.id,
       widget_type: w.widget_type,
       query: w.query,
       adapter: w.adapter,
-      time_range: (w.config as any)?.time_range || (w as any).extra?.time_range || "",
-      series: (w.config as any)?.series || (w as any).extra?.series || [],
-      telemetry_keys: (w.config as any)?.telemetry_keys || (w as any).extra?.telemetry_keys || [],
+      time_range: (w.config as any)?.time_range || (w.config as any)?.extra?.time_range || "",
+      series: (w.config as any)?.series || (w.config as any)?.extra?.series || [],
+      telemetry_keys: (w.config as any)?.telemetry_keys || (w.config as any)?.extra?.telemetry_keys || [],
     }));
 
     inflightRef.current = true;
+    setIsPollingActive(true);
     try {
       await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zabbix-poller`,
@@ -149,38 +158,45 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
             Authorization: `Bearer ${session.session.access_token}`,
           },
           body: JSON.stringify({
-            connection_id: dashboard.zabbix_connection_id,
-            dashboard_id: dashboard.id,
+            connection_id: dash.zabbix_connection_id,
+            dashboard_id: dash.id,
             widgets: widgetConfigs,
           }),
         },
       );
     } catch (err) {
-      console.error("Poll failed:", err);
+      console.error("[FlowPulse] Poll failed:", err);
+      // Error does NOT stop the timer — next cycle will retry
     } finally {
       inflightRef.current = false;
+      setIsPollingActive(false);
     }
-  }, [dashboard]);
+  }, []); // stable — reads from ref
 
-  // Start/stop polling
+  // Start/stop polling — reacts to interval changes
   useEffect(() => {
     if (!dashboard?.zabbix_connection_id || !dashboard.widgets.length) return;
 
-    // Initial poll
+    const intervalMs = (pollIntervalOverride ?? 60) * 1000;
+    console.log("🔄 Polling iniciado em:", `${pollIntervalOverride ?? 60}s (${intervalMs}ms)`);
+
+    // Immediate first poll
     pollNow();
 
-    const intervalMs = (pollIntervalOverride || (dashboard.settings as Record<string, unknown>)?.poll_interval_seconds as number || 60) * 1000;
     pollIntervalRef.current = setInterval(pollNow, intervalMs);
 
     return () => {
-      if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
+      if (pollIntervalRef.current) {
+        clearInterval(pollIntervalRef.current);
+        pollIntervalRef.current = null;
+      }
     };
-  }, [dashboard?.id, dashboard?.zabbix_connection_id, pollNow, pollIntervalOverride]);
+  }, [dashboard?.id, dashboard?.zabbix_connection_id, dashboard?.widgets?.length, pollIntervalOverride, pollNow]);
 
   // Clear cache on dashboard switch
   useEffect(() => {
     return () => clearCache();
   }, [dashboardId]);
 
-  return { dashboard, isLoading, error, telemetryCache, pollNow };
+  return { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive };
 }

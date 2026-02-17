@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff, Timer } from "lucide-react";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCallback, useMemo, useState, useEffect } from "react";
+import { useCallback, useState, useEffect } from "react";
 import { useAudioAlert } from "@/hooks/useAudioAlert";
 
 /** Grid: 12 columns, each row = 80px height */
@@ -29,7 +29,6 @@ function getPollIntervalKey(dashboardId: string) {
 export default function DashboardView() {
   const { dashboardId } = useParams<{ dashboardId: string }>();
   const navigate = useNavigate();
-  const [isPolling, setIsPolling] = useState(false);
   const { muted, toggleMute, playBeep } = useAudioAlert();
 
   const handleCritical = useCallback((widgetId: string) => {
@@ -74,12 +73,10 @@ export default function DashboardView() {
     }
   }, [activeDashId]);
 
-  const { dashboard, isLoading, error, telemetryCache, pollNow } = useDashboardData(activeDashId, pollInterval);
+  const { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive } = useDashboardData(activeDashId, pollInterval);
 
   const handlePoll = async () => {
-    setIsPolling(true);
     await pollNow();
-    setTimeout(() => setIsPolling(false), 1000);
   };
 
   const hasData = telemetryCache.size > 0;
@@ -118,13 +115,13 @@ export default function DashboardView() {
       style={{ background: 'var(--category-bg, linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%))' }}
     >
       {/* Sync progress bar */}
-      {isPolling && (
+      {isPollingActive && (
         <div className="fixed top-0 left-0 right-0 h-[2px] z-50">
           <motion.div
             className="h-full bg-primary"
             initial={{ width: "0%" }}
             animate={{ width: "100%" }}
-            transition={{ duration: 1, ease: "easeInOut" }}
+            transition={{ duration: 1.5, ease: "easeInOut" }}
           />
         </div>
       )}
@@ -202,10 +199,10 @@ export default function DashboardView() {
               variant="outline"
               size="sm"
               onClick={handlePoll}
-              disabled={isPolling || !dashboard?.zabbix_connection_id}
+              disabled={isPollingActive || !dashboard?.zabbix_connection_id}
               className="gap-1.5 text-xs"
             >
-              <RefreshCw className={`w-3 h-3 ${isPolling ? "animate-spin" : ""}`} />
+              <RefreshCw className={`w-3 h-3 ${isPollingActive ? "animate-spin" : ""}`} />
               Poll
             </Button>
           </div>
