@@ -64,6 +64,86 @@
     --sidebar-border: 222 15% 14%;
     --sidebar-ring: 142 100% 50%;
   }
+
+  /* ── Category Themes ── */
+  [data-theme-category="network"],
+  [data-theme-category="wifi"] {
+    --primary: 210 100% 56%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 210 100% 56%;
+    --neon-green: 186 100% 50%;
+    --category-accent: 210 100% 56%;
+    --category-accent-alt: 186 100% 50%;
+    --category-glow: hsl(210 100% 56% / 0.08);
+  }
+
+  [data-theme-category="starlink"] {
+    --primary: 186 100% 50%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 186 100% 50%;
+    --category-accent: 186 100% 50%;
+    --category-accent-alt: 210 100% 56%;
+    --category-glow: hsl(186 100% 50% / 0.08);
+  }
+
+  [data-theme-category="energy"] {
+    --primary: 43 100% 50%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 43 100% 50%;
+    --neon-green: 30 100% 55%;
+    --category-accent: 43 100% 50%;
+    --category-accent-alt: 30 100% 55%;
+    --category-glow: hsl(43 100% 50% / 0.08);
+  }
+
+  [data-theme-category="servers"],
+  [data-theme-category="datacenter"] {
+    --primary: 210 10% 70%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 210 10% 70%;
+    --category-accent: 210 10% 70%;
+    --category-accent-alt: 142 100% 50%;
+    --category-glow: hsl(210 10% 70% / 0.06);
+  }
+
+  [data-theme-category="security"] {
+    --primary: 265 90% 65%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 265 90% 65%;
+    --category-accent: 265 90% 65%;
+    --category-accent-alt: 300 80% 55%;
+    --category-glow: hsl(265 90% 65% / 0.08);
+  }
+
+  [data-theme-category="virtualization"],
+  [data-theme-category="database"] {
+    --primary: 217 90% 60%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 217 90% 60%;
+    --category-accent: 217 90% 60%;
+    --category-accent-alt: 240 80% 66%;
+    --category-glow: hsl(217 90% 60% / 0.08);
+  }
+
+  [data-theme-category="monitoring"],
+  [data-theme-category="cameras"] {
+    --primary: 330 85% 60%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 330 85% 60%;
+    --category-accent: 330 85% 60%;
+    --category-accent-alt: 290 80% 55%;
+    --category-glow: hsl(330 85% 60% / 0.08);
+  }
+
+  [data-theme-category="backup"],
+  [data-theme-category="logistics"] {
+    --primary: 152 80% 45%;
+    --primary-foreground: 228 30% 4%;
+    --ring: 152 80% 45%;
+    --category-accent: 152 80% 45%;
+    --category-accent-alt: 142 100% 50%;
+    --category-glow: hsl(152 80% 45% / 0.08);
+  }
 }
 
 @layer base {

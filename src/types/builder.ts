@@ -89,6 +89,8 @@ export interface DashboardConfig {
     /** Ambient glow */
     ambientGlow?: boolean;
     ambientGlowColor?: string;
+    /** Category theme from preset */
+    category?: string;
   };
   widgets: WidgetConfig[];
 }

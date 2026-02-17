@@ -75,11 +75,13 @@ export default function DashboardView() {
     );
   }
 
+  const themeCategory = (dashboard?.settings as any)?.category || "";
+
   return (
-    <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
+    <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8" data-theme-category={themeCategory}>
       {/* Ambient glow */}
-      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-green/5 rounded-full blur-[120px] pointer-events-none" />
-      <div className="fixed bottom-0 right-0 w-[400px] h-[400px] bg-neon-blue/3 rounded-full blur-[100px] pointer-events-none" />
+      <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full blur-[120px] pointer-events-none" style={{ background: 'var(--category-glow, hsl(142 100% 50% / 0.05))' }} />
+      <div className="fixed bottom-0 right-0 w-[400px] h-[400px] rounded-full blur-[100px] pointer-events-none" style={{ background: 'var(--category-glow, hsl(210 100% 56% / 0.03))' }} />
 
       <div className="max-w-[1600px] mx-auto relative z-10">
         {/* Header */}

@@ -150,7 +150,7 @@ export default function DashboardBuilder() {
       name: prev.name === "Novo Dashboard" ? preset.name : prev.name,
       description: prev.description || preset.description,
       widgets: [...prev.widgets, ...preset.widgets],
-      settings: { ...prev.settings, ...preset.settings },
+      settings: { ...prev.settings, ...preset.settings, category: preset.category },
     }));
     setSelectedWidgetId(null);
     setSidebarMode("widgets");
@@ -276,7 +276,7 @@ export default function DashboardBuilder() {
     : {};
 
   return (
-    <div className="h-screen flex flex-col bg-background overflow-hidden">
+    <div className="h-screen flex flex-col bg-background overflow-hidden" data-theme-category={config.settings.category || ""}>
       {/* ── Top Bar ── */}
       <header className="h-12 border-b border-border/30 flex items-center justify-between px-4 flex-shrink-0 glass-card-elevated z-20">
         <div className="flex items-center gap-3">
@@ -397,7 +397,7 @@ export default function DashboardBuilder() {
             <>
               <div
                 className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full blur-[120px] pointer-events-none"
-                style={{ background: `${config.settings.ambientGlowColor || "#39FF14"}08` }}
+                style={{ background: `var(--category-glow, ${config.settings.ambientGlowColor || "#39FF14"}08)` }}
               />
             </>
           )}
