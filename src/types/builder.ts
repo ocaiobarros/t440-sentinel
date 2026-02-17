@@ -93,6 +93,26 @@ export interface DashboardConfig {
   widgets: WidgetConfig[];
 }
 
+/** Hotspot definition for image-map widgets */
+export interface ImageHotspot {
+  id: string;
+  /** Position as percentage 0-100 */
+  x: number;
+  y: number;
+  /** Telemetry key to bind LED to */
+  telemetry_key: string;
+  /** Label shown on hover */
+  label: string;
+  /** LED size px */
+  size?: number;
+  /** Shape of the hotspot */
+  shape?: "circle" | "square" | "bar-h" | "bar-v";
+  /** Color mapping: value→color pairs (e.g., { "0": "#39FF14", "1": "#FF4444" }) */
+  color_map?: Record<string, string>;
+  /** Default color when no match */
+  default_color?: string;
+}
+
 export const WIDGET_TYPES = [
   { type: "stat", label: "Stat", icon: "Hash", description: "Valor numérico com unidade e trend", minW: 2, minH: 2 },
   { type: "gauge", label: "Gauge", icon: "Gauge", description: "Indicador semicircular com min/max", minW: 2, minH: 3 },
@@ -102,6 +122,7 @@ export const WIDGET_TYPES = [
   { type: "status", label: "Status", icon: "CircleDot", description: "Indicador de status com glow", minW: 2, minH: 2 },
   { type: "progress", label: "Barra", icon: "BarChart3", description: "Barra de progresso horizontal", minW: 3, minH: 2 },
   { type: "icon-value", label: "Ícone+Valor", icon: "Zap", description: "Ícone grande com valor", minW: 2, minH: 2 },
+  { type: "image-map", label: "Image Map", icon: "Image", description: "Imagem interativa com LEDs mapeados", minW: 4, minH: 4 },
 ] as const;
 
 export const GLOW_PRESETS = [

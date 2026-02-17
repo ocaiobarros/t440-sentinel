@@ -1,8 +1,10 @@
 import { useState, useMemo } from "react";
-import type { WidgetConfig, WidgetStyle } from "@/types/builder";
+import type { WidgetConfig, WidgetStyle, ImageHotspot } from "@/types/builder";
 import { GLOW_PRESETS, FONT_OPTIONS, COLOR_PRESETS } from "@/types/builder";
 import { getIconNames } from "./DynamicIcon";
 import DynamicIcon from "./DynamicIcon";
+import ImageUploader from "./ImageUploader";
+import HotspotEditor from "./HotspotEditor";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
@@ -11,7 +13,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, X, Search, Palette, Type, Sparkles, Database, Settings2 } from "lucide-react";
+import { Trash2, X, Search, Palette, Type, Sparkles, Database, Settings2, ImageIcon } from "lucide-react";
 
 interface Props {
   widget: WidgetConfig;
@@ -77,10 +79,11 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose 
 
       <ScrollArea className="flex-1">
         <Tabs defaultValue="style" className="p-3">
-          <TabsList className="w-full grid grid-cols-4 h-7">
+          <TabsList className="w-full grid grid-cols-5 h-7">
             <TabsTrigger value="style" className="text-[9px] gap-1 px-1"><Palette className="w-3 h-3" />Visual</TabsTrigger>
             <TabsTrigger value="text" className="text-[9px] gap-1 px-1"><Type className="w-3 h-3" />Texto</TabsTrigger>
             <TabsTrigger value="icon" className="text-[9px] gap-1 px-1"><Sparkles className="w-3 h-3" />Ícone</TabsTrigger>
+            <TabsTrigger value="image" className="text-[9px] gap-1 px-1"><ImageIcon className="w-3 h-3" />Imagem</TabsTrigger>
             <TabsTrigger value="data" className="text-[9px] gap-1 px-1"><Database className="w-3 h-3" />Dados</TabsTrigger>
           </TabsList>
 
@@ -271,7 +274,47 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose 
             )}
           </TabsContent>
 
-          {/* ── DATA TAB ── */}
+          {/* ── IMAGE TAB ── */}
+          <TabsContent value="image" className="space-y-4 mt-3">
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground">Imagem do dispositivo</Label>
+              <ImageUploader
+                currentUrl={(widget.extra?.imageUrl as string) || undefined}
+                onUploaded={(url) => onUpdate({ ...widget, extra: { ...widget.extra, imageUrl: url } })}
+                onRemove={() => {
+                  const { imageUrl, ...rest } = widget.extra;
+                  onUpdate({ ...widget, extra: rest });
+                }}
+              />
+            </div>
+
+            {widget.extra?.imageUrl && (
+              <div className="space-y-1.5">
+                <Label className="text-[10px] text-muted-foreground">
+                  LEDs interativos ({((widget.extra?.hotspots as ImageHotspot[]) || []).length})
+                </Label>
+                <HotspotEditor
+                  imageUrl={widget.extra.imageUrl as string}
+                  hotspots={((widget.extra?.hotspots as ImageHotspot[]) || [])}
+                  onChange={(hotspots) => onUpdate({ ...widget, extra: { ...widget.extra, hotspots } })}
+                />
+              </div>
+            )}
+
+            {!widget.extra?.imageUrl && (
+              <p className="text-[9px] text-muted-foreground">
+                Faça upload de uma imagem (frontal do servidor, firewall, antena...) e depois adicione LEDs interativos mapeados para telemetry keys do Zabbix.
+              </p>
+            )}
+
+            {widget.widget_type !== "image-map" && widget.extra?.imageUrl && (
+              <p className="text-[9px] text-neon-amber">
+                💡 Dica: mude o tipo do widget para "Image Map" na aba Dados para usar LEDs interativos no viewer.
+              </p>
+            )}
+          </TabsContent>
+
+
           <TabsContent value="data" className="space-y-4 mt-3">
             <div className="space-y-1.5">
               <Label className="text-[10px] text-muted-foreground">Tipo do widget</Label>

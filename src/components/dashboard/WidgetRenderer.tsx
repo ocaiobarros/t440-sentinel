@@ -1,9 +1,11 @@
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
+import type { ImageHotspot } from "@/types/builder";
 import StatWidget from "./widgets/StatWidget";
 import GaugeWidget from "./widgets/GaugeWidget";
 import TimeseriesWidget from "./widgets/TimeseriesWidget";
 import TableWidget from "./widgets/TableWidget";
 import TextWidget from "./widgets/TextWidget";
+import ImageMapWidget from "./widgets/ImageMapWidget";
 
 interface Props {
   widgetType: string;
@@ -25,6 +27,15 @@ export default function WidgetRenderer({ widgetType, telemetryKey, title, cache,
       return <TableWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
     case "text":
       return <TextWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
+    case "image-map":
+      return (
+        <ImageMapWidget
+          imageUrl={(config?.imageUrl as string) || ""}
+          hotspots={((config?.hotspots as ImageHotspot[]) || [])}
+          cache={cache}
+          title={title}
+        />
+      );
     default:
       return (
         <div className="glass-card rounded-lg p-4 h-full flex items-center justify-center border border-border/50">

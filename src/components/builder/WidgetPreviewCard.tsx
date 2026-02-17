@@ -161,6 +161,18 @@ function renderTypePreview(widget: WidgetConfig) {
           <div style={valStyle} className="font-bold">—</div>
         </div>
       );
+    case "image-map":
+      return (
+        <div className="w-full h-full relative overflow-hidden rounded">
+          {widget.extra?.imageUrl ? (
+            <img src={widget.extra.imageUrl as string} alt="Device" className="w-full h-full object-contain opacity-70" />
+          ) : (
+            <div className="flex items-center justify-center h-full text-muted-foreground">
+              <span className="text-[9px]">Sem imagem</span>
+            </div>
+          )}
+        </div>
+      );
     default:
       return <span className="text-xs text-muted-foreground">Widget</span>;
   }

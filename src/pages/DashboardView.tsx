@@ -175,7 +175,7 @@ export default function DashboardView() {
                       telemetryKey={telemetryKey}
                       title={widget.title}
                       cache={telemetryCache}
-                      config={widget.config}
+                      config={widget.config as Record<string, unknown>}
                     />
                   </motion.div>
                 );

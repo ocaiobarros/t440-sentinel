@@ -218,7 +218,7 @@ export default function DashboardBuilder() {
           height: w.h,
           query: w.query as any,
           adapter: w.adapter as any,
-          config: { style: w.style, extra: w.extra } as any,
+          config: { style: w.style, extra: w.extra, imageUrl: w.extra?.imageUrl, hotspots: w.extra?.hotspots } as any,
           created_by: userId,
         }));
         const { error: wErr } = await supabase.from("widgets").insert(widgetRows);
