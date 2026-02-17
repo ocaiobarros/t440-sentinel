@@ -21,49 +21,6 @@ const ROW_HEIGHT = 80;
 const GRID_MARGIN: [number, number] = [4, 4];
 const GRID_CONTAINER_PADDING: [number, number] = [0, 0];
 
-/**
- * Auto-stretch: for each row, if the rightmost widget doesn't reach col 12,
- * expand its width to fill the gap so there's no dead space on the right.
- */
-function autoStretchWidgets(widgets: Array<{ position_x: number; position_y: number; width: number; height: number; [k: string]: any }>) {
-  if (!widgets.length) return widgets;
-
-  // Group widgets by each row they occupy
-  const rowMap = new Map<number, typeof widgets>();
-  for (const w of widgets) {
-    for (let row = w.position_y; row < w.position_y + w.height; row++) {
-      if (!rowMap.has(row)) rowMap.set(row, []);
-      rowMap.get(row)!.push(w);
-    }
-  }
-
-  // Find the rightmost widget per visual row and track which ones to stretch
-  const stretchAmounts = new Map<string, number>(); // widget id -> extra cols
-  for (const [, rowWidgets] of rowMap) {
-    let rightmost: typeof widgets[0] | null = null;
-    let maxRight = 0;
-    for (const w of rowWidgets) {
-      const right = w.position_x + w.width;
-      if (right > maxRight) {
-        maxRight = right;
-        rightmost = w;
-      }
-    }
-    if (rightmost && maxRight < GRID_COLS) {
-      const gap = GRID_COLS - maxRight;
-      const existing = stretchAmounts.get(rightmost.id) ?? 0;
-      stretchAmounts.set(rightmost.id, Math.max(existing, gap));
-    }
-  }
-
-  if (stretchAmounts.size === 0) return widgets;
-
-  return widgets.map((w) => {
-    const extra = stretchAmounts.get(w.id);
-    if (extra) return { ...w, width: w.width + extra };
-    return w;
-  });
-}
 
 const POLL_INTERVALS = [
   { label: "5s", value: 5 },
@@ -334,19 +291,18 @@ function ViewGrid({
   onCritical: (id: string) => void;
 }) {
   const isCompact = widgets.length > 20;
-  const stretched = useMemo(() => autoStretchWidgets(widgets), [widgets]);
 
   const gridLayout: Layout[] = useMemo(
     () =>
-      stretched.map((w: any) => ({
+      widgets.map((w: any) => ({
         i: w.id,
         x: w.position_x,
         y: w.position_y,
         w: w.width,
         h: w.height,
-        static: true, // non-draggable, non-resizable
+        static: true,
       })),
-    [stretched],
+    [widgets],
   );
 
   return (
@@ -357,12 +313,12 @@ function ViewGrid({
       rowHeight={rowHeight}
       isDraggable={false}
       isResizable={false}
-      compactType="vertical"
+      compactType={null}
       margin={GRID_MARGIN}
       containerPadding={GRID_CONTAINER_PADDING}
       useCSSTransforms
     >
-      {stretched.map((widget: any) => {
+      {widgets.map((widget: any) => {
         const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
         const mergedConfig = {
           ...(widget.config as Record<string, unknown>),
