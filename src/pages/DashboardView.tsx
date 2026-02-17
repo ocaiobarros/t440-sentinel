@@ -191,6 +191,7 @@ export default function DashboardView() {
                       width: `${widget.width * COL_WIDTH_PERCENT}%`,
                       height: `${widget.height * ROW_HEIGHT}px`,
                       padding: "4px",
+                      contain: "layout style paint",
                     }}
                   >
                     <WidgetRenderer

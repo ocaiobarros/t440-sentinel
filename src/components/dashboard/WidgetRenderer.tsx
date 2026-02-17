@@ -48,6 +48,7 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
   })();
 
   const wrapperClass = isCritical ? "h-full critical-pulse rounded-lg border border-destructive/50" : "h-full";
+  const containStyle: React.CSSProperties = { contain: "layout style paint" };
 
   // Show skeleton if no data yet for data-driven widgets
   const needsData = !["label", "text"].includes(widgetType);
@@ -95,7 +96,7 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
     }
   })();
 
-  return <div className={wrapperClass}>{inner}</div>;
+  return <div className={wrapperClass} style={containStyle}>{inner}</div>;
 }
 
 const WidgetRenderer = memo(WidgetRendererInner);
