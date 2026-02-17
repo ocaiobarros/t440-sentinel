@@ -7,13 +7,11 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff, Timer } from "lucide-react";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCallback, useState, useEffect, useMemo } from "react";
+import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { useAudioAlert } from "@/hooks/useAudioAlert";
-import { Responsive, WidthProvider, type Layout } from "react-grid-layout";
+import { Responsive, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-
-const ResponsiveGridLayout = WidthProvider(Responsive);
 
 /** Grid constants — MUST match DashboardBuilder exactly */
 const GRID_COLS = 12;
@@ -291,13 +289,18 @@ function ViewGrid({
   onCritical: (id: string) => void;
 }) {
   const isCompact = widgets.length > 20;
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
 
-  // Force WidthProvider to re-measure after mount & navigation
+  // Measure container width with ResizeObserver — no WidthProvider needed
   useEffect(() => {
-    const timer = setTimeout(() => {
-      window.dispatchEvent(new Event("resize"));
-    }, 50);
-    return () => clearTimeout(timer);
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => setContainerWidth(el.offsetWidth);
+    measure();
+    const ro = new ResizeObserver(() => measure());
+    ro.observe(el);
+    return () => ro.disconnect();
   }, []);
 
   const gridLayout: Layout[] = useMemo(
@@ -314,40 +317,45 @@ function ViewGrid({
   );
 
   return (
-    <ResponsiveGridLayout
-      layouts={{ lg: gridLayout }}
-      breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-      cols={{ lg: cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
-      rowHeight={rowHeight}
-      isDraggable={false}
-      isResizable={false}
-      compactType={null}
-      margin={GRID_MARGIN}
-      containerPadding={GRID_CONTAINER_PADDING}
-      useCSSTransforms
-    >
-      {widgets.map((widget: any) => {
-        const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
-        const mergedConfig = {
-          ...(widget.config as Record<string, unknown>),
-          ...((widget.config as any)?.extra || {}),
-          style: (widget.config as any)?.style,
-        };
-        return (
-          <div key={widget.id}>
-            <WidgetRenderer
-              widgetType={widget.widget_type}
-              widgetId={widget.id}
-              telemetryKey={telemetryKey}
-              title={widget.title}
-              cache={telemetryCache}
-              config={mergedConfig}
-              onCritical={onCritical}
-              compact={isCompact}
-            />
-          </div>
-        );
-      })}
-    </ResponsiveGridLayout>
+    <div ref={containerRef} style={{ width: '100%' }}>
+      {containerWidth > 0 && (
+        <Responsive
+          width={containerWidth}
+          layouts={{ lg: gridLayout }}
+          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+          cols={{ lg: cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
+          rowHeight={rowHeight}
+          isDraggable={false}
+          isResizable={false}
+          compactType={null}
+          margin={GRID_MARGIN}
+          containerPadding={GRID_CONTAINER_PADDING}
+          useCSSTransforms
+        >
+          {widgets.map((widget: any) => {
+            const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
+            const mergedConfig = {
+              ...(widget.config as Record<string, unknown>),
+              ...((widget.config as any)?.extra || {}),
+              style: (widget.config as any)?.style,
+            };
+            return (
+              <div key={widget.id}>
+                <WidgetRenderer
+                  widgetType={widget.widget_type}
+                  widgetId={widget.id}
+                  telemetryKey={telemetryKey}
+                  title={widget.title}
+                  cache={telemetryCache}
+                  config={mergedConfig}
+                  onCritical={onCritical}
+                  compact={isCompact}
+                />
+              </div>
+            );
+          })}
+        </Responsive>
+      )}
+    </div>
   );
 }
