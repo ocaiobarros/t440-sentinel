@@ -54,6 +54,26 @@ async function zabbixProxy(connectionId: string, method: string, params: Record<
   return data.result;
 }
 
+async function zabbixProxyPaginated(connectionId: string, method: string, baseParams: Record<string, unknown>) {
+  const pageSize = 500;
+  let offset = 0;
+  const allResults: unknown[] = [];
+
+  while (true) {
+    const result = await zabbixProxy(connectionId, method, {
+      ...baseParams,
+      limit: pageSize,
+      offset,
+    });
+    const items = (result as unknown[]) || [];
+    allResults.push(...items);
+    if (items.length < pageSize) break;
+    offset += pageSize;
+  }
+
+  return allResults;
+}
+
 export default function ZabbixItemBrowser({ connectionId, selectedItemId, onSelectItem }: ZabbixItemBrowserProps) {
   const [groups, setGroups] = useState<ZabbixGroup[]>([]);
   const [hosts, setHosts] = useState<ZabbixHost[]>([]);
@@ -73,7 +93,7 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, onSele
     if (!connectionId) return;
     setLoadingGroups(true);
     setError(null);
-    zabbixProxy(connectionId, "hostgroup.get", { output: ["groupid", "name"], sortfield: "name" })
+    zabbixProxyPaginated(connectionId, "hostgroup.get", { output: ["groupid", "name"], sortfield: "name" })
       .then((result) => setGroups((result as ZabbixGroup[]) || []))
       .catch((e) => setError(e.message))
       .finally(() => setLoadingGroups(false));
@@ -85,7 +105,7 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, onSele
     setLoadingHosts(true);
     setSelectedHost("");
     setItems([]);
-    zabbixProxy(connectionId, "host.get", {
+    zabbixProxyPaginated(connectionId, "host.get", {
       output: ["hostid", "host", "name"],
       groupids: [selectedGroup],
       sortfield: "name",
@@ -99,11 +119,10 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, onSele
   useEffect(() => {
     if (!connectionId || !selectedHost) { setItems([]); return; }
     setLoadingItems(true);
-    zabbixProxy(connectionId, "item.get", {
+    zabbixProxyPaginated(connectionId, "item.get", {
       output: ["itemid", "key_", "name", "lastvalue", "units", "value_type"],
       hostids: [selectedHost],
       sortfield: "name",
-      limit: 500,
     })
       .then((result) => setItems((result as ZabbixItem[]) || []))
       .catch((e) => setError(e.message))
