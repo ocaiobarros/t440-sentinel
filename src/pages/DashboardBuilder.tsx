@@ -189,13 +189,12 @@ export default function DashboardBuilder() {
   // CRITICAL: We ONLY update widget positions on drag/resize STOP events.
   // We do NOT use onLayoutChange because it fires on every width recalculation
   // (e.g. when sidebar opens/closes), which would corrupt saved widget sizes.
-  // Track drag/resize to distinguish from clicks.
-  // We use a counter that increments on start and check on click.
-  const interactionCountRef = useRef(0);
-  const clickInteractionRef = useRef(0);
+  // Track mouse position to distinguish clicks from drags.
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
+  const wasDragRef = useRef(false);
 
   const handleDragResizeStart = useCallback(() => {
-    interactionCountRef.current += 1;
+    wasDragRef.current = true;
   }, []);
 
   const handleDragStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
@@ -218,15 +217,19 @@ export default function DashboardBuilder() {
     }));
   }, []);
 
-  // On mousedown on widget, snapshot the interaction counter.
-  // On click, if counter changed → was a drag, suppress. Otherwise open config.
-  const handleWidgetMouseDown = useCallback(() => {
-    clickInteractionRef.current = interactionCountRef.current;
+  // Use onMouseDown + onMouseUp on the wrapper to detect clicks vs drags.
+  const handleWidgetMouseDown = useCallback((e: React.MouseEvent) => {
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+    wasDragRef.current = false;
   }, []);
 
-  const handleWidgetClick = useCallback((widgetId: string) => {
-    if (clickInteractionRef.current !== interactionCountRef.current) return; // drag/resize happened
-    console.log("Widget clicked for edit:", widgetId);
+  const handleWidgetMouseUp = useCallback((widgetId: string, e: React.MouseEvent) => {
+    if (wasDragRef.current) return;
+    const down = mouseDownPosRef.current;
+    if (down) {
+      const dist = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
+      if (dist > 5) return;
+    }
     setSelectedWidgetId(widgetId);
     setSidebarMode("config");
     setSidebarOpen(true);
@@ -481,11 +484,15 @@ export default function DashboardBuilder() {
                 useCSSTransforms
               >
                 {config.widgets.map((widget) => (
-                  <div key={widget.id} onMouseDown={handleWidgetMouseDown}>
+                  <div
+                    key={widget.id}
+                    onMouseDownCapture={handleWidgetMouseDown}
+                    onClickCapture={(e) => handleWidgetMouseUp(widget.id, e)}
+                  >
                     <WidgetPreviewCard
                       widget={widget}
                       isSelected={selectedWidgetId === widget.id}
-                      onClick={() => handleWidgetClick(widget.id)}
+                      onClick={() => {}}
                     />
                   </div>
                 ))}

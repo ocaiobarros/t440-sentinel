@@ -4,7 +4,7 @@ import DynamicIcon from "./DynamicIcon";
 interface Props {
   widget: WidgetConfig;
   isSelected: boolean;
-  onClick: () => void;
+  onClick: (e?: React.MouseEvent) => void;
   isPreview?: boolean;
 }
 
