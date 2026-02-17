@@ -189,12 +189,55 @@ export default function DashboardBuilder() {
   // CRITICAL: We ONLY update widget positions on drag/resize STOP events.
   // We do NOT use onLayoutChange because it fires on every width recalculation
   // (e.g. when sidebar opens/closes), which would corrupt saved widget sizes.
-  // Track mouse position to distinguish clicks from drags.
+  // ─── Click vs Drag detection via native DOM listeners on canvas ───
+  // React synthetic events are unreliable with RGL because RGL intercepts
+  // mousedown in bubble phase. Instead, we attach native capture-phase
+  // listeners directly to the canvas element.
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
-  const wasDragRef = useRef(false);
+  const mouseDownWidgetRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+
+    const onMouseDown = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      const widgetEl = target.closest("[data-widget-id]") as HTMLElement | null;
+      
+      if (widgetEl) {
+        mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+        mouseDownWidgetRef.current = widgetEl.getAttribute("data-widget-id");
+      } else {
+        mouseDownPosRef.current = null;
+        mouseDownWidgetRef.current = null;
+      }
+    };
+
+    const onClick = (e: MouseEvent) => {
+      const down = mouseDownPosRef.current;
+      const widgetId = mouseDownWidgetRef.current;
+      
+      if (!down || !widgetId) return;
+      const dist = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
+      
+      if (dist > 5) return;
+      setSelectedWidgetId(widgetId);
+      setSidebarMode("config");
+      setSidebarOpen(true);
+    };
+
+    el.addEventListener("mousedown", onMouseDown, true); // capture phase
+    el.addEventListener("click", onClick, true); // capture phase
+    return () => {
+      el.removeEventListener("mousedown", onMouseDown, true);
+      el.removeEventListener("click", onClick, true);
+    };
+  }, []);
 
   const handleDragResizeStart = useCallback(() => {
-    wasDragRef.current = true;
+    
+    // Do NOT null mouseDownPosRef here — RGL fires this on mousedown,
+    // before the click event, which would prevent click detection.
   }, []);
 
   const handleDragStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
@@ -215,24 +258,6 @@ export default function DashboardBuilder() {
         return { ...w, x: newItem.x, y: newItem.y, w: newItem.w, h: newItem.h };
       }),
     }));
-  }, []);
-
-  // Use onMouseDown + onMouseUp on the wrapper to detect clicks vs drags.
-  const handleWidgetMouseDown = useCallback((e: React.MouseEvent) => {
-    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
-    wasDragRef.current = false;
-  }, []);
-
-  const handleWidgetMouseUp = useCallback((widgetId: string, e: React.MouseEvent) => {
-    if (wasDragRef.current) return;
-    const down = mouseDownPosRef.current;
-    if (down) {
-      const dist = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
-      if (dist > 5) return;
-    }
-    setSelectedWidgetId(widgetId);
-    setSidebarMode("config");
-    setSidebarOpen(true);
   }, []);
 
   // Save mutation
@@ -484,11 +509,7 @@ export default function DashboardBuilder() {
                 useCSSTransforms
               >
                 {config.widgets.map((widget) => (
-                  <div
-                    key={widget.id}
-                    onMouseDownCapture={handleWidgetMouseDown}
-                    onClickCapture={(e) => handleWidgetMouseUp(widget.id, e)}
-                  >
+                  <div key={widget.id} data-widget-id={widget.id}>
                     <WidgetPreviewCard
                       widget={widget}
                       isSelected={selectedWidgetId === widget.id}
