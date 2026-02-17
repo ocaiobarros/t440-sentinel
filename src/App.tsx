@@ -12,6 +12,8 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ZabbixConnections from "./pages/ZabbixConnections";
 import DashboardView from "./pages/DashboardView";
+import DashboardBuilder from "./pages/DashboardBuilder";
+import DashboardList from "./pages/DashboardList";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,7 +34,7 @@ const App = () => (
               path="/"
               element={
                 <ProtectedRoute>
-                  <Index />
+                  <DashboardList />
                 </ProtectedRoute>
               }
             />
@@ -45,10 +47,34 @@ const App = () => (
               }
             />
             <Route
+              path="/builder"
+              element={
+                <ProtectedRoute>
+                  <DashboardBuilder />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/builder/:dashboardId"
+              element={
+                <ProtectedRoute>
+                  <DashboardBuilder />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/settings/connections"
               element={
                 <ProtectedRoute>
                   <ZabbixConnections />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/legacy"
+              element={
+                <ProtectedRoute>
+                  <Index />
                 </ProtectedRoute>
               }
             />

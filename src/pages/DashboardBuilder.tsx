@@ -1,0 +1,443 @@
+import { useState, useCallback, useMemo, useRef } from "react";
+import { Responsive, WidthProvider, type Layout } from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
+import { useNavigate, useParams } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { motion, AnimatePresence } from "framer-motion";
+import type { DashboardConfig, WidgetConfig } from "@/types/builder";
+import { createDefaultWidget } from "@/types/builder";
+import WidgetPalette from "@/components/builder/WidgetPalette";
+import WidgetConfigPanel from "@/components/builder/WidgetConfigPanel";
+import WidgetPreviewCard from "@/components/builder/WidgetPreviewCard";
+import DashboardSettingsPanel from "@/components/builder/DashboardSettingsPanel";
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Save, ArrowLeft, Eye, Settings2, PanelLeftClose, PanelLeft,
+  Layers, Undo2, Redo2,
+} from "lucide-react";
+import { ScrollArea } from "@/components/ui/scroll-area";
+
+const ResponsiveGridLayout = WidthProvider(Responsive);
+
+const DEFAULT_CONFIG: DashboardConfig = {
+  name: "Novo Dashboard",
+  description: "",
+  zabbix_connection_id: null,
+  settings: {
+    poll_interval_seconds: 60,
+    cols: 12,
+    rowHeight: 80,
+    showGrid: true,
+    scanlines: true,
+    ambientGlow: true,
+    ambientGlowColor: "#39FF14",
+  },
+  widgets: [],
+};
+
+export default function DashboardBuilder() {
+  const { dashboardId } = useParams<{ dashboardId?: string }>();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const isNew = !dashboardId;
+
+  // State
+  const [config, setConfig] = useState<DashboardConfig>(DEFAULT_CONFIG);
+  const [selectedWidgetId, setSelectedWidgetId] = useState<string | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<"widgets" | "settings" | "config">("widgets");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [history, setHistory] = useState<DashboardConfig[]>([]);
+  const [historyIdx, setHistoryIdx] = useState(-1);
+
+  const selectedWidget = useMemo(
+    () => config.widgets.find((w) => w.id === selectedWidgetId) ?? null,
+    [config.widgets, selectedWidgetId],
+  );
+
+  // Fetch connections for dropdown
+  const { data: connections = [] } = useQuery({
+    queryKey: ["zabbix-connections-list"],
+    queryFn: async () => {
+      const { data } = await supabase.from("zabbix_connections").select("id, name").eq("is_active", true);
+      return (data ?? []) as Array<{ id: string; name: string }>;
+    },
+  });
+
+  // Load existing dashboard
+  useQuery({
+    queryKey: ["builder-dashboard", dashboardId],
+    queryFn: async () => {
+      if (!dashboardId) return null;
+      const { data: dash } = await supabase
+        .from("dashboards")
+        .select("*")
+        .eq("id", dashboardId)
+        .single();
+      if (!dash) throw new Error("Dashboard not found");
+
+      const { data: widgets } = await supabase
+        .from("widgets")
+        .select("*")
+        .eq("dashboard_id", dashboardId);
+
+      const loaded: DashboardConfig = {
+        id: dash.id,
+        name: dash.name,
+        description: dash.description || "",
+        zabbix_connection_id: dash.zabbix_connection_id,
+        settings: {
+          ...DEFAULT_CONFIG.settings,
+          ...((dash.settings as Record<string, unknown>) || {}),
+        },
+        widgets: (widgets || []).map((w: any) => ({
+          id: w.id,
+          widget_type: w.widget_type,
+          title: w.title,
+          x: w.position_x,
+          y: w.position_y,
+          w: w.width,
+          h: w.height,
+          style: (w.config as any)?.style || {},
+          query: (w.query as any) || { source: "zabbix", method: "item.get", params: {} },
+          adapter: (w.adapter as any) || { type: "auto" },
+          extra: (w.config as any)?.extra || {},
+        })),
+      };
+      setConfig(loaded);
+      return loaded;
+    },
+    enabled: !!dashboardId,
+  });
+
+  // History management
+  const pushHistory = useCallback(() => {
+    setHistory((prev) => [...prev.slice(0, historyIdx + 1), JSON.parse(JSON.stringify(config))]);
+    setHistoryIdx((i) => i + 1);
+  }, [config, historyIdx]);
+
+  const undo = () => {
+    if (historyIdx > 0) {
+      setConfig(history[historyIdx - 1]);
+      setHistoryIdx((i) => i - 1);
+    }
+  };
+
+  const redo = () => {
+    if (historyIdx < history.length - 1) {
+      setConfig(history[historyIdx + 1]);
+      setHistoryIdx((i) => i + 1);
+    }
+  };
+
+  // Widget operations
+  const addWidget = useCallback((widget: WidgetConfig) => {
+    pushHistory();
+    setConfig((prev) => ({ ...prev, widgets: [...prev.widgets, widget] }));
+    setSelectedWidgetId(widget.id);
+    setSidebarMode("config");
+  }, [pushHistory]);
+
+  const updateWidget = useCallback((updated: WidgetConfig) => {
+    setConfig((prev) => ({
+      ...prev,
+      widgets: prev.widgets.map((w) => (w.id === updated.id ? updated : w)),
+    }));
+  }, []);
+
+  const deleteWidget = useCallback((id: string) => {
+    pushHistory();
+    setConfig((prev) => ({ ...prev, widgets: prev.widgets.filter((w) => w.id !== id) }));
+    if (selectedWidgetId === id) {
+      setSelectedWidgetId(null);
+      setSidebarMode("widgets");
+    }
+  }, [selectedWidgetId, pushHistory]);
+
+  const handleLayoutChange = useCallback((layout: Layout[]) => {
+    setConfig((prev) => ({
+      ...prev,
+      widgets: prev.widgets.map((w) => {
+        const l = layout.find((item) => item.i === w.id);
+        if (!l) return w;
+        return { ...w, x: l.x, y: l.y, w: l.w, h: l.h };
+      }),
+    }));
+  }, []);
+
+  // Save mutation
+  const saveMutation = useMutation({
+    mutationFn: async () => {
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session) throw new Error("Not authenticated");
+
+      const userId = session.session.user.id;
+      const { data: tenantData } = await supabase.rpc("get_user_tenant_id", { p_user_id: userId });
+      const tenantId = tenantData as string;
+
+      let dashId = config.id;
+
+      if (dashId) {
+        // Update
+        await supabase.from("dashboards").update({
+          name: config.name,
+          description: config.description,
+          zabbix_connection_id: config.zabbix_connection_id,
+          settings: config.settings as any,
+        }).eq("id", dashId);
+      } else {
+        // Create
+        const { data, error } = await supabase.from("dashboards").insert({
+          tenant_id: tenantId,
+          name: config.name,
+          description: config.description,
+          zabbix_connection_id: config.zabbix_connection_id,
+          settings: config.settings as any,
+          created_by: userId,
+        }).select("id").single();
+        if (error) throw error;
+        dashId = data.id;
+        setConfig((prev) => ({ ...prev, id: dashId }));
+      }
+
+      // Sync widgets: delete all then re-insert
+      await supabase.from("widgets").delete().eq("dashboard_id", dashId!);
+
+      if (config.widgets.length > 0) {
+        const widgetRows = config.widgets.map((w) => ({
+          id: w.id,
+          dashboard_id: dashId!,
+          widget_type: w.widget_type,
+          title: w.title,
+          position_x: w.x,
+          position_y: w.y,
+          width: w.w,
+          height: w.h,
+          query: w.query as any,
+          adapter: w.adapter as any,
+          config: { style: w.style, extra: w.extra } as any,
+          created_by: userId,
+        }));
+        const { error: wErr } = await supabase.from("widgets").insert(widgetRows);
+        if (wErr) throw wErr;
+      }
+
+      return dashId;
+    },
+    onSuccess: (dashId) => {
+      toast({ title: "Dashboard salvo!", description: "Todas as alterações foram persistidas." });
+      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      if (isNew && dashId) navigate(`/builder/${dashId}`, { replace: true });
+    },
+    onError: (err) => {
+      toast({ title: "Erro ao salvar", description: (err as Error).message, variant: "destructive" });
+    },
+  });
+
+  // Grid layout items
+  const gridLayout: Layout[] = config.widgets.map((w) => ({
+    i: w.id,
+    x: w.x,
+    y: w.y,
+    w: w.w,
+    h: w.h,
+    minW: w.minW || 2,
+    minH: w.minH || 2,
+  }));
+
+  const bgStyle: React.CSSProperties = config.settings.bgGradient
+    ? { background: config.settings.bgGradient }
+    : {};
+
+  return (
+    <div className="h-screen flex flex-col bg-background overflow-hidden">
+      {/* ── Top Bar ── */}
+      <header className="h-12 border-b border-border/30 flex items-center justify-between px-4 flex-shrink-0 glass-card-elevated z-20">
+        <div className="flex items-center gap-3">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/")} className="h-8 w-8">
+            <ArrowLeft className="w-4 h-4" />
+          </Button>
+          <div className="h-5 w-px bg-border/50" />
+          <span className="text-xs font-display font-bold text-neon-green truncate max-w-[200px]">
+            {config.name || "Novo Dashboard"}
+          </span>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <Button variant="ghost" size="icon" onClick={undo} disabled={historyIdx <= 0} className="h-8 w-8" title="Desfazer">
+            <Undo2 className="w-3.5 h-3.5" />
+          </Button>
+          <Button variant="ghost" size="icon" onClick={redo} disabled={historyIdx >= history.length - 1} className="h-8 w-8" title="Refazer">
+            <Redo2 className="w-3.5 h-3.5" />
+          </Button>
+          <div className="h-5 w-px bg-border/50" />
+          {config.id && (
+            <Button variant="ghost" size="sm" onClick={() => navigate(`/dashboard/${config.id}`)} className="gap-1.5 text-xs h-8">
+              <Eye className="w-3.5 h-3.5" />
+              Preview
+            </Button>
+          )}
+          <Button
+            size="sm"
+            onClick={() => saveMutation.mutate()}
+            disabled={saveMutation.isPending}
+            className="gap-1.5 text-xs h-8 bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
+          >
+            <Save className="w-3.5 h-3.5" />
+            {saveMutation.isPending ? "Salvando…" : "Salvar"}
+          </Button>
+        </div>
+      </header>
+
+      <div className="flex flex-1 min-h-0">
+        {/* ── Left Sidebar ── */}
+        <AnimatePresence mode="wait">
+          {sidebarOpen && (
+            <motion.aside
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 280, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="border-r border-border/30 flex flex-col h-full overflow-hidden flex-shrink-0 bg-card/50"
+            >
+              {/* Sidebar tabs */}
+              <div className="flex border-b border-border/30">
+                <button
+                  onClick={() => setSidebarMode("widgets")}
+                  className={`flex-1 py-2 text-[9px] font-display uppercase flex items-center justify-center gap-1 transition-colors ${
+                    sidebarMode === "widgets" ? "text-neon-green border-b-2 border-neon-green" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Layers className="w-3 h-3" />
+                  Widgets
+                </button>
+                <button
+                  onClick={() => setSidebarMode("settings")}
+                  className={`flex-1 py-2 text-[9px] font-display uppercase flex items-center justify-center gap-1 transition-colors ${
+                    sidebarMode === "settings" ? "text-neon-green border-b-2 border-neon-green" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Settings2 className="w-3 h-3" />
+                  Config
+                </button>
+              </div>
+
+              <ScrollArea className="flex-1">
+                <div className="p-3">
+                  {sidebarMode === "widgets" && <WidgetPalette onAddWidget={addWidget} />}
+                  {sidebarMode === "settings" && (
+                    <DashboardSettingsPanel config={config} onUpdate={setConfig} connections={connections} />
+                  )}
+                  {sidebarMode === "config" && selectedWidget && (
+                    <WidgetConfigPanel
+                      widget={selectedWidget}
+                      onUpdate={updateWidget}
+                      onDelete={deleteWidget}
+                      onClose={() => {
+                        setSelectedWidgetId(null);
+                        setSidebarMode("widgets");
+                      }}
+                    />
+                  )}
+                </div>
+              </ScrollArea>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+
+        {/* Sidebar toggle */}
+        <button
+          onClick={() => setSidebarOpen((v) => !v)}
+          className="absolute left-0 top-14 z-30 glass-card p-1.5 rounded-r-md border border-l-0 border-border/30 text-muted-foreground hover:text-foreground transition-colors"
+          style={{ left: sidebarOpen ? 280 : 0 }}
+        >
+          {sidebarOpen ? <PanelLeftClose className="w-3.5 h-3.5" /> : <PanelLeft className="w-3.5 h-3.5" />}
+        </button>
+
+        {/* ── Main Canvas ── */}
+        <main
+          className={`flex-1 overflow-auto relative ${config.settings.showGrid !== false ? "grid-pattern" : ""} ${config.settings.scanlines !== false ? "scanlines" : ""}`}
+          style={bgStyle}
+        >
+          {/* Ambient glow */}
+          {config.settings.ambientGlow !== false && (
+            <>
+              <div
+                className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] rounded-full blur-[120px] pointer-events-none"
+                style={{ background: `${config.settings.ambientGlowColor || "#39FF14"}08` }}
+              />
+            </>
+          )}
+
+          <div className="p-4 relative z-10">
+            {config.widgets.length === 0 ? (
+              <div className="flex items-center justify-center min-h-[50vh]">
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="glass-card-elevated rounded-xl p-8 text-center max-w-md"
+                >
+                  <Layers className="w-8 h-8 text-neon-green mx-auto mb-3" />
+                  <h2 className="text-sm font-display font-bold text-foreground mb-2">Canvas Vazio</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Clique nos widgets à esquerda para adicionar ao dashboard. Arraste e redimensione livremente.
+                  </p>
+                </motion.div>
+              </div>
+            ) : (
+              <ResponsiveGridLayout
+                layouts={{ lg: gridLayout }}
+                breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+                cols={{ lg: config.settings.cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
+                rowHeight={config.settings.rowHeight}
+                onLayoutChange={handleLayoutChange}
+                isDraggable
+                isResizable
+                compactType="vertical"
+                margin={[8, 8]}
+                containerPadding={[0, 0]}
+                useCSSTransforms
+              >
+                {config.widgets.map((widget) => (
+                  <div key={widget.id}>
+                    <WidgetPreviewCard
+                      widget={widget}
+                      isSelected={selectedWidgetId === widget.id}
+                      onClick={() => {
+                        setSelectedWidgetId(widget.id);
+                        setSidebarMode("config");
+                        setSidebarOpen(true);
+                      }}
+                    />
+                  </div>
+                ))}
+              </ResponsiveGridLayout>
+            )}
+          </div>
+        </main>
+
+        {/* ── Right Config Panel (when widget selected on wider screens) ── */}
+        <AnimatePresence>
+          {selectedWidget && !sidebarOpen && (
+            <motion.aside
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 280, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              className="border-l border-border/30 bg-card/50 flex-shrink-0 overflow-hidden"
+            >
+              <WidgetConfigPanel
+                widget={selectedWidget}
+                onUpdate={updateWidget}
+                onDelete={deleteWidget}
+                onClose={() => setSelectedWidgetId(null)}
+              />
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      </div>
+    </div>
+  );
+}
