@@ -3,6 +3,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import { useDashboardRealtime, type TelemetryCacheEntry } from "./useDashboardRealtime";
 import { useDashboardReplay } from "./useDashboardReplay";
+import { setMetaForDashboard, getMetaForDashboard } from "@/lib/metadata-cache";
 
 interface DashboardWidget {
   id: string;
@@ -29,6 +30,7 @@ interface Dashboard {
 export function useDashboardData(dashboardId: string | null) {
   const [telemetryCache, setTelemetryCache] = useState<Map<string, TelemetryCacheEntry>>(new Map());
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const inflightRef = useRef(false); // congestion control
 
   // Fetch dashboard + widgets from DB
   const { data: dashboard, isLoading, error } = useQuery({
@@ -76,22 +78,52 @@ export function useDashboardData(dashboardId: string | null) {
   // Replay warm start
   const { replayKeys } = useDashboardReplay({ dashboardId });
 
-  // Seed cache from replay once widgets are loaded
+  // Seed cache from replay once widgets are loaded + persist metadata to IndexedDB
   useEffect(() => {
-    if (!dashboard?.widgets?.length) return;
+    if (!dashboard?.widgets?.length || !dashboardId) return;
     const keys = dashboard.widgets
       .map((w) => w.adapter?.telemetry_key || `zbx:widget:${w.id}`)
       .filter(Boolean);
     if (keys.length === 0) return;
+
+    // Persist metadata to IndexedDB for instant future loads
+    setMetaForDashboard(
+      dashboardId,
+      dashboard.widgets.map((w) => ({
+        key: w.adapter?.telemetry_key || `zbx:widget:${w.id}`,
+        hostId: (w.query?.params as any)?.hostids?.[0],
+        itemId: (w.query?.params as any)?.itemids?.[0],
+        widgetType: w.widget_type,
+      }))
+    ).catch(() => {}); // fire and forget
 
     replayKeys(keys).then((entries) => {
       if (entries.length > 0) seedCache(entries);
     });
   }, [dashboard?.id, dashboard?.widgets?.length]);
 
-  // Poll Zabbix periodically
+  // On mount, try to pre-seed from IndexedDB cached replay before DB query completes
+  useEffect(() => {
+    if (!dashboardId) return;
+    getMetaForDashboard(dashboardId).then((meta) => {
+      if (meta.length > 0) {
+        const keys = meta.map((m) => m.key);
+        replayKeys(keys).then((entries) => {
+          if (entries.length > 0) seedCache(entries);
+        });
+      }
+    }).catch(() => {});
+  }, [dashboardId]);
+
+  // Poll Zabbix periodically with congestion control
   const pollNow = useCallback(async () => {
     if (!dashboard?.zabbix_connection_id || !dashboard.widgets.length) return;
+
+    // Congestion control: skip if previous request is still in-flight
+    if (inflightRef.current) {
+      console.debug("[FlowPulse] Skipping poll — previous request still in-flight");
+      return;
+    }
 
     const { data: session } = await supabase.auth.getSession();
     if (!session?.session?.access_token) return;
@@ -103,6 +135,7 @@ export function useDashboardData(dashboardId: string | null) {
       adapter: w.adapter,
     }));
 
+    inflightRef.current = true;
     try {
       await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zabbix-poller`,
@@ -121,6 +154,8 @@ export function useDashboardData(dashboardId: string | null) {
       );
     } catch (err) {
       console.error("Poll failed:", err);
+    } finally {
+      inflightRef.current = false;
     }
   }, [dashboard]);
 

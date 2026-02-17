@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import type { TelemetryData, TelemetryType } from "@/types/telemetry";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 
@@ -41,9 +41,11 @@ export function useWidgetData({
   const lastUpdateRef = useRef(0);
   const pendingRef = useRef<TelemetryCacheEntry | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const stateTs = useRef<number | null>(null);
 
   const applyUpdate = useCallback((entry: TelemetryCacheEntry) => {
     lastUpdateRef.current = Date.now();
+    stateTs.current = entry.ts;
     setState((prev) => ({
       data: entry.data,
       previousData: prev.data,
@@ -53,18 +55,17 @@ export function useWidgetData({
     }));
   }, []);
 
-  // Watch cache for this key's changes
+  // Watch cache for this key's changes — use ref for ts to avoid re-render dependency loop
   useEffect(() => {
     const entry = cache.get(telemetryKey);
     if (!entry) return;
 
     // Skip if same ts
-    if (entry.ts === state.ts) return;
+    if (entry.ts === stateTs.current) return;
 
     const elapsed = Date.now() - lastUpdateRef.current;
 
     if (elapsed >= minIntervalMs) {
-      // Enough time passed, apply immediately
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -83,7 +84,7 @@ export function useWidgetData({
         }, minIntervalMs - elapsed);
       }
     }
-  }, [cache, telemetryKey, state.ts, minIntervalMs, applyUpdate]);
+  }, [cache, telemetryKey, minIntervalMs, applyUpdate]);
 
   // Cleanup timer
   useEffect(() => {

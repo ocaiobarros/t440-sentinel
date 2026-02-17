@@ -1,3 +1,4 @@
+import { memo, useMemo } from "react";
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryTimeseriesData } from "@/types/telemetry";
@@ -9,14 +10,20 @@ interface Props {
   cache: Map<string, TelemetryCacheEntry>;
 }
 
-export default function TimeseriesWidget({ telemetryKey, title, cache }: Props) {
+function TimeseriesWidgetInner({ telemetryKey, title, cache }: Props) {
   const { data } = useWidgetData({ telemetryKey, cache });
   const ts = data as TelemetryTimeseriesData | null;
 
-  const chartData = (ts?.points || []).map((p) => ({
-    time: new Date(p.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-    value: p.value,
-  }));
+  const chartData = useMemo(
+    () =>
+      (ts?.points || []).map((p) => ({
+        time: new Date(p.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        value: p.value,
+      })),
+    [ts?.points],
+  );
+
+  const gradientId = `grad-${telemetryKey}`;
 
   return (
     <div className="glass-card rounded-lg p-4 h-full flex flex-col border border-border/50">
@@ -28,7 +35,7 @@ export default function TimeseriesWidget({ telemetryKey, title, cache }: Props) 
           <ResponsiveContainer width="100%" height="100%">
             <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
-                <linearGradient id={`grad-${telemetryKey}`} x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
                   <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
                   <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
@@ -43,13 +50,15 @@ export default function TimeseriesWidget({ telemetryKey, title, cache }: Props) 
                   fontSize: 11,
                   color: "hsl(var(--foreground))",
                 }}
+                isAnimationActive={false}
               />
               <Area
                 type="monotone"
                 dataKey="value"
                 stroke="hsl(var(--primary))"
                 strokeWidth={2}
-                fill={`url(#grad-${telemetryKey})`}
+                fill={`url(#${gradientId})`}
+                isAnimationActive={false}
               />
             </AreaChart>
           </ResponsiveContainer>
@@ -62,3 +71,5 @@ export default function TimeseriesWidget({ telemetryKey, title, cache }: Props) 
     </div>
   );
 }
+
+export default memo(TimeseriesWidgetInner);
