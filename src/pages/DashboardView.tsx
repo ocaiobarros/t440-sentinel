@@ -11,8 +11,53 @@ import { useCallback, useState, useEffect } from "react";
 import { useAudioAlert } from "@/hooks/useAudioAlert";
 
 /** Grid: 12 columns, each row = 80px height */
-const COL_WIDTH_PERCENT = 100 / 12;
+const GRID_COLS = 12;
+const COL_WIDTH_PERCENT = 100 / GRID_COLS;
 const ROW_HEIGHT = 80;
+
+/**
+ * Auto-stretch: for each row, if the rightmost widget doesn't reach col 12,
+ * expand its width to fill the gap so there's no dead space on the right.
+ */
+function autoStretchWidgets(widgets: Array<{ position_x: number; position_y: number; width: number; height: number; [k: string]: any }>) {
+  if (!widgets.length) return widgets;
+
+  // Group widgets by each row they occupy
+  const rowMap = new Map<number, typeof widgets>();
+  for (const w of widgets) {
+    for (let row = w.position_y; row < w.position_y + w.height; row++) {
+      if (!rowMap.has(row)) rowMap.set(row, []);
+      rowMap.get(row)!.push(w);
+    }
+  }
+
+  // Find the rightmost widget per visual row and track which ones to stretch
+  const stretchAmounts = new Map<string, number>(); // widget id -> extra cols
+  for (const [, rowWidgets] of rowMap) {
+    let rightmost: typeof widgets[0] | null = null;
+    let maxRight = 0;
+    for (const w of rowWidgets) {
+      const right = w.position_x + w.width;
+      if (right > maxRight) {
+        maxRight = right;
+        rightmost = w;
+      }
+    }
+    if (rightmost && maxRight < GRID_COLS) {
+      const gap = GRID_COLS - maxRight;
+      const existing = stretchAmounts.get(rightmost.id) ?? 0;
+      stretchAmounts.set(rightmost.id, Math.max(existing, gap));
+    }
+  }
+
+  if (stretchAmounts.size === 0) return widgets;
+
+  return widgets.map((w) => {
+    const extra = stretchAmounts.get(w.id);
+    if (extra) return { ...w, width: w.width + extra };
+    return w;
+  });
+}
 
 const POLL_INTERVALS = [
   { label: "5s", value: 5 },
@@ -110,9 +155,14 @@ export default function DashboardView() {
 
   return (
     <div
-      className={`min-h-screen grid-pattern scanlines relative p-2 md:p-3 lg:p-4 ${isLightTheme ? 'text-foreground' : ''}`}
+      className={`min-h-screen grid-pattern scanlines relative px-2 py-2 ${isLightTheme ? 'text-foreground' : ''}`}
       data-theme-category={themeCategory}
-      style={{ background: 'var(--category-bg, linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%))' }}
+      style={{
+        background: 'var(--category-bg, linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%))',
+        width: '100%',
+        maxWidth: '100vw',
+        boxSizing: 'border-box',
+      }}
     >
       {/* Sync progress bar */}
       {isPollingActive && (
@@ -243,7 +293,8 @@ export default function DashboardView() {
             ) : (
               (() => {
                 const isCompact = dashboard.widgets.length > 20;
-                return dashboard.widgets.map((widget, i) => {
+                const stretched = autoStretchWidgets(dashboard.widgets as any[]);
+                return stretched.map((widget: any, i: number) => {
                   const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
                   const mergedConfig = {
                     ...(widget.config as Record<string, unknown>),
