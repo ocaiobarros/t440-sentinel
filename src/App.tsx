@@ -11,6 +11,7 @@ import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ZabbixConnections from "./pages/ZabbixConnections";
+import DashboardView from "./pages/DashboardView";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -32,6 +33,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <Index />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/dashboard/:dashboardId"
+              element={
+                <ProtectedRoute>
+                  <DashboardView />
                 </ProtectedRoute>
               }
             />
