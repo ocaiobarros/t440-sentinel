@@ -8,3 +8,6 @@ verify_jwt = false
 
 [functions.flowpulse-reactor]
 verify_jwt = false
+
+[functions.zabbix-proxy]
+verify_jwt = false
