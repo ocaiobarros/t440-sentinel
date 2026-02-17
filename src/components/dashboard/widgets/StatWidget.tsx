@@ -33,7 +33,7 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
       </span>
       {stat ? (
         <>
-          <span className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono-data text-glow-green text-neon-green`}>
+          <span className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono-data text-primary`} style={{ textShadow: '0 0 8px hsl(var(--primary) / 0.6), 0 0 24px hsl(var(--primary) / 0.25)' }}>
             {typeof stat.value === "number" ? stat.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : stat.value}
           </span>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">

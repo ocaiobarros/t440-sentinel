@@ -29,25 +29,25 @@ export default function TimeseriesWidget({ telemetryKey, title, cache }: Props) 
             <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
                 <linearGradient id={`grad-${telemetryKey}`} x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="5%" stopColor="hsl(110 100% 54%)" stopOpacity={0.3} />
-                  <stop offset="95%" stopColor="hsl(110 100% 54%)" stopOpacity={0} />
+                  <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
+                  <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <XAxis dataKey="time" tick={{ fill: "hsl(215 10% 50%)", fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fill: "hsl(215 10% 50%)", fontSize: 9 }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="time" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
               <Tooltip
                 contentStyle={{
-                  background: "hsl(220 20% 10%)",
-                  border: "1px solid hsl(220 15% 25%)",
+                  background: "hsl(var(--card))",
+                  border: "1px solid hsl(var(--border))",
                   borderRadius: 6,
                   fontSize: 11,
-                  color: "hsl(180 10% 88%)",
+                  color: "hsl(var(--foreground))",
                 }}
               />
               <Area
                 type="monotone"
                 dataKey="value"
-                stroke="hsl(110 100% 54%)"
+                stroke="hsl(var(--primary))"
                 strokeWidth={2}
                 fill={`url(#grad-${telemetryKey})`}
               />
