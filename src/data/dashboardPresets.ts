@@ -21,7 +21,10 @@ export type PresetCategory =
   | "servers"
   | "wifi"
   | "datacenter"
-  | "security";
+  | "security"
+  | "monitoring"
+  | "backup"
+  | "cameras";
 
 export const PRESET_CATEGORIES: { key: PresetCategory; label: string; icon: string; color: string }[] = [
   { key: "network", label: "Network", icon: "Network", color: "#3B82F6" },
@@ -30,6 +33,9 @@ export const PRESET_CATEGORIES: { key: PresetCategory; label: string; icon: stri
   { key: "energy", label: "Energia", icon: "Zap", color: "#FFBF00" },
   { key: "wifi", label: "Wi-Fi / APs", icon: "Wifi", color: "#06B6D4" },
   { key: "security", label: "Segurança", icon: "Shield", color: "#8B5CF6" },
+  { key: "monitoring", label: "Monitoramento", icon: "Eye", color: "#EC4899" },
+  { key: "backup", label: "Backup", icon: "DatabaseBackup", color: "#10B981" },
+  { key: "cameras", label: "Câmeras", icon: "Camera", color: "#A855F7" },
 ];
 
 /* ── Helper to create widgets with overrides ── */
@@ -296,11 +302,278 @@ const PRESET_FIREWALL: DashboardPreset = {
   ],
 };
 
+/* ── Câmeras / CFTV ── */
+const PRESET_CAMERAS: DashboardPreset = {
+  id: "cameras-cftv",
+  name: "Câmeras / CFTV",
+  description: "NVR status, canais livres/em uso, armazenamento de discos e lista de câmeras.",
+  category: "cameras",
+  icon: "Camera",
+  accent: "#A855F7",
+  widgets: [
+    w("stat", "Status do Dispositivo", 0, 0, 2, 1, {
+      style: { icon: "CheckCircle", iconColor: "#39FF14", glow: "green" },
+    }),
+    w("stat", "Disponibilidade", 2, 0, 2, 1, {
+      style: { icon: "Clock", iconColor: "#06B6D4" },
+    }),
+    w("stat", "Tipo do Dispositivo", 4, 0, 2, 1, {
+      style: { icon: "Cctv" },
+    }),
+    w("stat", "Versão do Sistema", 6, 0, 3, 1, {
+      style: { icon: "Info" },
+    }),
+    w("gauge", "Câmeras Conectadas", 0, 1, 4, 2, {
+      style: { glow: "green" },
+    }),
+    w("stat", "Canais Livres", 4, 1, 3, 1, {
+      style: { icon: "Radio", iconColor: "#39FF14" },
+    }),
+    w("stat", "Em Uso", 7, 1, 3, 1, {
+      style: { icon: "Video", iconColor: "#3B82F6" },
+    }),
+    w("progress", "Disco 1", 4, 2, 4, 1, { extra: { units: "%" } }),
+    w("progress", "Disco 2", 8, 2, 4, 1, { extra: { units: "%" } }),
+    w("table", "Lista de Câmeras", 0, 3, 6, 3, { style: { icon: "List" } }),
+    w("timeseries", "FPS Histórico", 6, 3, 6, 3),
+  ],
+};
+
+/* ── Monitoramento Web ── */
+const PRESET_WEB_MONITORING: DashboardPreset = {
+  id: "monitoring-web",
+  name: "Monitoramento Web",
+  description: "Status de grupos de serviços, indicadores operacional/crítico e topologia visual.",
+  category: "monitoring",
+  icon: "Globe",
+  accent: "#EC4899",
+  widgets: [
+    w("status", "Grupo 01 - Status", 0, 0, 4, 1, {
+      style: { icon: "CheckCircle", glow: "green" },
+    }),
+    w("status", "Grupo 02 - Status", 4, 0, 4, 1, {
+      style: { icon: "AlertTriangle", glow: "red" },
+    }),
+    w("status", "Grupo 03 - Status", 8, 0, 4, 1, {
+      style: { icon: "AlertTriangle", glow: "red" },
+    }),
+    w("table", "Grupo 01 - Serviços", 0, 1, 4, 3, { style: { icon: "List" } }),
+    w("table", "Grupo 02 - Serviços", 4, 1, 4, 3, { style: { icon: "List" } }),
+    w("table", "Grupo 03 - Serviços", 8, 1, 4, 3, { style: { icon: "List" } }),
+    w("gauge", "% Online", 0, 4, 4, 2, { style: { glow: "green" }, extra: { units: "%" } }),
+    w("table", "Grupo 04 - Serviços", 4, 4, 4, 3, { style: { icon: "List" } }),
+  ],
+};
+
+/* ── Aplicações Web ── */
+const PRESET_WEB_APPS: DashboardPreset = {
+  id: "monitoring-webapps",
+  name: "Aplicações Web",
+  description: "Cenários web: hosts online/offline, status de resposta e latência por site.",
+  category: "monitoring",
+  icon: "AppWindow",
+  accent: "#F472B6",
+  widgets: [
+    w("stat", "CloudX Online", 0, 0, 3, 1, {
+      style: { icon: "CheckCircle", iconColor: "#39FF14", glow: "green" },
+    }),
+    w("stat", "CloudX Offline", 3, 0, 3, 1, {
+      style: { icon: "XCircle", iconColor: "#FF4444", glow: "red" },
+    }),
+    w("stat", "ManageTech Online", 0, 1, 3, 1, {
+      style: { icon: "CheckCircle", iconColor: "#39FF14" },
+    }),
+    w("stat", "ManageTech Offline", 3, 1, 3, 1, {
+      style: { icon: "XCircle", iconColor: "#FF4444" },
+    }),
+    w("table", "Status dos Hosts", 6, 0, 6, 4, { style: { icon: "Globe" } }),
+    w("table", "Erros Ativos", 0, 2, 6, 3, { style: { icon: "AlertTriangle" } }),
+  ],
+};
+
+/* ── Backup / Veeam ── */
+const PRESET_BACKUP: DashboardPreset = {
+  id: "backup-veeam",
+  name: "Veeam Backup",
+  description: "Status de jobs, VMs com falha, espaço em disco e serviços de exportação.",
+  category: "backup",
+  icon: "DatabaseBackup",
+  accent: "#10B981",
+  widgets: [
+    w("stat", "Zabbix Agent", 0, 0, 2, 1, {
+      style: { icon: "CheckCircle", iconColor: "#39FF14" },
+    }),
+    w("stat", "Uptime", 0, 1, 2, 1, {
+      style: { icon: "Clock", iconColor: "#06B6D4" },
+    }),
+    w("stat", "Total de Jobs", 0, 2, 2, 1, { style: { icon: "Layers" } }),
+    w("gauge", "CPU", 2, 0, 2, 2, { style: { glow: "green" }, extra: { units: "%" } }),
+    w("gauge", "MEM", 4, 0, 2, 2, { style: { glow: "amber" }, extra: { units: "%" } }),
+    w("gauge", "Disco", 6, 0, 2, 2, { style: { glow: "blue" }, extra: { units: "%" } }),
+    w("stat", "Espaço Usado", 8, 0, 2, 1, {
+      style: { icon: "HardDrive" }, extra: { units: "B" },
+    }),
+    w("stat", "Espaço Total", 10, 0, 2, 1, {
+      style: { icon: "HardDrive" }, extra: { units: "B" },
+    }),
+    w("stat", "Jobs Success", 0, 3, 3, 1, {
+      style: { icon: "CheckCircle", iconColor: "#39FF14", glow: "green" },
+    }),
+    w("stat", "Jobs Problems", 3, 3, 3, 1, {
+      style: { icon: "XCircle", iconColor: "#FF4444", glow: "red" },
+    }),
+    w("stat", "Serviços Running", 6, 3, 3, 1, {
+      style: { icon: "Play", iconColor: "#39FF14" },
+    }),
+    w("stat", "Serviços Stopped", 9, 3, 3, 1, {
+      style: { icon: "Square", iconColor: "#FF4444" },
+    }),
+    w("table", "VMs por Job", 0, 4, 6, 3, { style: { icon: "List" } }),
+    w("table", "VMs com Falha", 6, 4, 6, 3, { style: { icon: "AlertTriangle" } }),
+  ],
+};
+
+/* ── Nobreaks Detalhado ── */
+const PRESET_NOBREAK: DashboardPreset = {
+  id: "energy-nobreak",
+  name: "Nobreak Detalhado",
+  description: "Status do UPS, nível de bateria, tensão entrada/saída, RouterBoard e incidentes.",
+  category: "energy",
+  icon: "BatteryCharging",
+  accent: "#22C55E",
+  widgets: [
+    w("status", "Status UPS", 0, 0, 3, 1, {
+      style: { icon: "Power", glow: "green" },
+    }),
+    w("stat", "Temperatura", 0, 1, 2, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C" },
+    }),
+    w("stat", "Modo", 2, 1, 2, 1, { style: { icon: "Workflow" } }),
+    w("gauge", "Nível da Bateria", 3, 0, 3, 2, {
+      style: { glow: "green" }, extra: { units: "%" },
+    }),
+    w("stat", "Tensão Entrada", 0, 2, 3, 1, {
+      style: { icon: "ArrowRight", iconColor: "#FFBF00" }, extra: { units: "V" },
+    }),
+    w("stat", "Tensão Saída", 3, 2, 3, 1, {
+      style: { icon: "ArrowRight", iconColor: "#39FF14" }, extra: { units: "V" },
+    }),
+    w("status", "Status RB", 6, 0, 3, 1, {
+      style: { icon: "Router", glow: "green" },
+    }),
+    w("stat", "Tensão RB", 9, 0, 3, 1, {
+      style: { icon: "Zap", iconColor: "#39FF14" }, extra: { units: "V" },
+    }),
+    w("timeseries", "Tráfego Uplink", 6, 1, 6, 2),
+    w("table", "Incidentes Ativos", 0, 3, 12, 3, { style: { icon: "AlertTriangle" } }),
+  ],
+};
+
+/* ── Links / ISP ── */
+const PRESET_LINKS: DashboardPreset = {
+  id: "network-links",
+  name: "Análise de Links",
+  description: "Status de operadoras, latência, perda de pacotes, estabilidade e consumo de interfaces.",
+  category: "network",
+  icon: "Link",
+  accent: "#0EA5E9",
+  widgets: [
+    w("stat", "Operadora 1 - Latência", 0, 0, 3, 1, {
+      style: { icon: "Activity", iconColor: "#39FF14", glow: "green" }, extra: { units: "ms" },
+    }),
+    w("stat", "Operadora 1 - Perda", 3, 0, 3, 1, {
+      style: { icon: "TrendingDown", iconColor: "#FFBF00" }, extra: { units: "%" },
+    }),
+    w("stat", "Operadora 2 - Latência", 0, 1, 3, 1, {
+      style: { icon: "Activity", iconColor: "#3B82F6" }, extra: { units: "ms" },
+    }),
+    w("stat", "Operadora 2 - Perda", 3, 1, 3, 1, {
+      style: { icon: "TrendingDown", iconColor: "#FFBF00" }, extra: { units: "%" },
+    }),
+    w("table", "Comparativo de Performance", 6, 0, 6, 3, { style: { icon: "Table2" } }),
+    w("progress", "Estabilidade Op. 1", 0, 2, 6, 1, { extra: { units: "%" } }),
+    w("progress", "Estabilidade Op. 2", 0, 3, 6, 1, { extra: { units: "%" } }),
+    w("timeseries", "Download", 0, 4, 6, 2),
+    w("timeseries", "Upload", 6, 4, 6, 2),
+    w("stat", "Média Download", 0, 6, 3, 1, {
+      style: { icon: "ArrowDown", iconColor: "#06B6D4" }, extra: { units: "Gb/s" },
+    }),
+    w("stat", "Média Upload", 3, 6, 3, 1, {
+      style: { icon: "ArrowUp", iconColor: "#39FF14" }, extra: { units: "Gb/s" },
+    }),
+  ],
+};
+
+/* ── Servidores Macro ── */
+const PRESET_SERVERS_MACRO: DashboardPreset = {
+  id: "servers-macro",
+  name: "Visão Macro Servidores",
+  description: "Grid de servidores com gauges de CPU/MEM/Disco, serviços críticos e top consumo.",
+  category: "servers",
+  icon: "MonitorCog",
+  accent: "#14B8A6",
+  widgets: [
+    w("stat", "Servidores Monitorados", 0, 0, 4, 1, {
+      style: { icon: "Server", iconColor: "#39FF14", glow: "green" },
+    }),
+    w("gauge", "Status Geral", 4, 0, 4, 2, { style: { glow: "green" } }),
+    w("status", "Zabbix Agent", 8, 0, 4, 1, {
+      style: { icon: "Radio", glow: "green" },
+    }),
+    w("gauge", "Srv 1 - CPU", 0, 2, 2, 2, { extra: { units: "%" } }),
+    w("gauge", "Srv 1 - MEM", 2, 2, 2, 2, { extra: { units: "%" } }),
+    w("gauge", "Srv 1 - Disco", 4, 2, 2, 2, { extra: { units: "%" } }),
+    w("gauge", "Srv 2 - CPU", 6, 2, 2, 2, { extra: { units: "%" } }),
+    w("gauge", "Srv 2 - MEM", 8, 2, 2, 2, { extra: { units: "%" } }),
+    w("gauge", "Srv 2 - Disco", 10, 2, 2, 2, { extra: { units: "%" } }),
+    w("table", "Serviços Críticos", 0, 4, 6, 3, { style: { icon: "AlertTriangle" } }),
+    w("table", "Top 5 Consumo CPU", 6, 4, 3, 3, { style: { icon: "Cpu" } }),
+    w("table", "Top 5 Consumo RAM", 9, 4, 3, 3, { style: { icon: "MemoryStick" } }),
+  ],
+};
+
+/* ── IX / Peering ── */
+const PRESET_IX_PEERING: DashboardPreset = {
+  id: "network-ix",
+  name: "IX / Peering",
+  description: "Tráfego agregado de peering (IX.br, Cloudflare, CDN) com timeseries e incidentes.",
+  category: "network",
+  icon: "Globe",
+  accent: "#6366F1",
+  widgets: [
+    w("stat", "Agregado Download", 0, 0, 3, 1, {
+      style: { icon: "ArrowDown", iconColor: "#3B82F6" }, extra: { units: "Gb/s" },
+    }),
+    w("stat", "Agregado Upload", 3, 0, 3, 1, {
+      style: { icon: "ArrowUp", iconColor: "#39FF14" }, extra: { units: "Gb/s" },
+    }),
+    w("timeseries", "Agregado Geral", 6, 0, 6, 2),
+    w("stat", "IX BR (SP) - DL", 0, 1, 3, 1, { extra: { units: "Gb/s" } }),
+    w("stat", "IX BR (SP) - UL", 3, 1, 3, 1, { extra: { units: "MB/s" } }),
+    w("stat", "Cloudflare - DL", 0, 2, 3, 1, { extra: { units: "MB/s" } }),
+    w("stat", "Cloudflare - UL", 3, 2, 3, 1, { extra: { units: "MB/s" } }),
+    w("timeseries", "IX BR (SP)", 0, 3, 3, 2),
+    w("timeseries", "IX BR (RJ)", 3, 3, 3, 2),
+    w("timeseries", "Cloudflare", 6, 3, 3, 2),
+    w("timeseries", "CDN / Wix", 9, 3, 3, 2),
+    w("table", "Incidentes", 0, 5, 12, 2, { style: { icon: "AlertTriangle" } }),
+  ],
+};
+
 export const DASHBOARD_PRESETS: DashboardPreset[] = [
   PRESET_NETWORK_CORE,
   PRESET_SERVERS,
+  PRESET_SERVERS_MACRO,
   PRESET_DATACENTER,
   PRESET_ENERGY,
+  PRESET_NOBREAK,
   PRESET_WIFI,
   PRESET_FIREWALL,
+  PRESET_CAMERAS,
+  PRESET_WEB_MONITORING,
+  PRESET_WEB_APPS,
+  PRESET_BACKUP,
+  PRESET_LINKS,
+  PRESET_IX_PEERING,
 ];
