@@ -152,7 +152,7 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
           </ResponsiveContainer>
         ) : (
           <div className="flex items-center justify-center h-full text-muted-foreground/50 text-xs font-mono">
-            Aguardando dados…
+            {(isMultiSeries || timeRange) ? "Sem dados no período" : "Aguardando dados…"}
           </div>
         )}
       </div>
