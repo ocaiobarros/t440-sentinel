@@ -170,42 +170,45 @@ export default function DashboardView() {
                 </p>
               </motion.div>
             ) : (
-              dashboard.widgets.map((widget, i) => {
-                const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
-                // Merge config.extra fields into top-level config for widget access
-                const mergedConfig = {
-                  ...(widget.config as Record<string, unknown>),
-                  ...((widget.config as any)?.extra || {}),
-                  style: (widget.config as any)?.style,
-                };
-                return (
-                  <motion.div
-                    key={widget.id}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.05 }}
-                    className="absolute"
-                    style={{
-                      left: `${widget.position_x * COL_WIDTH_PERCENT}%`,
-                      top: `${widget.position_y * ROW_HEIGHT}px`,
-                      width: `${widget.width * COL_WIDTH_PERCENT}%`,
-                      height: `${widget.height * ROW_HEIGHT}px`,
-                      padding: "4px",
-                      contain: "layout style paint",
-                    }}
-                  >
-                    <WidgetRenderer
-                      widgetType={widget.widget_type}
-                      widgetId={widget.id}
-                      telemetryKey={telemetryKey}
-                      title={widget.title}
-                      cache={telemetryCache}
-                      config={mergedConfig}
-                      onCritical={handleCritical}
-                    />
-                  </motion.div>
-                );
-              })
+              (() => {
+                const isCompact = dashboard.widgets.length > 20;
+                return dashboard.widgets.map((widget, i) => {
+                  const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
+                  const mergedConfig = {
+                    ...(widget.config as Record<string, unknown>),
+                    ...((widget.config as any)?.extra || {}),
+                    style: (widget.config as any)?.style,
+                  };
+                  return (
+                    <motion.div
+                      key={widget.id}
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="absolute"
+                      style={{
+                        left: `${widget.position_x * COL_WIDTH_PERCENT}%`,
+                        top: `${widget.position_y * ROW_HEIGHT}px`,
+                        width: `${widget.width * COL_WIDTH_PERCENT}%`,
+                        height: `${widget.height * ROW_HEIGHT}px`,
+                        padding: isCompact ? "2px" : "4px",
+                        contain: "layout style paint",
+                      }}
+                    >
+                      <WidgetRenderer
+                        widgetType={widget.widget_type}
+                        widgetId={widget.id}
+                        telemetryKey={telemetryKey}
+                        title={widget.title}
+                        cache={telemetryCache}
+                        config={mergedConfig}
+                        onCritical={handleCritical}
+                        compact={isCompact}
+                      />
+                    </motion.div>
+                  );
+                });
+              })()
             )}
           </div>
         )}

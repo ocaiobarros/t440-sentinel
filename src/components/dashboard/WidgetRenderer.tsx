@@ -23,9 +23,10 @@ interface Props {
   cache: Map<string, TelemetryCacheEntry>;
   config?: Record<string, unknown>;
   onCritical?: (widgetId: string) => void;
+  compact?: boolean;
 }
 
-function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache, config, onCritical }: Props) {
+function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache, config, onCritical, compact }: Props) {
   const prevCriticalRef = useRef(false);
 
   const entry = cache.get(telemetryKey);
@@ -59,9 +60,9 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
   const inner = (() => {
     switch (widgetType) {
       case "stat":
-        return <StatWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+        return <StatWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "gauge":
-        return <GaugeWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+        return <GaugeWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "timeseries":
         return <TimeseriesWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
       case "table":
@@ -69,13 +70,13 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
       case "text":
         return <TextWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
       case "status":
-        return <StatusWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+        return <StatusWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "progress":
-        return <ProgressWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+        return <ProgressWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "icon-value":
-        return <IconValueWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+        return <IconValueWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "traffic-light":
-        return <TrafficLightWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
+        return <TrafficLightWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "label":
         return <LabelWidget title={title} config={config} />;
       case "image-map":

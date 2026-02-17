@@ -9,6 +9,7 @@ interface Props {
   title: string;
   cache: Map<string, TelemetryCacheEntry>;
   config?: Record<string, unknown>;
+  compact?: boolean;
 }
 
 /** Format bytes to human-readable (KB, MB, GB, TB) using base 1024 */
@@ -21,7 +22,7 @@ function formatBytes(bytes: number): string {
   return `${val.toFixed(1)} ${units[idx]}`;
 }
 
-function ProgressWidgetInner({ telemetryKey, title, cache, config }: Props) {
+function ProgressWidgetInner({ telemetryKey, title, cache, config, compact }: Props) {
   const { data, isInitial } = useWidgetData({ telemetryKey, cache });
 
   const rawValue = extractRawValue(data);
@@ -69,17 +70,17 @@ function ProgressWidgetInner({ telemetryKey, title, cache, config }: Props) {
     <motion.div
       initial={isInitial ? { opacity: 0, scale: 0.95 } : false}
       animate={{ opacity: 1, scale: 1 }}
-      className="glass-card rounded-lg p-4 h-full flex flex-col justify-center gap-2 border border-border/50"
+      className={`glass-card rounded-lg ${compact ? "p-2 gap-1" : "p-4 gap-2"} h-full flex flex-col justify-center border border-border/50`}
     >
       <div className="flex items-center justify-between">
-        <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground truncate">
+        <span className={`${compact ? "text-[8px]" : "text-[10px]"} font-display uppercase tracking-wider text-muted-foreground truncate`}>
           {title}
         </span>
         <span className="text-sm font-bold font-mono" style={{ color: barColor }}>
           {displayValue}
         </span>
       </div>
-      <div className="h-3 rounded-full bg-muted overflow-hidden">
+      <div className={`${compact ? "h-2" : "h-3"} rounded-full bg-muted overflow-hidden`}>
         <motion.div
           className="h-full rounded-full"
           style={{

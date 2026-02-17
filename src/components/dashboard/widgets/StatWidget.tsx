@@ -9,9 +9,10 @@ interface Props {
   title: string;
   cache: Map<string, TelemetryCacheEntry>;
   config?: Record<string, unknown>;
+  compact?: boolean;
 }
 
-export default function StatWidget({ telemetryKey, title, cache, config }: Props) {
+export default function StatWidget({ telemetryKey, title, cache, config, compact }: Props) {
   const { data, isInitial } = useWidgetData({ telemetryKey, cache });
   const stat = data as TelemetryStatData | null;
 
@@ -25,14 +26,14 @@ export default function StatWidget({ telemetryKey, title, cache, config }: Props
     <motion.div
       initial={isInitial ? { opacity: 0, scale: 0.95 } : false}
       animate={{ opacity: 1, scale: 1 }}
-      className="glass-card rounded-lg p-4 h-full flex flex-col items-center justify-center gap-2 border border-border/50"
+      className={`glass-card rounded-lg ${compact ? "p-2 gap-1" : "p-4 gap-2"} h-full flex flex-col items-center justify-center border border-border/50`}
     >
-      <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground truncate w-full text-center">
+      <span className={`${compact ? "text-[8px]" : "text-[10px]"} font-display uppercase tracking-wider text-muted-foreground truncate w-full text-center`}>
         {title}
       </span>
       {stat ? (
         <>
-          <span className="text-2xl font-bold font-mono-data text-glow-green text-neon-green">
+          <span className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono-data text-glow-green text-neon-green`}>
             {typeof stat.value === "number" ? stat.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : stat.value}
           </span>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
