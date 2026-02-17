@@ -4,6 +4,14 @@ import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryTimeseriesData } from "@/types/telemetry";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
+/** Auto-detect best unit based on max value */
+function detectUnit(maxVal: number): { divisor: number; suffix: string } {
+  if (maxVal >= 1_000_000_000) return { divisor: 1_000_000_000, suffix: " Gbps" };
+  if (maxVal >= 1_000_000) return { divisor: 1_000_000, suffix: " Mbps" };
+  if (maxVal >= 1_000) return { divisor: 1_000, suffix: " Kbps" };
+  return { divisor: 1, suffix: " bps" };
+}
+
 interface SeriesConfig {
   itemid: string;
   name: string;
@@ -95,17 +103,55 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
   const chartData = isMultiSeries ? (multiData || []) : singleChartData;
   const hasData = chartData.length > 0;
 
+  // Detect if data looks like bps and compute unit
+  const isBpsData = useMemo(() => {
+    const extra2 = config?.extra as Record<string, unknown> | undefined;
+    const unit = (extra2?.unit as string) || "";
+    if (unit) return unit.toLowerCase().includes("bps") || unit.toLowerCase().includes("bit");
+    // Heuristic: if max value > 10000, likely bps
+    let max = 0;
+    for (const row of chartData) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k !== "time" && typeof v === "number" && v > max) max = v;
+      }
+    }
+    return max > 10000;
+  }, [chartData, config]);
+
+  const unitInfo = useMemo(() => {
+    if (!isBpsData) return { divisor: 1, suffix: "" };
+    let max = 0;
+    for (const row of chartData) {
+      for (const [k, v] of Object.entries(row)) {
+        if (k !== "time" && typeof v === "number" && v > max) max = v;
+      }
+    }
+    return detectUnit(max);
+  }, [isBpsData, chartData]);
+
+  const formatValue = (val: number) => {
+    if (unitInfo.divisor === 1) return String(val);
+    return (val / unitInfo.divisor).toFixed(2);
+  };
+
   return (
     <div className="glass-card rounded-lg p-4 h-full flex flex-col border border-border/50">
       <div className="flex items-center justify-between mb-2">
         <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground">
           {title}
         </span>
-        {timeRange && (
-          <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
-            {TIME_RANGE_LABELS[timeRange] || timeRange}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5">
+          {unitInfo.suffix && (
+            <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-muted text-muted-foreground border border-border/30">
+              {unitInfo.suffix.trim()}
+            </span>
+          )}
+          {timeRange && (
+            <span className="text-[8px] font-mono px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+              {TIME_RANGE_LABELS[timeRange] || timeRange}
+            </span>
+          )}
+        </div>
       </div>
       <div className="flex-1 min-h-0">
         {hasData ? (
@@ -130,7 +176,7 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
                 )}
               </defs>
               <XAxis dataKey="time" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis domain={["auto", "auto"]} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
+              <YAxis domain={["auto", "auto"]} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => unitInfo.divisor > 1 ? `${(v / unitInfo.divisor).toFixed(1)}` : String(v)} />
               <Tooltip
                 contentStyle={{
                   background: "hsl(var(--card))",
@@ -140,6 +186,10 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
                   color: "hsl(var(--foreground))",
                 }}
                 isAnimationActive={false}
+                formatter={(value: number, name: string) => [
+                  `${formatValue(value)}${unitInfo.suffix}`,
+                  name,
+                ]}
               />
               {isMultiSeries ? (
                 <>
