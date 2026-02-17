@@ -173,6 +173,29 @@ export default function DashboardBuilder() {
     }
   }, [selectedWidgetId, pushHistory]);
 
+  // Track drag/resize to suppress click events that would open config panel
+  const isDraggingRef = useRef(false);
+  const dragTimerRef = useRef<ReturnType<typeof setTimeout>>();
+
+  const handleDragResizeStart = useCallback(() => {
+    isDraggingRef.current = true;
+    if (dragTimerRef.current) clearTimeout(dragTimerRef.current);
+  }, []);
+
+  const handleDragResizeStop = useCallback(() => {
+    // Delay clearing the flag so the click event fires first and gets suppressed
+    dragTimerRef.current = setTimeout(() => {
+      isDraggingRef.current = false;
+    }, 200);
+  }, []);
+
+  const handleWidgetClick = useCallback((widgetId: string) => {
+    if (isDraggingRef.current) return; // suppress click after drag/resize
+    setSelectedWidgetId(widgetId);
+    setSidebarMode("config");
+    setSidebarOpen(true);
+  }, []);
+
   const handleLayoutChange = useCallback((layout: Layout[]) => {
     setConfig((prev) => ({
       ...prev,
@@ -425,6 +448,10 @@ export default function DashboardBuilder() {
                 cols={{ lg: config.settings.cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
                 rowHeight={config.settings.rowHeight}
                 onLayoutChange={handleLayoutChange}
+                onDragStart={handleDragResizeStart}
+                onDragStop={handleDragResizeStop}
+                onResizeStart={handleDragResizeStart}
+                onResizeStop={handleDragResizeStop}
                 isDraggable
                 isResizable
                 compactType="vertical"
@@ -437,11 +464,7 @@ export default function DashboardBuilder() {
                     <WidgetPreviewCard
                       widget={widget}
                       isSelected={selectedWidgetId === widget.id}
-                      onClick={() => {
-                        setSelectedWidgetId(widget.id);
-                        setSidebarMode("config");
-                        setSidebarOpen(true);
-                      }}
+                      onClick={() => handleWidgetClick(widget.id)}
                     />
                   </div>
                 ))}
