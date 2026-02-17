@@ -49,17 +49,20 @@ function buildWidgetCSS(style: WidgetStyle): React.CSSProperties {
   return css;
 }
 
+/** Use themed primary color, fallback to explicit style color */
+const PRIMARY_CSS = "hsl(var(--primary))";
+
 export default function WidgetPreviewCard({ widget, isSelected, onClick, isPreview }: Props) {
   const s = widget.style;
   const inlineCSS = buildWidgetCSS(s);
 
   const glassClass = s.glass !== false ? "glass-card" : "";
-  const selectedClass = isSelected ? "ring-2 ring-neon-green ring-offset-1 ring-offset-background" : "";
+  const selectedClass = isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : "";
 
   return (
     <div
       onClick={onClick}
-      className={`h-full w-full rounded-lg border border-border/50 overflow-hidden cursor-pointer transition-all ${glassClass} ${selectedClass} ${isPreview ? "" : "hover:border-foreground/20"}`}
+      className={`h-full w-full rounded-lg border border-border/50 overflow-hidden cursor-pointer transition-all ${glassClass} ${selectedClass} ${isPreview ? "" : "hover:border-primary/30"}`}
       style={{
         ...inlineCSS,
         borderStyle: "solid",
@@ -71,14 +74,14 @@ export default function WidgetPreviewCard({ widget, isSelected, onClick, isPrevi
           <DynamicIcon
             name={s.icon}
             className="w-3.5 h-3.5 flex-shrink-0"
-            style={{ color: s.iconColor || "#39FF14" }}
+            style={{ color: s.iconColor || PRIMARY_CSS }}
           />
         )}
         <span
           className="text-[10px] uppercase tracking-wider truncate font-semibold"
           style={{
             fontFamily: s.titleFont || "'Orbitron', sans-serif",
-            color: s.labelColor || s.textColor || "hsl(215 10% 50%)",
+            color: s.labelColor || s.textColor || "hsl(var(--muted-foreground))",
           }}
         >
           {widget.title}
@@ -98,10 +101,11 @@ export default function WidgetPreviewCard({ widget, isSelected, onClick, isPrevi
 
 function renderTypePreview(widget: WidgetConfig) {
   const s = widget.style;
+  const accentColor = s.valueColor || PRIMARY_CSS;
   const valStyle: React.CSSProperties = {
     fontFamily: s.valueFont || "'JetBrains Mono', monospace",
     fontSize: s.valueFontSize || 24,
-    color: s.valueColor || "#39FF14",
+    color: accentColor,
   };
 
   switch (widget.widget_type) {
@@ -115,16 +119,16 @@ function renderTypePreview(widget: WidgetConfig) {
     case "gauge":
       return (
         <svg viewBox="0 0 100 60" className="w-full max-w-[80px]">
-          <path d="M 10 55 A 40 40 0 0 1 90 55" fill="none" stroke="hsl(220 15% 20%)" strokeWidth="6" strokeLinecap="round" />
-          <path d="M 10 55 A 40 40 0 0 1 90 55" fill="none" stroke={s.valueColor || "#39FF14"} strokeWidth="6" strokeLinecap="round" strokeDasharray="125" strokeDashoffset="80" />
-          <text x="50" y="50" textAnchor="middle" fill={s.valueColor || "#39FF14"} fontSize="12" fontFamily={s.valueFont || "'JetBrains Mono'"}>—</text>
+          <path d="M 10 55 A 40 40 0 0 1 90 55" fill="none" stroke="hsl(var(--muted))" strokeWidth="6" strokeLinecap="round" />
+          <path d="M 10 55 A 40 40 0 0 1 90 55" fill="none" stroke={accentColor} strokeWidth="6" strokeLinecap="round" strokeDasharray="125" strokeDashoffset="80" />
+          <text x="50" y="50" textAnchor="middle" fill={accentColor} fontSize="12" fontFamily={s.valueFont || "'JetBrains Mono'"}>—</text>
         </svg>
       );
     case "timeseries":
       return (
         <div className="w-full h-full flex items-end gap-px opacity-40">
           {[30, 45, 38, 52, 48, 60, 55, 42].map((h, i) => (
-            <div key={i} className="flex-1 rounded-t" style={{ height: `${h}%`, background: s.valueColor || "#39FF14" }} />
+            <div key={i} className="flex-1 rounded-t" style={{ height: `${h}%`, background: accentColor }} />
           ))}
         </div>
       );
@@ -142,7 +146,7 @@ function renderTypePreview(widget: WidgetConfig) {
     case "status":
       return (
         <div className="flex items-center gap-2">
-          <span className="w-3 h-3 rounded-full pulse-green" style={{ background: s.valueColor || "#39FF14" }} />
+          <span className="w-3 h-3 rounded-full pulse-green" style={{ background: accentColor }} />
           <span style={{ ...valStyle, fontSize: 16 }} className="font-bold">OK</span>
         </div>
       );
@@ -150,14 +154,14 @@ function renderTypePreview(widget: WidgetConfig) {
       return (
         <div className="w-full">
           <div className="h-3 rounded-full bg-muted overflow-hidden">
-            <div className="h-full rounded-full w-[35%]" style={{ background: s.valueColor || "#39FF14" }} />
+            <div className="h-full rounded-full w-[35%]" style={{ background: accentColor }} />
           </div>
         </div>
       );
     case "icon-value":
       return (
         <div className="flex items-center gap-3">
-          {s.icon && <DynamicIcon name={s.icon} className="w-8 h-8" style={{ color: s.iconColor || "#39FF14" }} />}
+          {s.icon && <DynamicIcon name={s.icon} className="w-8 h-8" style={{ color: s.iconColor || PRIMARY_CSS }} />}
           <div style={valStyle} className="font-bold">—</div>
         </div>
       );
@@ -176,9 +180,10 @@ function renderTypePreview(widget: WidgetConfig) {
     case "traffic-light":
       return (
         <div className="flex flex-col gap-1 items-center">
-          {["#FF4444", "#FFBF00", "#39FF14"].map((c, i) => (
-            <div key={i} className="w-3 h-3 rounded-full" style={{ background: i === 2 ? c : `${c}30` }} />
+          {["#FF4444", "#FFBF00"].map((c, i) => (
+            <div key={i} className="w-3 h-3 rounded-full" style={{ background: `${c}30` }} />
           ))}
+          <div className="w-3 h-3 rounded-full" style={{ background: accentColor }} />
         </div>
       );
     case "label":
