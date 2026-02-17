@@ -1,7 +1,8 @@
-import { memo, useEffect, useRef, useMemo } from "react";
+import { memo, useEffect, useRef } from "react";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { ImageHotspot } from "@/types/builder";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
+import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import WidgetSkeleton from "./widgets/WidgetSkeleton";
 import StatWidget from "./widgets/StatWidget";
 import GaugeWidget from "./widgets/GaugeWidget";
@@ -28,6 +29,7 @@ interface Props {
 
 function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache, config, onCritical, compact }: Props) {
   const prevCriticalRef = useRef(false);
+  const { containerRef, isVisible } = useWidgetVisibility();
 
   const entry = cache.get(telemetryKey);
   const colorMap = config?.color_map as Record<string, unknown> | undefined;
@@ -54,7 +56,26 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
   // Show skeleton if no data yet for data-driven widgets
   const needsData = !["label", "text"].includes(widgetType);
   if (needsData && !entry) {
-    return <div className="h-full"><WidgetSkeleton type={widgetType} /></div>;
+    return <div ref={containerRef} className="h-full"><WidgetSkeleton type={widgetType} /></div>;
+  }
+
+  // When off-screen: render a lightweight frozen placeholder instead of live charts
+  // Critical alerts still process in background (useEffect above), but no expensive SVG rendering
+  if (!isVisible) {
+    return (
+      <div ref={containerRef} className={wrapperClass} style={containStyle}>
+        <div className="glass-card rounded-lg p-4 h-full flex flex-col items-center justify-center border border-border/50">
+          <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground truncate w-full text-center">
+            {title}
+          </span>
+          {entry ? (
+            <span className="text-xs font-mono text-muted-foreground/60 mt-1">⏸ standby</span>
+          ) : (
+            <WidgetSkeleton type={widgetType} />
+          )}
+        </div>
+      </div>
+    );
   }
 
   const inner = (() => {
@@ -97,7 +118,7 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
     }
   })();
 
-  return <div className={wrapperClass} style={containStyle}>{inner}</div>;
+  return <div ref={containerRef} className={wrapperClass} style={containStyle}>{inner}</div>;
 }
 
 const WidgetRenderer = memo(WidgetRendererInner);
