@@ -147,7 +147,7 @@ export default function DashboardView() {
         </>
       )}
 
-      <div className="w-full relative z-10">
+      <div className="w-full relative z-10" style={{ maxWidth: '100%' }}>
         {/* Header */}
         <motion.header
           initial={{ opacity: 0, y: -10 }}
@@ -291,6 +291,14 @@ function ViewGrid({
   onCritical: (id: string) => void;
 }) {
   const isCompact = widgets.length > 20;
+
+  // Force WidthProvider to re-measure after mount & navigation
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.dispatchEvent(new Event("resize"));
+    }, 50);
+    return () => clearTimeout(timer);
+  }, []);
 
   const gridLayout: Layout[] = useMemo(
     () =>
