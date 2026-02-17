@@ -5,7 +5,7 @@ import Fuse from "fuse.js";
 import { supabase } from "@/integrations/supabase/client";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
-import { Search, Server, FolderTree, Activity, ChevronDown, Check, ChevronRight, Plus } from "lucide-react";
+import { Search, Server, FolderTree, Activity, ChevronDown, Check, ChevronRight, Plus, Loader2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getNavCache, setNavCache } from "@/lib/metadata-cache";
 
@@ -55,8 +55,6 @@ async function zabbixProxyPaginated(connectionId: string, method: string, basePa
   }
   return allResults;
 }
-
-const FUSE_OPTIONS = { keys: ["name", "key_"], threshold: 0.4, ignoreLocation: true };
 
 // ── Virtualized Select Dropdown ──
 
@@ -160,15 +158,25 @@ function VirtualSelect<T extends { id: string; label: string }>({
   );
 }
 
+// ── Constants ──
+const PAGE_SIZE = 50;
+const DEFAULT_SEARCH_NAMES = ["Bits sent", "Bits received", "Traffic"];
+
 // ── Main Component ──
 
 export default function ZabbixItemBrowser({ connectionId, selectedItemId, initialGroupId, initialHostId, initialGroupName, initialHostName, initialItemName, multiSelect, selectedSeries, onSelectItem }: ZabbixItemBrowserProps) {
   const [selectedGroup, setSelectedGroup] = useState(initialGroupId || "");
   const [selectedHost, setSelectedHost] = useState(initialHostId || "");
   const [itemSearch, setItemSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [loadedItems, setLoadedItems] = useState<ZabbixItem[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [currentOffset, setCurrentOffset] = useState(0);
   const parentRef = useRef<HTMLDivElement>(null);
   const queryClient = useQueryClient();
   const initializedRef = useRef(false);
+  const debounceRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
     if (initialGroupId && !initializedRef.current) {
@@ -177,6 +185,15 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
       initializedRef.current = true;
     }
   }, [initialGroupId, initialHostId]);
+
+  // Debounce search input
+  useEffect(() => {
+    clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setDebouncedSearch(itemSearch);
+    }, 400);
+    return () => clearTimeout(debounceRef.current);
+  }, [itemSearch]);
 
   // ── Groups with IndexedDB SWR ──
   const groupsCacheKey = `groups:${connectionId}`;
@@ -224,36 +241,130 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
     }).catch(() => {});
   }, [connectionId, selectedGroup]);
 
-  // ── Items ──
-  const { data: items = [], isLoading: loadingItems } = useQuery({
-    queryKey: ["zabbix-items", connectionId, selectedHost],
-    queryFn: () => zabbixProxyPaginated(connectionId!, "item.get", { output: ["itemid", "key_", "name", "lastvalue", "units", "value_type"], hostids: [selectedHost], sortfield: "name" }),
+  // ── Items — Server-side search + pagination ──
+  const buildItemParams = useCallback((offset: number, searchTerm: string) => {
+    const params: Record<string, unknown> = {
+      output: ["itemid", "key_", "name", "lastvalue", "units", "value_type"],
+      hostids: [selectedHost],
+      sortfield: "name",
+      limit: PAGE_SIZE,
+      offset,
+    };
+
+    if (searchTerm.trim()) {
+      // Server-side search by name
+      params.search = { name: searchTerm.trim() };
+      params.startSearch = true;
+    } else {
+      // Default: show bandwidth-related items first
+      params.search = { name: DEFAULT_SEARCH_NAMES[0] };
+      params.searchByAny = true;
+      // We'll do multiple calls for default filters
+    }
+
+    return params;
+  }, [selectedHost]);
+
+  const { isLoading: loadingItems, isFetching: fetchingItems } = useQuery({
+    queryKey: ["zabbix-items-ss", connectionId, selectedHost, debouncedSearch],
+    queryFn: async () => {
+      if (!connectionId || !selectedHost) return [];
+
+      let allItems: ZabbixItem[] = [];
+
+      if (debouncedSearch.trim()) {
+        // User typed something — single server-side search
+        const result = await zabbixProxy(connectionId, "item.get", {
+          output: ["itemid", "key_", "name", "lastvalue", "units", "value_type"],
+          hostids: [selectedHost],
+          sortfield: "name",
+          limit: PAGE_SIZE,
+          search: { name: debouncedSearch.trim() },
+          startSearch: true,
+        });
+        allItems = (result as ZabbixItem[]) || [];
+        setHasMore(allItems.length >= PAGE_SIZE);
+      } else {
+        // No search — fetch default bandwidth items in parallel
+        const searches = DEFAULT_SEARCH_NAMES.map((term) =>
+          zabbixProxy(connectionId, "item.get", {
+            output: ["itemid", "key_", "name", "lastvalue", "units", "value_type"],
+            hostids: [selectedHost],
+            sortfield: "name",
+            limit: PAGE_SIZE,
+            search: { name: term },
+            startSearch: true,
+          })
+        );
+        const results = await Promise.all(searches);
+        const seen = new Set<string>();
+        for (const batch of results) {
+          for (const item of (batch as ZabbixItem[]) || []) {
+            if (!seen.has(item.itemid)) {
+              seen.add(item.itemid);
+              allItems.push(item);
+            }
+          }
+        }
+        allItems.sort((a, b) => a.name.localeCompare(b.name));
+        setHasMore(false); // default view shows curated list
+      }
+
+      setLoadedItems(allItems);
+      setCurrentOffset(allItems.length);
+      return allItems;
+    },
     enabled: !!connectionId && !!selectedHost,
     staleTime: 5 * 60 * 1000,
-    select: (d) => (d as ZabbixItem[]) || [],
   });
+
+  // ── Load More ──
+  const handleLoadMore = useCallback(async () => {
+    if (!connectionId || !selectedHost || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const result = await zabbixProxy(connectionId, "item.get", {
+        output: ["itemid", "key_", "name", "lastvalue", "units", "value_type"],
+        hostids: [selectedHost],
+        sortfield: "name",
+        limit: PAGE_SIZE,
+        offset: currentOffset,
+        ...(debouncedSearch.trim()
+          ? { search: { name: debouncedSearch.trim() }, startSearch: true }
+          : {}),
+      });
+      const newItems = (result as ZabbixItem[]) || [];
+      const seen = new Set(loadedItems.map((i) => i.itemid));
+      const unique = newItems.filter((i) => !seen.has(i.itemid));
+      setLoadedItems((prev) => [...prev, ...unique]);
+      setCurrentOffset((prev) => prev + PAGE_SIZE);
+      setHasMore(newItems.length >= PAGE_SIZE);
+    } catch (err) {
+      console.error("Load more failed:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [connectionId, selectedHost, currentOffset, debouncedSearch, loadedItems, loadingMore]);
 
   const handleGroupChange = useCallback((groupId: string) => {
     setSelectedGroup(groupId);
     setSelectedHost("");
     setItemSearch("");
+    setLoadedItems([]);
   }, []);
 
   const handleHostChange = useCallback((hostId: string) => {
     setSelectedHost(hostId);
     setItemSearch("");
+    setLoadedItems([]);
+    setCurrentOffset(0);
+    setHasMore(false);
   }, []);
 
-  const fuse = useMemo(() => new Fuse(items, FUSE_OPTIONS), [items]);
-  const filteredItems = useMemo(() => {
-    if (!itemSearch.trim()) return items;
-    return fuse.search(itemSearch).map((r) => r.item);
-  }, [fuse, items, itemSearch]);
-
   const virtualizer = useVirtualizer({
-    count: filteredItems.length,
+    count: loadedItems.length + (hasMore ? 1 : 0), // +1 for load-more row
     getScrollElement: () => parentRef.current,
-    estimateSize: () => 36, // compact rows
+    estimateSize: () => 36,
     overscan: 5,
   });
 
@@ -275,6 +386,7 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
   const selectedSeriesSet = useMemo(() => new Set(selectedSeries || []), [selectedSeries]);
 
   const error = groupsError ? (groupsError as Error).message : null;
+  const isSearching = fetchingItems && !loadingItems;
 
   if (!connectionId) {
     return (
@@ -290,7 +402,7 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
         <div className="text-[9px] text-neon-red p-2 border border-neon-red/30 rounded-md bg-neon-red/5">{error}</div>
       )}
 
-      {/* Breadcrumb — compact fixed line */}
+      {/* Breadcrumb */}
       {(groupName || hostName) && (
         <div className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground overflow-hidden">
           <span className="text-primary/60">📍</span>
@@ -303,28 +415,64 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
       <VirtualSelect items={groupOptions} value={selectedGroup} onChange={handleGroupChange} placeholder="Selecionar grupo" isLoading={loadingGroups && groups.length === 0} icon={FolderTree} label="Grupo de Hosts" />
       <VirtualSelect items={hostOptions} value={selectedHost} onChange={handleHostChange} placeholder={!selectedGroup ? "Selecione um grupo primeiro" : "Selecionar host"} isLoading={loadingHosts && hosts.length === 0} icon={Server} label="Host" />
 
-      {/* Items — Compact Virtualized List */}
+      {/* Items — Server-side Search + Paginated List */}
       {selectedHost && (
         <div className="space-y-1">
           <Label className="text-[10px] text-muted-foreground flex items-center gap-1">
-            <Activity className="w-3 h-3" /> Itens ({filteredItems.length})
+            <Activity className="w-3 h-3" /> Itens ({loadedItems.length})
+            {isSearching && <Loader2 className="w-3 h-3 animate-spin text-primary ml-1" />}
           </Label>
           <div className="relative">
             <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
-            <Input value={itemSearch} onChange={(e) => setItemSearch(e.target.value)} placeholder="Busca fuzzy…" className="h-7 text-xs pl-7" />
+            <Input
+              value={itemSearch}
+              onChange={(e) => setItemSearch(e.target.value)}
+              placeholder="Buscar no servidor…"
+              className="h-7 text-xs pl-7"
+            />
           </div>
 
+          {!itemSearch.trim() && loadedItems.length > 0 && (
+            <p className="text-[8px] text-muted-foreground/60 px-1">
+              Mostrando itens de banda. Digite para buscar outros itens.
+            </p>
+          )}
+
           {loadingItems ? (
-            <div className="space-y-1">
-              {Array.from({ length: 6 }).map((_, i) => (
-                <Skeleton key={i} className="h-8 w-full rounded bg-muted/30" />
-              ))}
+            <div className="flex flex-col items-center justify-center py-8 gap-2">
+              <Loader2 className="w-5 h-5 animate-spin text-primary" />
+              <span className="text-[9px] text-muted-foreground">Buscando itens do Zabbix…</span>
             </div>
           ) : (
             <div ref={parentRef} className="h-[320px] border border-border/30 rounded-md overflow-auto">
               <div style={{ height: `${virtualizer.getTotalSize()}px`, width: "100%", position: "relative" }}>
                 {virtualizer.getVirtualItems().map((vRow) => {
-                  const item = filteredItems[vRow.index];
+                  // Last row = load more button
+                  if (hasMore && vRow.index === loadedItems.length) {
+                    return (
+                      <div
+                        key="load-more"
+                        className="absolute left-0 w-full flex items-center justify-center py-2"
+                        style={{ top: `${vRow.start}px`, height: `${vRow.size}px` }}
+                      >
+                        <button
+                          type="button"
+                          onClick={handleLoadMore}
+                          disabled={loadingMore}
+                          className="text-[9px] text-primary hover:text-primary/80 font-medium flex items-center gap-1 disabled:opacity-50"
+                        >
+                          {loadingMore ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> Carregando…</>
+                          ) : (
+                            "Carregar mais itens"
+                          )}
+                        </button>
+                      </div>
+                    );
+                  }
+
+                  const item = loadedItems[vRow.index];
+                  if (!item) return null;
                   const isInSeries = multiSelect && selectedSeriesSet.has(item.itemid);
                   const isSingleSelected = !multiSelect && selectedItemId === item.itemid;
 
@@ -341,14 +489,12 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
                       }`}
                       style={{ top: `${vRow.start}px`, height: `${vRow.size}px` }}
                     >
-                      {/* Content */}
                       <div className="flex-1 min-w-0">
                         <span className="font-medium truncate block">{item.name}</span>
                         <span className="font-mono text-muted-foreground/60 truncate block text-[8px]">
                           {item.lastvalue !== undefined ? `${item.lastvalue}${item.units || ""}` : "—"}
                         </span>
                       </div>
-                      {/* Action icon */}
                       {multiSelect && (
                         isInSeries ? (
                           <Check className="w-3.5 h-3.5 text-primary shrink-0" />
@@ -360,8 +506,10 @@ export default function ZabbixItemBrowser({ connectionId, selectedItemId, initia
                   );
                 })}
               </div>
-              {filteredItems.length === 0 && !loadingItems && (
-                <p className="text-[9px] text-muted-foreground text-center py-3">Nenhum item encontrado</p>
+              {loadedItems.length === 0 && !loadingItems && !fetchingItems && (
+                <p className="text-[9px] text-muted-foreground text-center py-3">
+                  {debouncedSearch ? "Nenhum item encontrado" : "Nenhum item de banda encontrado. Digite para buscar."}
+                </p>
               )}
             </div>
           )}
