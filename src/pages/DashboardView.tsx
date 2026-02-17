@@ -7,13 +7,19 @@ import { Button } from "@/components/ui/button";
 import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff, Timer } from "lucide-react";
 import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
-import { useCallback, useState, useEffect } from "react";
+import { useCallback, useState, useEffect, useMemo } from "react";
 import { useAudioAlert } from "@/hooks/useAudioAlert";
+import { Responsive, WidthProvider, type Layout } from "react-grid-layout";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 
-/** Grid: 12 columns, each row = 80px height */
+const ResponsiveGridLayout = WidthProvider(Responsive);
+
+/** Grid constants — MUST match DashboardBuilder exactly */
 const GRID_COLS = 12;
-const COL_WIDTH_PERCENT = 100 / GRID_COLS;
 const ROW_HEIGHT = 80;
+const GRID_MARGIN: [number, number] = [4, 4];
+const GRID_CONTAINER_PADDING: [number, number] = [0, 0];
 
 /**
  * Auto-stretch: for each row, if the rightmost widget doesn't reach col 12,
@@ -277,9 +283,9 @@ export default function DashboardView() {
           </div>
         )}
 
-        {/* Widget Grid */}
+        {/* Widget Grid — uses same react-grid-layout as Builder for pixel-perfect match */}
         {dashboard && !isLoading && (
-          <div className="relative" style={{ minHeight: getGridHeight(dashboard.widgets) }}>
+          <>
             {dashboard.widgets.length === 0 ? (
               <motion.div
                 initial={{ opacity: 0 }}
@@ -291,48 +297,15 @@ export default function DashboardView() {
                 </p>
               </motion.div>
             ) : (
-              (() => {
-                const isCompact = dashboard.widgets.length > 20;
-                const stretched = autoStretchWidgets(dashboard.widgets as any[]);
-                return stretched.map((widget: any, i: number) => {
-                  const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
-                  const mergedConfig = {
-                    ...(widget.config as Record<string, unknown>),
-                    ...((widget.config as any)?.extra || {}),
-                    style: (widget.config as any)?.style,
-                  };
-                  return (
-                    <motion.div
-                      key={widget.id}
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: i * 0.05 }}
-                      className="absolute"
-                      style={{
-                        left: `${widget.position_x * COL_WIDTH_PERCENT}%`,
-                        top: `${widget.position_y * ROW_HEIGHT}px`,
-                        width: `${widget.width * COL_WIDTH_PERCENT}%`,
-                        height: `${widget.height * ROW_HEIGHT}px`,
-                        padding: isCompact ? "2px" : "3px",
-                        contain: "layout style paint",
-                      }}
-                    >
-                      <WidgetRenderer
-                        widgetType={widget.widget_type}
-                        widgetId={widget.id}
-                        telemetryKey={telemetryKey}
-                        title={widget.title}
-                        cache={telemetryCache}
-                        config={mergedConfig}
-                        onCritical={handleCritical}
-                        compact={isCompact}
-                      />
-                    </motion.div>
-                  );
-                });
-              })()
+              <ViewGrid
+                widgets={dashboard.widgets as any[]}
+                cols={(dashboard.settings as any)?.cols || GRID_COLS}
+                rowHeight={(dashboard.settings as any)?.rowHeight || ROW_HEIGHT}
+                telemetryCache={telemetryCache}
+                onCritical={handleCritical}
+              />
             )}
-          </div>
+          </>
         )}
 
         {/* Footer */}
@@ -346,8 +319,71 @@ export default function DashboardView() {
   );
 }
 
-function getGridHeight(widgets: Array<{ position_y: number; height: number }>): string {
-  if (!widgets.length) return "200px";
-  const maxBottom = Math.max(...widgets.map((w) => (w.position_y + w.height) * ROW_HEIGHT));
-  return `${maxBottom + 16}px`;
+/** Extracted grid component so WidthProvider can measure correctly */
+function ViewGrid({
+  widgets,
+  cols,
+  rowHeight,
+  telemetryCache,
+  onCritical,
+}: {
+  widgets: any[];
+  cols: number;
+  rowHeight: number;
+  telemetryCache: Map<string, any>;
+  onCritical: (id: string) => void;
+}) {
+  const isCompact = widgets.length > 20;
+  const stretched = useMemo(() => autoStretchWidgets(widgets), [widgets]);
+
+  const gridLayout: Layout[] = useMemo(
+    () =>
+      stretched.map((w: any) => ({
+        i: w.id,
+        x: w.position_x,
+        y: w.position_y,
+        w: w.width,
+        h: w.height,
+        static: true, // non-draggable, non-resizable
+      })),
+    [stretched],
+  );
+
+  return (
+    <ResponsiveGridLayout
+      layouts={{ lg: gridLayout }}
+      breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
+      cols={{ lg: cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
+      rowHeight={rowHeight}
+      isDraggable={false}
+      isResizable={false}
+      compactType="vertical"
+      margin={GRID_MARGIN}
+      containerPadding={GRID_CONTAINER_PADDING}
+      useCSSTransforms
+    >
+      {stretched.map((widget: any) => {
+        const telemetryKey = widget.adapter?.telemetry_key || `zbx:widget:${widget.id}`;
+        const mergedConfig = {
+          ...(widget.config as Record<string, unknown>),
+          ...((widget.config as any)?.extra || {}),
+          style: (widget.config as any)?.style,
+        };
+        return (
+          <div key={widget.id}>
+            <WidgetRenderer
+              widgetType={widget.widget_type}
+              widgetId={widget.id}
+              telemetryKey={telemetryKey}
+              title={widget.title}
+              cache={telemetryCache}
+              config={mergedConfig}
+              onCritical={onCritical}
+              compact={isCompact}
+            />
+          </div>
+        );
+      })}
+    </ResponsiveGridLayout>
+  );
 }
