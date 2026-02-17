@@ -54,8 +54,15 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
   const containStyle: React.CSSProperties = { contain: "layout style paint" };
 
   // Show skeleton if no data yet for data-driven widgets
+  // For multi-series timeseries, data lives under individual item keys, not the main telemetryKey
   const needsData = !["label", "text"].includes(widgetType);
-  if (needsData && !entry) {
+  const hasMultiSeriesData = (() => {
+    if (widgetType !== "timeseries") return false;
+    const series = (config?.series as Array<{ itemid: string }>) || [];
+    if (series.length === 0) return false;
+    return series.some((s) => cache.has(`zbx:item:${s.itemid}`));
+  })();
+  if (needsData && !entry && !hasMultiSeriesData) {
     return <div ref={containerRef} className="h-full"><WidgetSkeleton type={widgetType} /></div>;
   }
 
