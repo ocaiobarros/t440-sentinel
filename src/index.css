@@ -65,84 +65,157 @@
     --sidebar-ring: 142 100% 50%;
   }
 
-  /* ── Category Themes ── */
+  /* ── Category Themes — Radical Visual Differentiation ── */
+
+  /* NETWORK / LINKS — Deep navy-teal, electric blue accents */
   [data-theme-category="network"],
   [data-theme-category="wifi"] {
+    --background: 215 45% 5%;
+    --card: 215 40% 8%;
+    --secondary: 215 35% 12%;
+    --muted: 215 30% 10%;
+    --border: 210 40% 18%;
     --primary: 210 100% 56%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 220 40% 4%;
     --ring: 210 100% 56%;
     --neon-green: 186 100% 50%;
     --category-accent: 210 100% 56%;
     --category-accent-alt: 186 100% 50%;
-    --category-glow: hsl(210 100% 56% / 0.08);
+    --category-glow: hsl(210 100% 56% / 0.12);
+    --category-bg: radial-gradient(ellipse at 30% 20%, hsl(210 60% 12% / 0.6) 0%, hsl(215 45% 4%) 70%);
+    --category-card-border: hsl(210 100% 56% / 0.25);
+    --category-card-bg: linear-gradient(145deg, hsl(215 40% 10% / 0.85) 0%, hsl(215 45% 5% / 0.7) 100%);
   }
 
+  /* STARLINK — Cyan-dominated, futuristic arctic feel */
   [data-theme-category="starlink"] {
+    --background: 200 50% 4%;
+    --card: 200 40% 7%;
+    --secondary: 200 35% 11%;
+    --muted: 200 30% 9%;
+    --border: 195 40% 16%;
     --primary: 186 100% 50%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 200 50% 4%;
     --ring: 186 100% 50%;
     --category-accent: 186 100% 50%;
-    --category-accent-alt: 210 100% 56%;
-    --category-glow: hsl(186 100% 50% / 0.08);
+    --category-accent-alt: 170 80% 45%;
+    --category-glow: hsl(186 100% 50% / 0.15);
+    --category-bg: radial-gradient(ellipse at 50% 0%, hsl(186 60% 15% / 0.5) 0%, hsl(200 50% 3%) 65%);
+    --category-card-border: hsl(186 100% 50% / 0.3);
+    --category-card-bg: linear-gradient(145deg, hsl(200 40% 9% / 0.85) 0%, hsl(200 50% 4% / 0.7) 100%);
   }
 
+  /* ENERGY / RETIFICADORAS — Carbon-dark, amber/orange industrial */
   [data-theme-category="energy"] {
+    --background: 30 20% 4%;
+    --card: 30 18% 7%;
+    --secondary: 30 15% 11%;
+    --muted: 30 12% 9%;
+    --border: 35 25% 16%;
     --primary: 43 100% 50%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 30 20% 4%;
     --ring: 43 100% 50%;
     --neon-green: 30 100% 55%;
     --category-accent: 43 100% 50%;
-    --category-accent-alt: 30 100% 55%;
-    --category-glow: hsl(43 100% 50% / 0.08);
+    --category-accent-alt: 25 100% 50%;
+    --category-glow: hsl(43 100% 50% / 0.12);
+    --category-bg: radial-gradient(ellipse at 60% 80%, hsl(30 50% 10% / 0.5) 0%, hsl(30 20% 3%) 70%);
+    --category-card-border: hsl(43 100% 50% / 0.2);
+    --category-card-bg: linear-gradient(145deg, hsl(30 18% 10% / 0.85) 0%, hsl(30 20% 4% / 0.7) 100%);
   }
 
+  /* SERVERS / DATACENTER — Cool metallic, green accents */
   [data-theme-category="servers"],
   [data-theme-category="datacenter"] {
-    --primary: 210 10% 70%;
-    --primary-foreground: 228 30% 4%;
-    --ring: 210 10% 70%;
-    --category-accent: 210 10% 70%;
-    --category-accent-alt: 142 100% 50%;
-    --category-glow: hsl(210 10% 70% / 0.06);
+    --background: 220 20% 5%;
+    --card: 220 18% 8%;
+    --secondary: 220 15% 12%;
+    --muted: 220 12% 10%;
+    --border: 220 15% 16%;
+    --primary: 142 100% 50%;
+    --primary-foreground: 220 20% 4%;
+    --ring: 142 100% 50%;
+    --category-accent: 142 100% 50%;
+    --category-accent-alt: 160 70% 40%;
+    --category-glow: hsl(142 100% 50% / 0.08);
+    --category-bg: radial-gradient(ellipse at 20% 50%, hsl(142 40% 8% / 0.4) 0%, hsl(220 20% 4%) 65%);
+    --category-card-border: hsl(142 100% 50% / 0.15);
+    --category-card-bg: linear-gradient(145deg, hsl(220 18% 10% / 0.85) 0%, hsl(220 20% 5% / 0.7) 100%);
   }
 
+  /* SECURITY — Dark purple, vivid warning tones */
   [data-theme-category="security"] {
+    --background: 260 30% 5%;
+    --card: 260 25% 8%;
+    --secondary: 260 20% 12%;
+    --muted: 260 18% 10%;
+    --border: 265 25% 18%;
     --primary: 265 90% 65%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 260 30% 4%;
     --ring: 265 90% 65%;
     --category-accent: 265 90% 65%;
-    --category-accent-alt: 300 80% 55%;
-    --category-glow: hsl(265 90% 65% / 0.08);
+    --category-accent-alt: 340 85% 55%;
+    --category-glow: hsl(265 90% 65% / 0.12);
+    --category-bg: radial-gradient(ellipse at 70% 30%, hsl(265 50% 15% / 0.5) 0%, hsl(260 30% 4%) 65%);
+    --category-card-border: hsl(265 90% 65% / 0.25);
+    --category-card-bg: linear-gradient(145deg, hsl(260 25% 10% / 0.85) 0%, hsl(260 30% 5% / 0.7) 100%);
   }
 
+  /* VIRTUALIZATION / DATABASE — Deep royal blue */
   [data-theme-category="virtualization"],
   [data-theme-category="database"] {
+    --background: 225 50% 5%;
+    --card: 225 45% 9%;
+    --secondary: 225 35% 13%;
+    --muted: 225 30% 10%;
+    --border: 220 40% 20%;
     --primary: 217 90% 60%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 225 50% 4%;
     --ring: 217 90% 60%;
     --category-accent: 217 90% 60%;
-    --category-accent-alt: 240 80% 66%;
-    --category-glow: hsl(217 90% 60% / 0.08);
+    --category-accent-alt: 200 90% 55%;
+    --category-glow: hsl(217 90% 60% / 0.12);
+    --category-bg: radial-gradient(ellipse at 50% 50%, hsl(220 60% 14% / 0.6) 0%, hsl(225 50% 4%) 65%);
+    --category-card-border: hsl(217 90% 60% / 0.3);
+    --category-card-bg: linear-gradient(145deg, hsl(225 45% 11% / 0.85) 0%, hsl(225 50% 5% / 0.7) 100%);
   }
 
+  /* MONITORING / CAMERAS — Hot pink/magenta */
   [data-theme-category="monitoring"],
   [data-theme-category="cameras"] {
+    --background: 330 25% 5%;
+    --card: 330 20% 8%;
+    --secondary: 330 18% 12%;
+    --muted: 330 15% 10%;
+    --border: 330 20% 16%;
     --primary: 330 85% 60%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 330 25% 4%;
     --ring: 330 85% 60%;
     --category-accent: 330 85% 60%;
     --category-accent-alt: 290 80% 55%;
-    --category-glow: hsl(330 85% 60% / 0.08);
+    --category-glow: hsl(330 85% 60% / 0.12);
+    --category-bg: radial-gradient(ellipse at 40% 70%, hsl(330 50% 12% / 0.5) 0%, hsl(330 25% 4%) 65%);
+    --category-card-border: hsl(330 85% 60% / 0.2);
+    --category-card-bg: linear-gradient(145deg, hsl(330 20% 10% / 0.85) 0%, hsl(330 25% 5% / 0.7) 100%);
   }
 
+  /* BACKUP / LOGISTICS — Emerald/teal, organic feel */
   [data-theme-category="backup"],
   [data-theme-category="logistics"] {
+    --background: 160 25% 4%;
+    --card: 160 20% 7%;
+    --secondary: 160 18% 11%;
+    --muted: 160 15% 9%;
+    --border: 155 20% 15%;
     --primary: 152 80% 45%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 160 25% 4%;
     --ring: 152 80% 45%;
     --category-accent: 152 80% 45%;
     --category-accent-alt: 142 100% 50%;
-    --category-glow: hsl(152 80% 45% / 0.08);
+    --category-glow: hsl(152 80% 45% / 0.10);
+    --category-bg: radial-gradient(ellipse at 50% 90%, hsl(152 40% 10% / 0.5) 0%, hsl(160 25% 3%) 65%);
+    --category-card-border: hsl(152 80% 45% / 0.2);
+    --category-card-bg: linear-gradient(145deg, hsl(160 20% 9% / 0.85) 0%, hsl(160 25% 4% / 0.7) 100%);
   }
 }
 
@@ -234,17 +307,18 @@
 
   /* Glass card — deep blur + subtle border for Flowbix fidelity */
   .glass-card {
-    background: linear-gradient(145deg, hsl(225 25% 9% / 0.8) 0%, hsl(228 30% 5% / 0.6) 100%);
+    background: var(--category-card-bg, linear-gradient(145deg, hsl(225 25% 9% / 0.8) 0%, hsl(228 30% 5% / 0.6) 100%));
     backdrop-filter: blur(16px);
     -webkit-backdrop-filter: blur(16px);
-    border: 1px solid hsl(222 15% 16% / 0.5);
+    border: 1px solid var(--category-card-border, hsl(222 15% 16% / 0.5));
   }
 
   .glass-card-elevated {
-    background: linear-gradient(145deg, hsl(225 25% 11% / 0.85) 0%, hsl(228 30% 7% / 0.7) 100%);
+    background: var(--category-card-bg, linear-gradient(145deg, hsl(225 25% 11% / 0.85) 0%, hsl(228 30% 7% / 0.7) 100%));
     backdrop-filter: blur(20px);
     -webkit-backdrop-filter: blur(20px);
-    border: 1px solid hsl(222 15% 20% / 0.6);
+    border: 1px solid var(--category-card-border, hsl(222 15% 20% / 0.6));
+    box-shadow: 0 0 20px hsl(var(--primary) / 0.05);
   }
 
   /* Compact widget variant — tight padding for high-density views */

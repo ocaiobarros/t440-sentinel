@@ -273,7 +273,7 @@ export default function DashboardBuilder() {
 
   const bgStyle: React.CSSProperties = config.settings.bgGradient
     ? { background: config.settings.bgGradient }
-    : {};
+    : { background: 'var(--category-bg, linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%))' };
 
   return (
     <div className="h-screen flex flex-col bg-background overflow-hidden" data-theme-category={config.settings.category || ""}>
