@@ -11,3 +11,6 @@ verify_jwt = false
 
 [functions.zabbix-proxy]
 verify_jwt = false
+
+[functions.zabbix-connections]
+verify_jwt = false
