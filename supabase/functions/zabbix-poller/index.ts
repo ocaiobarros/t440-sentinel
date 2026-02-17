@@ -169,6 +169,13 @@ function adaptToTable(items: Array<Record<string, string>>, cfg: WidgetPollConfi
   }];
 }
 
+/** Resolve history type from item's value_type (Zabbix uses same int for both) */
+function resolveHistoryType(items: Array<Record<string, string>>, itemId: string, fallback: number): number {
+  const item = items.find((i) => i.itemid === itemId);
+  if (item?.value_type !== undefined) return parseInt(item.value_type);
+  return fallback;
+}
+
 async function adaptResultWithHistory(
   url: string, auth: string, result: unknown, cfg: WidgetPollConfig
 ): Promise<TelemetryPayload[]> {
@@ -182,13 +189,13 @@ async function adaptResultWithHistory(
     
     if (itemIds.length === 0) return adaptItemToStat(items, cfg);
     
-    // Fetch history for each item in parallel
     const allPayloads: TelemetryPayload[] = [];
     await Promise.all(itemIds.map(async (itemId) => {
       try {
+        const histType = resolveHistoryType(items, itemId, cfg.adapter.history_type ?? 0);
         const histResult = await zabbixCall(url, auth, "history.get", {
           itemids: [itemId],
-          history: cfg.adapter.history_type ?? 0,
+          history: histType,
           time_from: timeFrom,
           sortfield: "clock",
           sortorder: "ASC",
@@ -202,21 +209,22 @@ async function adaptResultWithHistory(
         );
         allPayloads.push(...payloads);
       } catch (err) {
-        console.error(`history.get failed for item ${itemId}:`, err);
+        console.error(`history.get failed for item ${itemId} (histType auto):`, err);
       }
     }));
     return allPayloads;
   }
 
-  // For timeseries without time_range but with multi-series: also fetch history (last 1h default)
+  // For timeseries without time_range but with multi-series
   if (cfg.widget_type === "timeseries" && cfg.series && cfg.series.length > 0) {
     const timeFrom = Math.floor(Date.now() / 1000) - 3600;
     const allPayloads: TelemetryPayload[] = [];
     await Promise.all(cfg.series.map(async (s) => {
       try {
+        const histType = resolveHistoryType(items, s.itemid, cfg.adapter.history_type ?? 0);
         const histResult = await zabbixCall(url, auth, "history.get", {
           itemids: [s.itemid],
-          history: cfg.adapter.history_type ?? 0,
+          history: histType,
           time_from: timeFrom,
           sortfield: "clock",
           sortorder: "ASC",
