@@ -221,12 +221,12 @@ export default function DashboardBuilder() {
     dragTimerRef.current = setTimeout(() => { isDraggingRef.current = false; }, 200);
   }, []);
 
-  // Click handler — NEVER auto-opens the sidebar. Only switches content if already open.
+  // Click handler — opens sidebar to config panel on explicit click (not after drag/resize)
   const handleWidgetClick = useCallback((widgetId: string) => {
     if (isDraggingRef.current) return;
     setSelectedWidgetId(widgetId);
     setSidebarMode("config");
-    // Do NOT call setSidebarOpen(true) — user controls sidebar manually
+    setSidebarOpen(true);
   }, []);
 
   // Save mutation
