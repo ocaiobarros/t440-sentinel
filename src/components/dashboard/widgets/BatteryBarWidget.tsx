@@ -1,10 +1,10 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef, useCallback } from "react";
 import { motion, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
 import { formatDynamicValue } from "@/lib/format-utils";
-import { BatteryWarning, Zap, Timer, Activity } from "lucide-react";
+import { BatteryWarning, Zap, Timer, Activity, BatteryCharging, ShieldCheck, AlertTriangle } from "lucide-react";
 
 // ── Types ──
 interface Props {
@@ -14,6 +14,24 @@ interface Props {
   config?: Record<string, unknown>;
   compact?: boolean;
 }
+
+// ── Battery State Machine ──
+type BatteryState = "charging" | "ready" | "discharging" | "shutdown";
+
+// ── Color palette ──
+const STATE_COLORS: Record<BatteryState, string> = {
+  charging: "rgb(0, 220, 255)",     // Cyan
+  ready: "rgb(0, 220, 80)",         // Green
+  discharging: "rgb(255, 160, 0)",  // Orange (overridden by pct-based color when low)
+  shutdown: "rgb(255, 30, 30)",     // Emergency Red
+};
+
+const STATE_LABELS: Record<BatteryState, string> = {
+  charging: "CHARGING",
+  ready: "BATTERY READY",
+  discharging: "DISCHARGING",
+  shutdown: "SHUTDOWN IMMINENT",
+};
 
 // ── Color helpers ──
 interface RGBStop { pct: number; r: number; g: number; b: number }
@@ -51,36 +69,86 @@ function getBatteryColor(pct: number): string {
 
 const SEGMENT_COUNT = 20;
 const EMERGENCY_RED = "rgb(255, 30, 30)";
+const MAX_HISTORY = 4;
 
-// ── Non-linear discharge curve estimation (Method B) ──
-function estimateRuntimeByVoltage(voltage: number, minV: number, criticalV: number): { display: string; suffix: string } {
-  // Distance from critical as a ratio (0 = at critical, 1 = at max safe distance)
-  const safeRange = minV < criticalV ? criticalV - minV : 1;
-  const distFromCritical = Math.max(0, voltage - criticalV);
-  const ratio = Math.min(1, distFromCritical / safeRange);
-  // Non-linear: battery drains faster at lower voltages
+// ── Voltage Decay Rate estimation (Method B - Pop Protect) ──
+function estimateRuntimeByDecayRate(
+  voltage: number,
+  criticalV: number,
+  voltageHistory: number[],
+): { display: string; suffix: string } {
+  const distToCritical = Math.max(0, voltage - criticalV);
+
+  if (distToCritical <= 0) {
+    return { display: "0", suffix: "m" };
+  }
+
+  // Calculate average decay rate from history
+  if (voltageHistory.length >= 2) {
+    let totalDrop = 0;
+    let pairs = 0;
+    for (let i = 1; i < voltageHistory.length; i++) {
+      const drop = voltageHistory[i - 1] - voltageHistory[i];
+      if (drop > 0) { totalDrop += drop; pairs++; }
+    }
+    if (pairs > 0) {
+      const avgDropPerInterval = totalDrop / pairs;
+      // Each interval ≈ polling cycle (~30s-60s), normalize to per-minute
+      const dropPerMinute = avgDropPerInterval * 2; // assume ~30s intervals
+      if (dropPerMinute > 0) {
+        const minutesLeft = Math.round(distToCritical / dropPerMinute);
+        if (minutesLeft >= 60) {
+          const h = Math.floor(minutesLeft / 60);
+          const m = minutesLeft % 60;
+          return { display: String(h), suffix: `h ${String(m).padStart(2, "0")}m` };
+        }
+        return { display: String(Math.max(1, minutesLeft)), suffix: "m" };
+      }
+    }
+  }
+
+  // Fallback: non-linear curve estimation
+  const maxRange = Math.max(criticalV - (criticalV - 5), 1); // ~5V range
+  const ratio = Math.min(1, distToCritical / maxRange);
   const curvedRatio = Math.pow(ratio, 0.6);
-  const estimatedMinutes = Math.round(curvedRatio * 180); // max ~3h estimate
+  const estimatedMinutes = Math.round(curvedRatio * 180);
   if (estimatedMinutes >= 60) {
     const h = Math.floor(estimatedMinutes / 60);
     const m = estimatedMinutes % 60;
     return { display: String(h), suffix: `h ${String(m).padStart(2, "0")}m` };
   }
-  return { display: String(estimatedMinutes), suffix: "m" };
+  return { display: String(Math.max(1, estimatedMinutes)), suffix: "m" };
 }
 
 // ── Universal trigger: supports binary (0/1) and string (on/off) ──
-function matchesDischargingValue(raw: string | null, target: string): boolean {
+function matchesValue(raw: string | null, target: string): boolean {
   if (raw === null) return false;
-  const r = raw.trim().toLowerCase();
-  const t = target.trim().toLowerCase();
-  return r === t;
+  return raw.trim().toLowerCase() === target.trim().toLowerCase();
 }
 
 function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: Props) {
   const { data, isInitial } = useWidgetData({ telemetryKey, cache });
   const rawValue = extractRawValue(data);
   const numValue = rawValue !== null ? parseFloat(rawValue) : 0;
+
+  // ── Voltage history for decay rate (Pop Protect "Eat Time" effect) ──
+  const voltageHistoryRef = useRef<number[]>([]);
+  const lastRecordedRef = useRef<number>(0);
+
+  // Record voltage readings (throttled to avoid flooding)
+  const recordVoltage = useCallback((v: number) => {
+    const now = Date.now();
+    if (now - lastRecordedRef.current < 5000) return; // min 5s between recordings
+    lastRecordedRef.current = now;
+    const hist = voltageHistoryRef.current;
+    hist.push(v);
+    if (hist.length > MAX_HISTORY) hist.shift();
+  }, []);
+
+  // Record on each render with valid data
+  if (rawValue !== null && !isNaN(numValue)) {
+    recordVoltage(numValue);
+  }
 
   const extra = (config?.extra as Record<string, unknown>) || config || {};
   const minVoltage = (extra.minVoltage as number) ?? (extra.min as number) ?? 22;
@@ -116,7 +184,7 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
     });
   }, [hasMapping, mappedStatus.label, numValue, title, manualUnit, unit, decimals]);
 
-  // ── Smart Runtime Mode ──
+  // ── Smart Runtime Mode config ──
   const runtimeEnabled = (extra.runtimeEnabled as boolean) ?? false;
   const runtimeStatusKey = (extra.runtimeStatusKey as string) || "";
   const runtimeDischargingValue = (extra.runtimeDischargingValue as string) || "1";
@@ -131,29 +199,71 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
   const secondaryAlarmKey = (extra.secondaryAlarmKey as string) || "";
   const secondaryAlarmValue = (extra.secondaryAlarmValue as string) || "1";
 
-  // Read status item
+  // ── Read telemetry from cache ──
   const statusEntry = runtimeEnabled && runtimeStatusKey ? cache.get(runtimeStatusKey) : undefined;
   const statusRaw = statusEntry ? extractRawValue(statusEntry.data) : null;
 
-  // Universal trigger: supports 0/1, on/off, etc.
-  const isDischarging = useMemo(() => {
-    if (!runtimeEnabled) return false;
-    if (statusRaw === null) return false;
-    return matchesDischargingValue(statusRaw, runtimeDischargingValue);
-  }, [runtimeEnabled, statusRaw, runtimeDischargingValue]);
-
-  // Read amperage from cache (Method A)
   const amperageEntry = runtimeEnabled && amperageKey ? cache.get(amperageKey) : undefined;
   const amperageRaw = amperageEntry ? extractRawValue(amperageEntry.data) : null;
   const amperageNum = amperageRaw !== null ? parseFloat(amperageRaw) : 0;
 
-  // Read runtime/time-remaining item (direct from Zabbix)
   const runtimeEntry = runtimeEnabled && runtimeTimeKey ? cache.get(runtimeTimeKey) : undefined;
   const runtimeRaw = runtimeEntry ? extractRawValue(runtimeEntry.data) : null;
 
-  // ── Adaptive Runtime Calculation ──
+  const secondaryEntry = secondaryAlarmKey ? cache.get(secondaryAlarmKey) : undefined;
+  const secondaryRaw = secondaryEntry ? extractRawValue(secondaryEntry.data) : null;
+  const isSecondaryAlarm = useMemo(() => {
+    if (!secondaryAlarmKey || secondaryRaw === null) return false;
+    return matchesValue(secondaryRaw, secondaryAlarmValue);
+  }, [secondaryAlarmKey, secondaryRaw, secondaryAlarmValue]);
+
+  // ── Universal trigger ──
+  const isDischarging = useMemo(() => {
+    if (!runtimeEnabled) return false;
+    if (statusRaw === null) return false;
+    return matchesValue(statusRaw, runtimeDischargingValue);
+  }, [runtimeEnabled, statusRaw, runtimeDischargingValue]);
+
+  // ── Detect voltage trend (rising = charging for Pop Protect) ──
+  const isVoltageRising = useMemo(() => {
+    const hist = voltageHistoryRef.current;
+    if (hist.length < 2) return false;
+    const recent = hist[hist.length - 1];
+    const prev = hist[hist.length - 2];
+    return recent > prev;
+  }, [numValue]); // eslint-disable-line -- intentional re-eval on numValue change
+
+  // ── Battery percentage ──
+  const pct = useMemo(() => {
+    if (maxVoltage <= minVoltage) return 0;
+    return Math.min(100, Math.max(0, ((numValue - minVoltage) / (maxVoltage - minVoltage)) * 100));
+  }, [numValue, minVoltage, maxVoltage]);
+
+  // ── State Machine ──
+  const batteryState: BatteryState = useMemo(() => {
+    if (isSecondaryAlarm) return "shutdown";
+    if (numValue <= criticalThreshold && rawValue !== null) return "shutdown";
+    if (!runtimeEnabled) return "ready";
+    if (isDischarging) return "discharging";
+    // AC Normal: check if charging
+    if (amperageNum > 0 && !isDischarging) return "charging"; // XPS: positive amperage + not discharging
+    if (isVoltageRising && !isDischarging) return "charging";  // Pop: voltage rising
+    return "ready";
+  }, [isSecondaryAlarm, numValue, criticalThreshold, rawValue, runtimeEnabled, isDischarging, amperageNum, isVoltageRising]);
+
+  // ── Adaptive Runtime Calculation (Dual-Engine) ──
   const runtimeFormatted = useMemo(() => {
-    // If a direct runtime key provides data, use it first
+    // SHUTDOWN → fixed label
+    if (batteryState === "shutdown") {
+      return { display: "0", suffix: "m", numericValue: 0 };
+    }
+
+    // Not discharging → no countdown
+    if (batteryState !== "discharging") {
+      return null; // signal to show state label instead
+    }
+
+    // Direct runtime from Zabbix
     if (runtimeRaw !== null && runtimeRaw !== undefined) {
       return formatDynamicValue(runtimeRaw, "Uptime", { zabbixUnit: "s", decimals: 0 });
     }
@@ -168,15 +278,14 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
       return formatDynamicValue(totalSeconds, "Uptime", { zabbixUnit: "s", decimals: 0 });
     }
 
-    // Method B (Pop Protect Estimation): non-linear voltage curve
-    if (runtimeCalcMethod === "estimate" || (runtimeCalcMethod === "auto" && isDischarging)) {
-      const est = estimateRuntimeByVoltage(numValue, minVoltage, criticalThreshold);
+    // Method B (Pop Protect): voltage decay rate with "Eat Time" effect
+    if (runtimeCalcMethod === "estimate" || runtimeCalcMethod === "auto") {
+      const est = estimateRuntimeByDecayRate(numValue, criticalThreshold, voltageHistoryRef.current);
       return { display: est.display, suffix: est.suffix, numericValue: null };
     }
 
-    // Placeholder
     return { display: "--", suffix: "h --m", numericValue: null };
-  }, [runtimeRaw, runtimeCalcMethod, amperageNum, capacityAh, numValue, isDischarging, minVoltage, criticalThreshold]);
+  }, [batteryState, runtimeRaw, runtimeCalcMethod, amperageNum, capacityAh, numValue, criticalThreshold]);
 
   // Amperage formatted
   const amperageFormatted = useMemo(() => {
@@ -186,46 +295,45 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
     return null;
   }, [amperageNum]);
 
-  // Active calculation method label
+  // Active method label
   const activeMethod = useMemo(() => {
+    if (batteryState !== "discharging") return "idle";
     if (runtimeRaw !== null) return "direct";
     if (amperageNum > 0 && capacityAh > 0) return "xps";
-    if (isDischarging) return "estimate";
-    return "idle";
-  }, [runtimeRaw, amperageNum, capacityAh, isDischarging]);
+    return "estimate";
+  }, [batteryState, runtimeRaw, amperageNum, capacityAh]);
 
   const showRuntime = runtimeEnabled;
 
-  // ── Secondary alarm check ──
-  const secondaryEntry = secondaryAlarmKey ? cache.get(secondaryAlarmKey) : undefined;
-  const secondaryRaw = secondaryEntry ? extractRawValue(secondaryEntry.data) : null;
-  const isSecondaryAlarm = useMemo(() => {
-    if (!secondaryAlarmKey || secondaryRaw === null) return false;
-    return matchesDischargingValue(secondaryRaw, secondaryAlarmValue);
-  }, [secondaryAlarmKey, secondaryRaw, secondaryAlarmValue]);
-
-  // ── Computed values ──
-  const pct = useMemo(() => {
-    if (maxVoltage <= minVoltage) return 0;
-    return Math.min(100, Math.max(0, ((numValue - minVoltage) / (maxVoltage - minVoltage)) * 100));
-  }, [numValue, minVoltage, maxVoltage]);
-
-  const isCritical = (numValue <= criticalThreshold && rawValue !== null) || isSecondaryAlarm;
-  const dynamicColor = isSecondaryAlarm ? EMERGENCY_RED : getBatteryColor(pct);
+  // ── Dynamic coloring based on state ──
+  const stateColor = STATE_COLORS[batteryState];
+  const dynamicColor = isSecondaryAlarm ? EMERGENCY_RED :
+    batteryState === "discharging" ? getBatteryColor(pct) :
+    stateColor;
   const color = hasMapping ? mappedStatus.color : (valueColor || dynamicColor);
+
+  const isCritical = batteryState === "shutdown";
 
   const springPct = useSpring(pct, { stiffness: 80, damping: 20 });
   const widthStr = useTransform(springPct, (v) => `${v}%`);
   const litSegments = useMemo(() => Math.round((pct / 100) * SEGMENT_COUNT), [pct]);
 
   const alignClass = textAlign === "left" ? "items-start text-left" : textAlign === "right" ? "items-end text-right" : "items-center text-center";
-  const runtimeColor = isSecondaryAlarm ? EMERGENCY_RED : dynamicColor;
-  const isRuntimeLow = pct < 20 || isSecondaryAlarm;
+  const runtimeColor = batteryState === "shutdown" ? EMERGENCY_RED :
+    batteryState === "discharging" ? getBatteryColor(pct) :
+    stateColor;
+  const isRuntimeLow = pct < 20 || batteryState === "shutdown";
 
-  const emergencyStyle = (isCritical || isSecondaryAlarm) ? {
+  const emergencyStyle = isCritical ? {
     borderColor: "hsl(0 100% 45%)",
     boxShadow: "0 0 15px hsla(0, 100%, 45%, 0.4), inset 0 0 15px hsla(0, 100%, 45%, 0.1)",
   } : undefined;
+
+  // State icon
+  const StateIcon = batteryState === "charging" ? BatteryCharging :
+    batteryState === "shutdown" ? AlertTriangle :
+    batteryState === "discharging" ? Timer :
+    ShieldCheck;
 
   return (
     <motion.div
@@ -258,7 +366,7 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
             {title}
           </span>
         </div>
-        {(isCritical || isSecondaryAlarm) && (
+        {isCritical && (
           <BatteryWarning
             className={`${compact ? "w-3 h-3" : "w-4 h-4"} text-destructive shrink-0`}
             style={{ animation: "battery-icon-blink 1.5s ease-in-out infinite" }}
@@ -290,7 +398,9 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
         <div className={`flex gap-[2px] ${compact ? "h-2.5" : showRuntime ? "h-3" : "h-4"}`} style={{ transition: "height 0.4s ease" }}>
           {Array.from({ length: SEGMENT_COUNT }).map((_, i) => {
             const segPct = ((i + 0.5) / SEGMENT_COUNT) * 100;
-            const segColor = isSecondaryAlarm ? EMERGENCY_RED : getBatteryColor(segPct);
+            const segColor = isSecondaryAlarm ? EMERGENCY_RED :
+              batteryState === "charging" ? STATE_COLORS.charging :
+              getBatteryColor(segPct);
             const isLit = i < litSegments;
             return (
               <motion.div
@@ -320,38 +430,65 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
         </div>
       </div>
 
-      {/* ── BOTTOM: Runtime (left) + Amperage (right) ── */}
-      <AnimatePresence>
+      {/* ── BOTTOM: Runtime/Status row ── */}
+      <AnimatePresence mode="wait">
         {showRuntime && (
           <motion.div
-            key="runtime-row"
+            key={`state-${batteryState}`}
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.35 }}
             className="flex items-center justify-between overflow-hidden"
           >
-            {/* Bottom Left: Runtime */}
+            {/* Bottom Left: Runtime countdown OR State label */}
             <div className="flex items-center gap-1">
-              <Timer
+              <StateIcon
                 className={`${compact ? "w-2.5 h-2.5" : "w-3 h-3"} shrink-0`}
-                style={{ color: runtimeColor, filter: `drop-shadow(0 0 4px ${runtimeColor})` }}
-              />
-              <span
-                className="font-bold font-mono leading-none"
                 style={{
                   color: runtimeColor,
-                  fontSize: valueFontSize ? `${valueFontSize * 0.65}px` : (compact ? "12px" : "15px"),
-                  fontFamily: valueFont || "'JetBrains Mono', monospace",
-                  textShadow: `0 0 12px ${runtimeColor}aa, 0 0 4px ${runtimeColor}`,
-                  animation: isRuntimeLow ? "battery-icon-blink 1.2s ease-in-out infinite" : undefined,
-                  transition: "color 0.8s, text-shadow 0.8s",
+                  filter: `drop-shadow(0 0 4px ${runtimeColor})`,
+                  animation: batteryState === "charging" ? "pulse 2s ease-in-out infinite" : undefined,
                 }}
-              >
-                {runtimeFormatted.display}
-                <span style={{ fontSize: "0.7em", opacity: 0.85 }}>{runtimeFormatted.suffix}</span>
-              </span>
-              {activeMethod !== "idle" && activeMethod !== "direct" && (
+              />
+              {runtimeFormatted ? (
+                // Discharging/Shutdown → show countdown
+                <span
+                  className="font-bold font-mono leading-none"
+                  style={{
+                    color: runtimeColor,
+                    fontSize: valueFontSize ? `${valueFontSize * 0.65}px` : (compact ? "12px" : "15px"),
+                    fontFamily: valueFont || "'JetBrains Mono', monospace",
+                    textShadow: `0 0 12px ${runtimeColor}aa, 0 0 4px ${runtimeColor}`,
+                    animation: isRuntimeLow ? "battery-icon-blink 1.2s ease-in-out infinite" : undefined,
+                    transition: "color 0.8s, text-shadow 0.8s",
+                  }}
+                >
+                  {batteryState === "shutdown" ? (
+                    <>0<span style={{ fontSize: "0.7em", opacity: 0.85 }}>m</span></>
+                  ) : (
+                    <>
+                      {runtimeFormatted.display}
+                      <span style={{ fontSize: "0.7em", opacity: 0.85 }}>{runtimeFormatted.suffix}</span>
+                    </>
+                  )}
+                </span>
+              ) : (
+                // Charging/Ready → show state label
+                <span
+                  className="font-bold leading-none uppercase tracking-wider"
+                  style={{
+                    color: stateColor,
+                    fontSize: compact ? "9px" : "11px",
+                    fontFamily: titleFont || "'JetBrains Mono', monospace",
+                    textShadow: `0 0 10px ${stateColor}80`,
+                    transition: "color 0.8s, text-shadow 0.8s",
+                  }}
+                >
+                  {STATE_LABELS[batteryState]}
+                </span>
+              )}
+              {activeMethod !== "idle" && activeMethod !== "direct" && batteryState === "discharging" && (
                 <span className={`${compact ? "text-[5px]" : "text-[7px]"} uppercase tracking-widest opacity-40 font-mono`}
                   style={{ color: runtimeColor }}
                 >
@@ -360,8 +497,21 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
               )}
             </div>
 
-            {/* Bottom Right: Amperage (if available) */}
-            {amperageFormatted && (
+            {/* Bottom Right: Amperage (if available) OR shutdown label */}
+            {batteryState === "shutdown" ? (
+              <span
+                className="font-bold uppercase tracking-wider"
+                style={{
+                  color: EMERGENCY_RED,
+                  fontSize: compact ? "7px" : "9px",
+                  fontFamily: titleFont || undefined,
+                  textShadow: `0 0 10px ${EMERGENCY_RED}80`,
+                  animation: "battery-icon-blink 1s ease-in-out infinite",
+                }}
+              >
+                SHUTDOWN
+              </span>
+            ) : amperageFormatted ? (
               <div className="flex items-center gap-1">
                 <Activity
                   className={`${compact ? "w-2.5 h-2.5" : "w-3 h-3"} shrink-0`}
@@ -382,7 +532,7 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
                   <span style={{ fontSize: "0.7em", opacity: 0.85 }}>{amperageFormatted.suffix}</span>
                 </span>
               </div>
-            )}
+            ) : null}
           </motion.div>
         )}
       </AnimatePresence>
