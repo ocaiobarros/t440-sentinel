@@ -1,7 +1,6 @@
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryTextData } from "@/types/telemetry";
-import { ScrollArea } from "@/components/ui/scroll-area";
 import { useMemo } from "react";
 
 interface Props {
@@ -15,6 +14,7 @@ export default function TextWidget({ telemetryKey, title, cache, config }: Props
   const { data } = useWidgetData({ telemetryKey, cache });
   const textData = data as TelemetryTextData | null;
 
+  // Style config from builder
   const styleConfig = (config?.style as Record<string, unknown>) || {};
   const labelColor = styleConfig.labelColor as string | undefined;
   const titleFont = styleConfig.titleFont as string | undefined;
@@ -23,41 +23,43 @@ export default function TextWidget({ telemetryKey, title, cache, config }: Props
   const valueFont = styleConfig.valueFont as string | undefined;
   const valueFontSize = styleConfig.valueFontSize as number | undefined;
 
-  const labelStyle = useMemo((): React.CSSProperties => ({
-    color: labelColor || undefined,
-    fontFamily: titleFont || undefined,
-    fontSize: labelFontSize ? `${labelFontSize}px` : "10px",
-    textShadow: labelColor
-      ? `0 0 6px ${labelColor}80, 0 0 16px ${labelColor}40`
-      : undefined,
-  }), [labelColor, titleFont, labelFontSize]);
+  // Critical alarm detection via color_map or external flag
+  const extra = (config?.extra as Record<string, unknown>) || {};
+  const isCritical = !!(extra.critical as boolean);
+
+  const accentColor = textColor || labelColor || "hsl(142, 100%, 50%)";
+
+  const containerClass = useMemo(() => {
+    const base = "glass-card rounded-lg h-full flex items-center justify-center border border-border/50 overflow-hidden relative neon-border-beam neon-scanline";
+    if (isCritical) return `${base} neon-critical-flash`;
+    return base;
+  }, [isCritical]);
+
+  const textStyle = useMemo((): React.CSSProperties => ({
+    color: isCritical ? "hsl(0, 90%, 55%)" : accentColor,
+    fontFamily: valueFont || titleFont || "'Orbitron', sans-serif",
+    fontSize: valueFontSize ? `${valueFontSize}px` : labelFontSize ? `${labelFontSize}px` : "1.5rem",
+    fontWeight: 700,
+    lineHeight: 1.2,
+    textAlign: "center" as const,
+    letterSpacing: "0.08em",
+    textTransform: "uppercase" as const,
+    ["--neon-banner-color" as string]: isCritical ? "hsl(0 90% 50%)" : accentColor,
+  }), [isCritical, accentColor, valueFont, titleFont, valueFontSize, labelFontSize]);
+
+  const displayText = textData?.text || title;
 
   return (
-    <div className="glass-card rounded-lg p-4 h-full flex flex-col border border-border/50">
+    <div
+      className={containerClass}
+      style={{ ["--neon-banner-color" as string]: isCritical ? "hsl(0 90% 50%)" : accentColor } as React.CSSProperties}
+    >
       <span
-        className="font-display uppercase tracking-wider text-muted-foreground mb-2"
-        style={labelStyle}
+        className="neon-breathe neon-banner-text relative z-10 px-4 py-2 select-none cursor-default w-full text-center"
+        style={textStyle}
       >
-        {title}
+        {displayText}
       </span>
-      <ScrollArea className="flex-1 min-h-0">
-        {textData ? (
-          <pre
-            className="font-mono text-foreground whitespace-pre-wrap break-words"
-            style={{
-              color: textColor || undefined,
-              fontFamily: valueFont || undefined,
-              fontSize: valueFontSize ? `${valueFontSize}px` : "0.75rem",
-            }}
-          >
-            {textData.text}
-          </pre>
-        ) : (
-          <div className="flex items-center justify-center h-full text-muted-foreground/50 text-xs font-mono">
-            Aguardando dados…
-          </div>
-        )}
-      </ScrollArea>
     </div>
   );
 }

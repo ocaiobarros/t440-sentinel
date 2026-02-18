@@ -617,3 +617,110 @@
   0%, 100% { opacity: 1; }
   50% { opacity: 0.3; }
 }
+
+/* ── Neon Banner: Breathe Glow ── */
+@keyframes neon-breathe {
+  0%, 100% {
+    text-shadow:
+      0 0 4px var(--neon-banner-color, hsl(142 100% 50%)),
+      0 0 12px var(--neon-banner-color, hsl(142 100% 50% / 0.5));
+  }
+  50% {
+    text-shadow:
+      0 0 10px var(--neon-banner-color, hsl(142 100% 50%)),
+      0 0 28px var(--neon-banner-color, hsl(142 100% 50% / 0.7)),
+      0 0 50px var(--neon-banner-color, hsl(142 100% 50% / 0.3));
+  }
+}
+
+.neon-breathe {
+  animation: neon-breathe 3s ease-in-out infinite;
+}
+
+/* ── Neon Banner: Border Beam ── */
+@keyframes border-beam {
+  0% { background-position: 0% 0%; }
+  25% { background-position: 100% 0%; }
+  50% { background-position: 100% 100%; }
+  75% { background-position: 0% 100%; }
+  100% { background-position: 0% 0%; }
+}
+
+.neon-border-beam {
+  position: relative;
+}
+.neon-border-beam::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: conic-gradient(
+    from 0deg,
+    transparent 0%,
+    var(--neon-banner-color, hsl(142 100% 50%)) 10%,
+    transparent 20%
+  );
+  mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  mask-composite: exclude;
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  animation: border-beam-spin 4s linear infinite;
+  pointer-events: none;
+}
+
+@keyframes border-beam-spin {
+  to { rotate: 360deg; }
+}
+
+/* ── Neon Banner: Scanline Overlay ── */
+@keyframes scanline-move {
+  0% { transform: translateY(-100%); }
+  100% { transform: translateY(100%); }
+}
+
+.neon-scanline::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    hsl(142 100% 50% / 0.03) 45%,
+    hsl(142 100% 50% / 0.06) 50%,
+    hsl(142 100% 50% / 0.03) 55%,
+    transparent 100%
+  );
+  animation: scanline-move 6s linear infinite;
+  pointer-events: none;
+}
+
+/* ── Neon Banner: Hover Glitch ── */
+@keyframes glitch-flash {
+  0% { transform: translate(0); filter: none; }
+  20% { transform: translate(-2px, 1px); filter: hue-rotate(90deg); }
+  40% { transform: translate(2px, -1px); filter: hue-rotate(-90deg) brightness(1.5); }
+  60% { transform: translate(-1px, -1px); filter: hue-rotate(45deg); }
+  80% { transform: translate(1px, 1px); filter: none; }
+  100% { transform: translate(0); filter: none; }
+}
+
+.neon-banner-text:hover {
+  animation: glitch-flash 0.3s ease-in-out;
+}
+
+/* ── Neon Banner: Critical Flash ── */
+@keyframes neon-critical-flash {
+  0%, 100% {
+    border-color: hsl(0 90% 50% / 0.4);
+    box-shadow: 0 0 8px hsl(0 90% 50% / 0.3), inset 0 0 8px hsl(0 90% 50% / 0.05);
+  }
+  50% {
+    border-color: hsl(0 90% 50% / 0.9);
+    box-shadow: 0 0 20px hsl(0 90% 50% / 0.6), 0 0 40px hsl(0 90% 50% / 0.3), inset 0 0 12px hsl(0 90% 50% / 0.1);
+  }
+}
+
+.neon-critical-flash {
+  animation: neon-critical-flash 0.8s ease-in-out infinite;
+}
