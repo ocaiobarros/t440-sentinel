@@ -27,8 +27,8 @@ const STATE_COLORS: Record<BatteryState, string> = {
 };
 
 const STATE_LABELS: Record<BatteryState, string> = {
-  charging: "CHARGING",
-  ready: "BATTERY READY",
+  charging: "RECOVERING",
+  ready: "AC NORMAL",
   discharging: "DISCHARGING",
   shutdown: "SHUTDOWN IMMINENT",
 };
@@ -69,13 +69,17 @@ function getBatteryColor(pct: number): string {
 
 const SEGMENT_COUNT = 20;
 const EMERGENCY_RED = "rgb(255, 30, 30)";
-const MAX_HISTORY = 4;
+const MAX_HISTORY = 6;
+// Default linear drain: assume ~3h total discharge time for fallback
+const DEFAULT_LINEAR_RATE_PER_MIN = 1; // 1 minute lost per minute (real-time)
 
 // ── Voltage Decay Rate estimation (Method B - Pop Protect) ──
+// Only uses readings captured WHILE discharging (status-gated).
+// Static voltage → linear fallback; rapid drops → accelerated countdown.
 function estimateRuntimeByDecayRate(
   voltage: number,
   criticalV: number,
-  voltageHistory: number[],
+  dischargeHistory: { v: number; t: number }[],
 ): { display: string; suffix: string } {
   const distToCritical = Math.max(0, voltage - criticalV);
 
@@ -83,41 +87,54 @@ function estimateRuntimeByDecayRate(
     return { display: "0", suffix: "m" };
   }
 
-  // Calculate average decay rate from history
-  if (voltageHistory.length >= 2) {
-    let totalDrop = 0;
-    let pairs = 0;
-    for (let i = 1; i < voltageHistory.length; i++) {
-      const drop = voltageHistory[i - 1] - voltageHistory[i];
-      if (drop > 0) { totalDrop += drop; pairs++; }
-    }
-    if (pairs > 0) {
-      const avgDropPerInterval = totalDrop / pairs;
-      // Each interval ≈ polling cycle (~30s-60s), normalize to per-minute
-      const dropPerMinute = avgDropPerInterval * 2; // assume ~30s intervals
-      if (dropPerMinute > 0) {
-        const minutesLeft = Math.round(distToCritical / dropPerMinute);
+  // Try to calculate actual decay rate from discharge-only history
+  if (dischargeHistory.length >= 2) {
+    const first = dischargeHistory[0];
+    const last = dischargeHistory[dischargeHistory.length - 1];
+    const elapsedMs = last.t - first.t;
+    const voltageDrop = first.v - last.v;
+
+    if (elapsedMs > 0) {
+      const elapsedMinutes = elapsedMs / 60000;
+
+      if (voltageDrop > 0.001 && elapsedMinutes > 0) {
+        // Voltage IS dropping → use actual decay rate (Eat Time effect)
+        const dropPerMinute = voltageDrop / elapsedMinutes;
+        const minutesLeft = Math.max(1, Math.round(distToCritical / dropPerMinute));
         if (minutesLeft >= 60) {
           const h = Math.floor(minutesLeft / 60);
           const m = minutesLeft % 60;
           return { display: String(h), suffix: `h ${String(m).padStart(2, "0")}m` };
         }
-        return { display: String(Math.max(1, minutesLeft)), suffix: "m" };
+        return { display: String(minutesLeft), suffix: "m" };
       }
+
+      // Voltage is STATIC during discharge (high-quality battery) → linear fallback
+      // Estimate based on distance to critical using a standard ~3h total curve
+      const totalRange = Math.max(1, voltage - criticalV + (first.v - criticalV)) / 2;
+      const fullMinutes = 180; // assume 3h total autonomy
+      const remainingRatio = distToCritical / Math.max(0.1, totalRange);
+      const minutesLeft = Math.max(1, Math.round(remainingRatio * fullMinutes - elapsedMinutes * DEFAULT_LINEAR_RATE_PER_MIN));
+      if (minutesLeft >= 60) {
+        const h = Math.floor(minutesLeft / 60);
+        const m = minutesLeft % 60;
+        return { display: String(h), suffix: `h ${String(m).padStart(2, "0")}m` };
+      }
+      return { display: String(minutesLeft), suffix: "m" };
     }
   }
 
-  // Fallback: non-linear curve estimation
-  const maxRange = Math.max(criticalV - (criticalV - 5), 1); // ~5V range
+  // No history yet → non-linear curve fallback based on distance to critical
+  const maxRange = 5; // ~5V typical safe range
   const ratio = Math.min(1, distToCritical / maxRange);
   const curvedRatio = Math.pow(ratio, 0.6);
-  const estimatedMinutes = Math.round(curvedRatio * 180);
+  const estimatedMinutes = Math.max(1, Math.round(curvedRatio * 180));
   if (estimatedMinutes >= 60) {
     const h = Math.floor(estimatedMinutes / 60);
     const m = estimatedMinutes % 60;
     return { display: String(h), suffix: `h ${String(m).padStart(2, "0")}m` };
   }
-  return { display: String(Math.max(1, estimatedMinutes)), suffix: "m" };
+  return { display: String(estimatedMinutes), suffix: "m" };
 }
 
 // ── Universal trigger: supports binary (0/1) and string (on/off) ──
@@ -131,24 +148,11 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
   const rawValue = extractRawValue(data);
   const numValue = rawValue !== null ? parseFloat(rawValue) : 0;
 
-  // ── Voltage history for decay rate (Pop Protect "Eat Time" effect) ──
-  const voltageHistoryRef = useRef<number[]>([]);
+  // ── Voltage history for decay rate — STATUS-GATED ──
+  // Only records while discharging to prevent ghost countdowns from AC fluctuations.
+  const dischargeHistoryRef = useRef<{ v: number; t: number }[]>([]);
   const lastRecordedRef = useRef<number>(0);
-
-  // Record voltage readings (throttled to avoid flooding)
-  const recordVoltage = useCallback((v: number) => {
-    const now = Date.now();
-    if (now - lastRecordedRef.current < 5000) return; // min 5s between recordings
-    lastRecordedRef.current = now;
-    const hist = voltageHistoryRef.current;
-    hist.push(v);
-    if (hist.length > MAX_HISTORY) hist.shift();
-  }, []);
-
-  // Record on each render with valid data
-  if (rawValue !== null && !isNaN(numValue)) {
-    recordVoltage(numValue);
-  }
+  const wasChargingRef = useRef(true); // reset history on state transition
 
   const extra = (config?.extra as Record<string, unknown>) || config || {};
   const minVoltage = (extra.minVoltage as number) ?? (extra.min as number) ?? 22;
@@ -224,13 +228,33 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
     return matchesValue(statusRaw, runtimeDischargingValue);
   }, [runtimeEnabled, statusRaw, runtimeDischargingValue]);
 
-  // ── Detect voltage trend (rising = charging for Pop Protect) ──
+  // ── Status-gated voltage recording ──
+  // Only record while discharging; clear history on AC restore
+  if (!isDischarging) {
+    // AC is UP → clear discharge history to prevent ghost countdowns
+    if (!wasChargingRef.current) {
+      dischargeHistoryRef.current = [];
+      wasChargingRef.current = true;
+    }
+  } else {
+    wasChargingRef.current = false;
+    // Record voltage only during discharge (throttled)
+    if (rawValue !== null && !isNaN(numValue)) {
+      const now = Date.now();
+      if (now - lastRecordedRef.current >= 5000) {
+        lastRecordedRef.current = now;
+        const hist = dischargeHistoryRef.current;
+        hist.push({ v: numValue, t: now });
+        if (hist.length > MAX_HISTORY) hist.shift();
+      }
+    }
+  }
+
+  // ── Detect voltage trend (rising = recovering for Pop Protect) ──
   const isVoltageRising = useMemo(() => {
-    const hist = voltageHistoryRef.current;
+    const hist = dischargeHistoryRef.current;
     if (hist.length < 2) return false;
-    const recent = hist[hist.length - 1];
-    const prev = hist[hist.length - 2];
-    return recent > prev;
+    return hist[hist.length - 1].v > hist[hist.length - 2].v;
   }, [numValue]); // eslint-disable-line -- intentional re-eval on numValue change
 
   // ── Battery percentage ──
@@ -280,7 +304,7 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
 
     // Method B (Pop Protect): voltage decay rate with "Eat Time" effect
     if (runtimeCalcMethod === "estimate" || runtimeCalcMethod === "auto") {
-      const est = estimateRuntimeByDecayRate(numValue, criticalThreshold, voltageHistoryRef.current);
+      const est = estimateRuntimeByDecayRate(numValue, criticalThreshold, dischargeHistoryRef.current);
       return { display: est.display, suffix: est.suffix, numericValue: null };
     }
 
