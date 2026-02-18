@@ -658,6 +658,48 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
                     placeholder="V"
                   />
                 </div>
+
+                {/* ── Smart Runtime Mode ── */}
+                <div className="border-t border-neon-amber/20 pt-2 mt-2 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[9px] text-neon-amber">⏱️ Smart Runtime Mode</Label>
+                    <Switch
+                      checked={(widget.extra?.runtimeEnabled as boolean) ?? false}
+                      onCheckedChange={(v) => onUpdate({ ...widget, extra: { ...widget.extra, runtimeEnabled: v } })}
+                    />
+                  </div>
+                  {(widget.extra?.runtimeEnabled as boolean) && (
+                    <>
+                      <div className="space-y-1">
+                        <Label className="text-[9px] text-muted-foreground">Status Item (Telemetry Key)</Label>
+                        <Input
+                          value={(widget.extra?.runtimeStatusKey as string) || ""}
+                          onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, runtimeStatusKey: e.target.value } })}
+                          className="h-6 text-[10px] font-mono"
+                          placeholder="zbx:item:99999"
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[9px] text-muted-foreground">Valor de Descarga</Label>
+                        <Input
+                          value={(widget.extra?.runtimeDischargingValue as string) || ""}
+                          onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, runtimeDischargingValue: e.target.value } })}
+                          className="h-6 text-[10px] font-mono"
+                          placeholder='1 ou "Discharging"'
+                        />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-[9px] text-muted-foreground">Runtime Item (Telemetry Key)</Label>
+                        <Input
+                          value={(widget.extra?.runtimeTimeKey as string) || ""}
+                          onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, runtimeTimeKey: e.target.value } })}
+                          className="h-6 text-[10px] font-mono"
+                          placeholder="zbx:item:88888"
+                        />
+                      </div>
+                    </>
+                  )}
+                </div>
               </div>
             )}
 

@@ -1,10 +1,10 @@
 import { memo, useMemo } from "react";
-import { motion, useSpring, useTransform } from "framer-motion";
+import { motion, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
 import { formatDynamicValue } from "@/lib/format-utils";
-import { BatteryWarning, Zap } from "lucide-react";
+import { BatteryWarning, Zap, Timer } from "lucide-react";
 
 interface Props {
   telemetryKey: string;
@@ -14,7 +14,6 @@ interface Props {
   compact?: boolean;
 }
 
-/** Voltage-based color stops (inverted: red=low, green=high) */
 interface RGBStop { pct: number; r: number; g: number; b: number }
 const BATTERY_STOPS: RGBStop[] = [
   { pct: 0,   r: 255, g: 0,   b: 0   },
@@ -89,6 +88,33 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
     });
   }, [hasMapping, mappedStatus.label, numValue, title, manualUnit, unit, decimals]);
 
+  // ── Smart Runtime Mode ──
+  const runtimeEnabled = (extra.runtimeEnabled as boolean) ?? false;
+  const runtimeStatusKey = (extra.runtimeStatusKey as string) || "";
+  const runtimeDischargingValue = (extra.runtimeDischargingValue as string) || "1";
+  const runtimeTimeKey = (extra.runtimeTimeKey as string) || "";
+
+  // Read the status item from the cache
+  const statusEntry = runtimeEnabled && runtimeStatusKey ? cache.get(runtimeStatusKey) : undefined;
+  const statusRaw = statusEntry ? extractRawValue(statusEntry.data) : null;
+  const isDischarging = useMemo(() => {
+    if (!runtimeEnabled || !statusRaw) return false;
+    const normalized = String(statusRaw).trim().toLowerCase();
+    const target = runtimeDischargingValue.trim().toLowerCase();
+    return normalized === target;
+  }, [runtimeEnabled, statusRaw, runtimeDischargingValue]);
+
+  // Read the runtime/time-remaining item from the cache
+  const runtimeEntry = runtimeEnabled && runtimeTimeKey ? cache.get(runtimeTimeKey) : undefined;
+  const runtimeRaw = runtimeEntry ? extractRawValue(runtimeEntry.data) : null;
+  const runtimeFormatted = useMemo(() => {
+    if (!runtimeRaw) return null;
+    return formatDynamicValue(runtimeRaw, "Uptime", { zabbixUnit: "s", decimals: 0 });
+  }, [runtimeRaw]);
+
+  // Show runtime display instead of bar when discharging
+  const showRuntime = isDischarging && runtimeFormatted;
+
   const pct = useMemo(() => {
     if (maxVoltage <= minVoltage) return 0;
     return Math.min(100, Math.max(0, ((numValue - minVoltage) / (maxVoltage - minVoltage)) * 100));
@@ -105,6 +131,10 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
 
   const alignClass = textAlign === "left" ? "items-start text-left" : textAlign === "right" ? "items-end text-right" : "items-center text-center";
 
+  // Runtime text color: proportional to battery charge (low pct = red, blinks)
+  const runtimeColor = dynamicColor;
+  const isRuntimeLow = pct < 20;
+
   return (
     <motion.div
       initial={isInitial ? { opacity: 0, scale: 0.95 } : false}
@@ -120,14 +150,25 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
       {/* Title row */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
-          <Zap
-            className={`${compact ? "w-3 h-3" : "w-4 h-4"} shrink-0`}
-            style={{
-              color: iconColor || color,
-              filter: `drop-shadow(0 0 6px ${iconColor || color})`,
-              transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
-          />
+          {showRuntime ? (
+            <Timer
+              className={`${compact ? "w-3 h-3" : "w-4 h-4"} shrink-0`}
+              style={{
+                color: iconColor || runtimeColor,
+                filter: `drop-shadow(0 0 6px ${iconColor || runtimeColor})`,
+                transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            />
+          ) : (
+            <Zap
+              className={`${compact ? "w-3 h-3" : "w-4 h-4"} shrink-0`}
+              style={{
+                color: iconColor || color,
+                filter: `drop-shadow(0 0 6px ${iconColor || color})`,
+                transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+              }}
+            />
+          )}
           <span
             className={`${compact ? "text-[8px]" : "text-[10px]"} font-display uppercase tracking-wider truncate`}
             style={{
@@ -136,7 +177,7 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
               transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           >
-            {title}
+            {showRuntime ? "RUNTIME" : title}
           </span>
         </div>
         {isCritical && (
@@ -166,40 +207,83 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
         </span>
       </div>
 
-      {/* Segmented Battery Bar */}
-      <div className="relative">
-        <div className={`flex gap-[2px] ${compact ? "h-3" : "h-4"}`}>
-          {Array.from({ length: SEGMENT_COUNT }).map((_, i) => {
-            const segPct = ((i + 0.5) / SEGMENT_COUNT) * 100;
-            const segColor = getBatteryColor(segPct);
-            const isLit = i < litSegments;
-            return (
-              <motion.div
-                key={i}
-                className="flex-1 rounded-[2px]"
-                initial={false}
-                animate={{ opacity: isLit ? 1 : 0.15, scale: isLit ? 1 : 0.95 }}
-                transition={{ duration: 0.4, ease: "easeOut" }}
-                style={{
-                  background: segColor,
-                  boxShadow: isLit ? `0 0 6px ${segColor}80, inset 0 1px 0 rgba(255,255,255,0.2)` : "none",
-                }}
-              />
-            );
-          })}
-        </div>
-        <div className={`absolute top-0 left-0 ${compact ? "h-3" : "h-4"} pointer-events-none rounded-sm`} style={{ width: "100%" }}>
+      {/* ── Conditional: Bar vs Runtime ── */}
+      <AnimatePresence mode="wait">
+        {showRuntime ? (
           <motion.div
-            className="h-full rounded-sm"
-            style={{
-              width: widthStr,
-              background: "transparent",
-              boxShadow: `0 0 12px ${dynamicColor}60, 0 0 4px ${dynamicColor}40`,
-              transition: "box-shadow 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
-            }}
-          />
-        </div>
-      </div>
+            key="runtime"
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.4 }}
+            className={`flex flex-col items-center justify-center ${compact ? "py-1" : "py-2"}`}
+          >
+            <span
+              className="font-bold font-mono leading-none"
+              style={{
+                color: runtimeColor,
+                fontSize: valueFontSize ? `${valueFontSize * 0.85}px` : (compact ? "16px" : "20px"),
+                fontFamily: valueFont || "'JetBrains Mono', monospace",
+                textShadow: `0 0 15px ${runtimeColor}aa, 0 0 5px ${runtimeColor}`,
+                animation: isRuntimeLow ? "battery-icon-blink 1.2s ease-in-out infinite" : undefined,
+                transition: "color 0.8s, text-shadow 0.8s",
+              }}
+            >
+              {runtimeFormatted.display}
+              <span style={{ fontSize: "0.7em", opacity: 0.85 }}>{runtimeFormatted.suffix}</span>
+            </span>
+            <span
+              className={`${compact ? "text-[7px]" : "text-[9px]"} uppercase tracking-widest mt-1`}
+              style={{ color: runtimeColor, opacity: 0.6, fontFamily: titleFont || undefined }}
+            >
+              remaining
+            </span>
+          </motion.div>
+        ) : (
+          <motion.div
+            key="bar"
+            initial={{ opacity: 0, y: -6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 6 }}
+            transition={{ duration: 0.4 }}
+          >
+            {/* Segmented Battery Bar */}
+            <div className="relative">
+              <div className={`flex gap-[2px] ${compact ? "h-3" : "h-4"}`}>
+                {Array.from({ length: SEGMENT_COUNT }).map((_, i) => {
+                  const segPct = ((i + 0.5) / SEGMENT_COUNT) * 100;
+                  const segColor = getBatteryColor(segPct);
+                  const isLit = i < litSegments;
+                  return (
+                    <motion.div
+                      key={i}
+                      className="flex-1 rounded-[2px]"
+                      initial={false}
+                      animate={{ opacity: isLit ? 1 : 0.15, scale: isLit ? 1 : 0.95 }}
+                      transition={{ duration: 0.4, ease: "easeOut" }}
+                      style={{
+                        background: segColor,
+                        boxShadow: isLit ? `0 0 6px ${segColor}80, inset 0 1px 0 rgba(255,255,255,0.2)` : "none",
+                      }}
+                    />
+                  );
+                })}
+              </div>
+              <div className={`absolute top-0 left-0 ${compact ? "h-3" : "h-4"} pointer-events-none rounded-sm`} style={{ width: "100%" }}>
+                <motion.div
+                  className="h-full rounded-sm"
+                  style={{
+                    width: widthStr,
+                    background: "transparent",
+                    boxShadow: `0 0 12px ${dynamicColor}60, 0 0 4px ${dynamicColor}40`,
+                    transition: "box-shadow 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+                  }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Range labels */}
       <div className="flex items-center justify-between">
