@@ -1,10 +1,10 @@
-import { memo, useMemo, useRef, useCallback } from "react";
+import { memo, useMemo, useRef } from "react";
 import { motion, useSpring, useTransform, AnimatePresence } from "framer-motion";
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
 import { formatDynamicValue } from "@/lib/format-utils";
-import { BatteryWarning, Zap, Timer, Activity, BatteryCharging, ShieldCheck, AlertTriangle } from "lucide-react";
+import { BatteryWarning, Zap, Timer, Activity, BatteryCharging, ShieldCheck, AlertTriangle, Plug } from "lucide-react";
 
 // ── Types ──
 interface Props {
@@ -28,7 +28,7 @@ const STATE_COLORS: Record<BatteryState, string> = {
 
 const STATE_LABELS: Record<BatteryState, string> = {
   charging: "RECOVERING",
-  ready: "AC NORMAL",
+  ready: "AC POWERED",
   discharging: "DISCHARGING",
   shutdown: "SHUTDOWN IMMINENT",
 };
@@ -329,14 +329,42 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
 
   const showRuntime = runtimeEnabled;
 
-  // ── Dynamic coloring based on state ──
+  // ── Estimate remaining minutes for color thresholds ──
+  const estimatedMinutes = useMemo(() => {
+    if (!runtimeFormatted) return Infinity; // not discharging
+    const d = parseInt(runtimeFormatted.display) || 0;
+    const s = runtimeFormatted.suffix || "";
+    if (s.includes("h")) {
+      // "Xh YYm" format: display is hours
+      const mMatch = s.match(/(\d+)m/);
+      return d * 60 + (mMatch ? parseInt(mMatch[1]) : 0);
+    }
+    return d; // display is minutes
+  }, [runtimeFormatted]);
+
+  // AC power indicator: visible when runtime enabled and NOT discharging
+  const showACPlug = runtimeEnabled && !isDischarging && batteryState !== "shutdown";
+
+  // ── Dynamic coloring based on state + runtime thresholds ──
   const stateColor = STATE_COLORS[batteryState];
+
+  // Discharge color: Red Neon (<15min or critical), Blinking Orange (>30%), else pct-based
+  const dischargeColor = useMemo(() => {
+    if (batteryState !== "discharging") return getBatteryColor(pct);
+    if (estimatedMinutes <= 15 || numValue <= criticalThreshold) return EMERGENCY_RED;
+    if (pct > 30) return "rgb(255, 160, 0)"; // Orange
+    return getBatteryColor(pct);
+  }, [batteryState, estimatedMinutes, pct, numValue, criticalThreshold]);
+
+  const isBlinkingOrange = batteryState === "discharging" && estimatedMinutes > 15 && pct > 30;
+  const isPulsingRed = batteryState === "discharging" && (estimatedMinutes <= 15 || numValue <= criticalThreshold);
+
   const dynamicColor = isSecondaryAlarm ? EMERGENCY_RED :
-    batteryState === "discharging" ? getBatteryColor(pct) :
+    batteryState === "discharging" ? dischargeColor :
     stateColor;
   const color = hasMapping ? mappedStatus.color : (valueColor || dynamicColor);
 
-  const isCritical = batteryState === "shutdown";
+  const isCritical = batteryState === "shutdown" || isPulsingRed;
 
   const springPct = useSpring(pct, { stiffness: 80, damping: 20 });
   const widthStr = useTransform(springPct, (v) => `${v}%`);
@@ -344,11 +372,11 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
 
   const alignClass = textAlign === "left" ? "items-start text-left" : textAlign === "right" ? "items-end text-right" : "items-center text-center";
   const runtimeColor = batteryState === "shutdown" ? EMERGENCY_RED :
-    batteryState === "discharging" ? getBatteryColor(pct) :
+    batteryState === "discharging" ? dischargeColor :
     stateColor;
-  const isRuntimeLow = pct < 20 || batteryState === "shutdown";
+  const isRuntimeLow = pct < 20 || batteryState === "shutdown" || isPulsingRed;
 
-  const emergencyStyle = isCritical ? {
+  const emergencyStyle = (batteryState === "shutdown" || isPulsingRed) ? {
     borderColor: "hsl(0 100% 45%)",
     boxShadow: "0 0 15px hsla(0, 100%, 45%, 0.4), inset 0 0 15px hsla(0, 100%, 45%, 0.1)",
   } : undefined;
@@ -368,7 +396,7 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
       }`}
       style={emergencyStyle}
     >
-      {/* ── TOP: Title row ── */}
+      {/* ── TOP: Title row with AC Plug indicator ── */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-1.5">
           <Zap
@@ -390,12 +418,36 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
             {title}
           </span>
         </div>
-        {isCritical && (
-          <BatteryWarning
-            className={`${compact ? "w-3 h-3" : "w-4 h-4"} text-destructive shrink-0`}
-            style={{ animation: "battery-icon-blink 1.5s ease-in-out infinite" }}
-          />
-        )}
+        <div className="flex items-center gap-1">
+          {/* AC Power Plug — visible when AC is UP, disappears on discharge */}
+          <AnimatePresence>
+            {showACPlug && (
+              <motion.div
+                key="ac-plug"
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                transition={{ duration: 0.3 }}
+              >
+                <Plug
+                  className={`${compact ? "w-3 h-3" : "w-3.5 h-3.5"} shrink-0`}
+                  style={{
+                    color: stateColor,
+                    filter: `drop-shadow(0 0 5px ${stateColor})`,
+                    animation: "pulse 2.5s ease-in-out infinite",
+                    transition: "color 0.8s",
+                  }}
+                />
+              </motion.div>
+            )}
+          </AnimatePresence>
+          {isCritical && (
+            <BatteryWarning
+              className={`${compact ? "w-3 h-3" : "w-4 h-4"} text-destructive shrink-0`}
+              style={{ animation: "battery-icon-blink 1.5s ease-in-out infinite" }}
+            />
+          )}
+        </div>
       </div>
 
       {/* ── Voltage value ── */}
@@ -484,7 +536,9 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
                     fontSize: valueFontSize ? `${valueFontSize * 0.65}px` : (compact ? "12px" : "15px"),
                     fontFamily: valueFont || "'JetBrains Mono', monospace",
                     textShadow: `0 0 12px ${runtimeColor}aa, 0 0 4px ${runtimeColor}`,
-                    animation: isRuntimeLow ? "battery-icon-blink 1.2s ease-in-out infinite" : undefined,
+                    animation: isPulsingRed ? "battery-icon-blink 0.8s ease-in-out infinite" :
+                      isBlinkingOrange ? "battery-icon-blink 2s ease-in-out infinite" :
+                      isRuntimeLow ? "battery-icon-blink 1.2s ease-in-out infinite" : undefined,
                     transition: "color 0.8s, text-shadow 0.8s",
                   }}
                 >
