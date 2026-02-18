@@ -127,6 +127,7 @@ export const WIDGET_TYPES = [
   { type: "image-map", label: "Image Map", icon: "Image", description: "Imagem interativa com LEDs mapeados", minW: 1, minH: 1 },
   { type: "traffic-light", label: "Semáforo", icon: "AlertTriangle", description: "Semáforo 3 estados com color_map", minW: 1, minH: 1 },
   { type: "label", label: "Label", icon: "Tag", description: "Label estático para organização", minW: 1, minH: 1 },
+  { type: "battery-bar", label: "Bateria", icon: "BatteryMedium", description: "Bar gauge de bateria com alerta crítico", minW: 1, minH: 1 },
 ] as const;
 
 export const GLOW_PRESETS = [

@@ -16,6 +16,7 @@ import ProgressWidget from "./widgets/ProgressWidget";
 import IconValueWidget from "./widgets/IconValueWidget";
 import TrafficLightWidget from "./widgets/TrafficLightWidget";
 import LabelWidget from "./widgets/LabelWidget";
+import BatteryBarWidget from "./widgets/BatteryBarWidget";
 
 interface Props {
   widgetType: string;
@@ -112,6 +113,8 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
         return <TrafficLightWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "label":
         return <LabelWidget title={title} config={config} />;
+      case "battery-bar":
+        return <BatteryBarWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "image-map":
         return (
           <ImageMapWidget
