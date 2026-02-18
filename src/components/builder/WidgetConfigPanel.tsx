@@ -233,6 +233,15 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
                 min={12} max={72} step={2}
               />
             </div>
+
+            <div className="space-y-1.5">
+              <Label className="text-[10px] text-muted-foreground">Tamanho do label: {widget.style.labelFontSize ?? 10}px</Label>
+              <Slider
+                value={[widget.style.labelFontSize ?? 10]}
+                onValueChange={([v]) => updateStyle({ labelFontSize: v })}
+                min={8} max={48} step={1}
+              />
+            </div>
           </TabsContent>
 
           {/* ── ICON TAB ── */}

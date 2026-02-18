@@ -49,6 +49,7 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
   const valueFontSize = styleConfig.valueFontSize as number | undefined;
   const labelColor = styleConfig.labelColor as string | undefined;
   const titleFont = styleConfig.titleFont as string | undefined;
+  const labelFontSize = styleConfig.labelFontSize as number | undefined;
 
   // ── Auto-suffix formatting ──
   const manualUnit = (extra.unit as string) || (config?.unit as string) || undefined;
@@ -84,7 +85,26 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
     return { textShadow: '0 0 8px hsl(var(--primary) / 0.6), 0 0 24px hsl(var(--primary) / 0.25)' };
   }, [hasMapping, mappedStatus.color, thermalStyle, valueColor]);
 
+  // Label neon glow style
+  const labelStyle = useMemo((): React.CSSProperties => {
+    const lc = labelColor || undefined;
+    return {
+      color: lc,
+      fontFamily: titleFont || undefined,
+      fontSize: labelFontSize ? `${labelFontSize}px` : (compact ? "8px" : "10px"),
+      textShadow: lc
+        ? `0 0 6px ${lc}80, 0 0 16px ${lc}40`
+        : "0 0 6px hsl(var(--muted-foreground) / 0.3)",
+      lineHeight: 1.2,
+    };
+  }, [labelColor, titleFont, labelFontSize, compact]);
+
   const hasData = formatted.display !== "—";
+
+  // Responsive value font: use rem-based scaling when no explicit size
+  const valueFontSizeFinal = valueFontSize
+    ? `${valueFontSize}px`
+    : compact ? "1.125rem" : "1.5rem";
 
   return (
     <motion.div
@@ -93,22 +113,19 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
       className={`glass-card rounded-lg ${compact ? "p-2 gap-1" : "p-4 gap-2"} h-full flex flex-col items-center justify-center border border-border/50`}
     >
       <span
-        className={`${compact ? "text-[8px]" : "text-[10px]"} font-display uppercase tracking-wider truncate w-full text-center`}
-        style={{
-          color: labelColor || undefined,
-          fontFamily: titleFont || undefined,
-        }}
+        className="font-display uppercase tracking-wider truncate w-full text-center"
+        style={labelStyle}
       >
         {title}
       </span>
       {hasData ? (
         <>
           <span
-            className={`font-bold font-mono-data ${!hasMapping && !thermalStyle && !valueColor ? "text-primary" : ""}`}
+            className={`font-bold font-mono-data flex-1 flex items-center justify-center ${!hasMapping && !thermalStyle && !valueColor ? "text-primary" : ""}`}
             style={{
               ...finalValueStyle,
               fontFamily: valueFont || undefined,
-              fontSize: valueFontSize ? `${valueFontSize}px` : (compact ? "18px" : "24px"),
+              fontSize: valueFontSizeFinal,
             }}
           >
             {formatted.display}
@@ -121,7 +138,7 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
           </div>
         </>
       ) : (
-        <span className="text-lg text-muted-foreground/50 font-mono animate-pulse">—</span>
+        <span className="text-lg text-muted-foreground/50 font-mono animate-pulse flex-1 flex items-center justify-center">—</span>
       )}
     </motion.div>
   );

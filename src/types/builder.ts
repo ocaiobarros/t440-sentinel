@@ -21,6 +21,8 @@ export interface WidgetStyle {
   valueFont?: string;
   /** Font size for value (px) */
   valueFontSize?: number;
+  /** Font size for label/title (px) */
+  labelFontSize?: number;
   /** Glow effect: "none" | "green" | "red" | "amber" | "blue" | "cyan" | "custom" */
   glow?: string;
   /** Custom glow color (when glow="custom") */

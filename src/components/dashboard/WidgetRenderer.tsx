@@ -102,7 +102,7 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
       case "table":
         return <TableWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
       case "text":
-        return <TextWidget telemetryKey={telemetryKey} title={title} cache={cache} />;
+        return <TextWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} />;
       case "status":
         return <StatusWidget telemetryKey={telemetryKey} title={title} cache={cache} config={config} compact={compact} />;
       case "progress":
