@@ -475,7 +475,8 @@ export default function DashboardBuilder() {
                 onResizeStop={handleResizeStop}
                 isDraggable
                 isResizable
-                compactType="vertical"
+                compactType={null}
+                preventCollision
                 margin={[4, 4]}
                 containerPadding={[0, 0]}
                 useCSSTransforms
