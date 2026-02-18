@@ -58,13 +58,24 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
   const criticalThreshold = (extra.criticalThreshold as number) ?? (extra.critical as number) ?? 23;
   const unit = (extra.units as string) || "V";
 
+  // ── Style config from Builder ──
+  const styleConfig = (config?.style as Record<string, unknown>) || {};
+  const valueColor = styleConfig.valueColor as string | undefined;
+  const labelColor = styleConfig.labelColor as string | undefined;
+  const titleFont = styleConfig.titleFont as string | undefined;
+  const valueFont = styleConfig.valueFont as string | undefined;
+  const valueFontSize = styleConfig.valueFontSize as number | undefined;
+  const iconColor = styleConfig.iconColor as string | undefined;
+
   const pct = useMemo(() => {
     if (maxVoltage <= minVoltage) return 0;
     return Math.min(100, Math.max(0, ((numValue - minVoltage) / (maxVoltage - minVoltage)) * 100));
   }, [numValue, minVoltage, maxVoltage]);
 
   const isCritical = numValue <= criticalThreshold && rawValue !== null;
-  const color = getBatteryColor(pct);
+  const dynamicColor = getBatteryColor(pct);
+  // Builder valueColor overrides dynamic color; fall back to battery interpolation
+  const color = valueColor || dynamicColor;
 
   const springPct = useSpring(pct, { stiffness: 80, damping: 20 });
   const widthStr = useTransform(springPct, (v) => `${v}%`);
@@ -89,12 +100,19 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
           <Zap
             className={`${compact ? "w-3 h-3" : "w-4 h-4"} shrink-0`}
             style={{
-              color,
-              filter: `drop-shadow(0 0 6px ${color})`,
+              color: iconColor || color,
+              filter: `drop-shadow(0 0 6px ${iconColor || color})`,
               transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
             }}
           />
-          <span className={`${compact ? "text-[8px]" : "text-[10px]"} font-display uppercase tracking-wider text-muted-foreground truncate`}>
+          <span
+            className={`${compact ? "text-[8px]" : "text-[10px]"} font-display uppercase tracking-wider truncate`}
+            style={{
+              color: labelColor || undefined,
+              fontFamily: titleFont || undefined,
+              transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
+            }}
+          >
             {title}
           </span>
         </div>
@@ -109,9 +127,11 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
 
       {/* Value */}
       <span
-        className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono leading-none`}
+        className={`font-bold leading-none`}
         style={{
           color,
+          fontFamily: valueFont || "'JetBrains Mono', monospace",
+          fontSize: valueFontSize ? `${valueFontSize}px` : (compact ? "18px" : "24px"),
           textShadow: `0 0 15px ${color}80, 0 0 5px ${color}`,
           transition: "all 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
@@ -126,7 +146,7 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
           style={{
             width: widthStr,
             background: `linear-gradient(90deg, rgb(255,0,0), rgb(255,200,0), rgb(0,220,80))`,
-            boxShadow: `0 0 8px ${color}80`,
+            boxShadow: `0 0 8px ${dynamicColor}80`,
             transition: "box-shadow 0.8s cubic-bezier(0.4, 0, 0.2, 1)",
           }}
         />
@@ -134,9 +154,9 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
 
       {/* Range labels */}
       <div className="flex items-center justify-between">
-        <span className="text-[8px] text-muted-foreground font-mono">{minVoltage}{unit}</span>
-        <span className="text-[8px] text-muted-foreground font-mono">{pct.toFixed(0)}%</span>
-        <span className="text-[8px] text-muted-foreground font-mono">{maxVoltage}{unit}</span>
+        <span className="text-[8px] font-mono" style={{ color: labelColor || undefined }}>{minVoltage}{unit}</span>
+        <span className="text-[8px] font-mono" style={{ color: labelColor || undefined }}>{pct.toFixed(0)}%</span>
+        <span className="text-[8px] font-mono" style={{ color: labelColor || undefined }}>{maxVoltage}{unit}</span>
       </div>
     </motion.div>
   );
