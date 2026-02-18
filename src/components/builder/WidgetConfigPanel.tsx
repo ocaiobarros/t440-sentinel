@@ -557,6 +557,51 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
 
             <div className="h-px bg-border/30" />
 
+            {/* ── Battery Config ── */}
+            {widget.widget_type === "battery-bar" && (
+              <div className="space-y-3 p-2 rounded-md border border-neon-amber/30 bg-neon-amber/5">
+                <span className="text-[9px] font-display text-neon-amber uppercase tracking-wider">⚡ Config Bateria</span>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-[9px] text-muted-foreground">Min (V)</Label>
+                    <Input
+                      type="number"
+                      value={(widget.extra?.minVoltage as number) ?? 22}
+                      onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, minVoltage: parseFloat(e.target.value) || 0 } })}
+                      className="h-6 text-[10px] font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[9px] text-muted-foreground">Max (V)</Label>
+                    <Input
+                      type="number"
+                      value={(widget.extra?.maxVoltage as number) ?? 27}
+                      onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, maxVoltage: parseFloat(e.target.value) || 0 } })}
+                      className="h-6 text-[10px] font-mono"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-[9px] text-destructive">Crítico (V)</Label>
+                    <Input
+                      type="number"
+                      value={(widget.extra?.criticalThreshold as number) ?? 23}
+                      onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, criticalThreshold: parseFloat(e.target.value) || 0 } })}
+                      className="h-6 text-[10px] font-mono border-destructive/30"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[9px] text-muted-foreground">Unidade</Label>
+                  <Input
+                    value={(widget.extra?.units as string) || "V"}
+                    onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, units: e.target.value } })}
+                    className="h-6 text-[10px] font-mono"
+                    placeholder="V"
+                  />
+                </div>
+              </div>
+            )}
+
             {/* ── Color Mapping ── */}
             <ColorMapEditor
               colorMap={(widget.extra?.color_map as Record<string, string>) || {}}
