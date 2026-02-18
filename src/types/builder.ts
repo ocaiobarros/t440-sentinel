@@ -115,6 +115,12 @@ export interface ImageHotspot {
   color_map?: Record<string, unknown>;
   /** Default color when no match */
   default_color?: string;
+  /** Glow radius multiplier (1-5, default 1) */
+  glowRadius?: number;
+  /** Whether to blink/pulse on critical state */
+  blinkOnCritical?: boolean;
+  /** Show the raw telemetry value as an overlay label */
+  showValue?: boolean;
 }
 
 export const WIDGET_TYPES = [
@@ -130,6 +136,7 @@ export const WIDGET_TYPES = [
   { type: "traffic-light", label: "Semáforo", icon: "AlertTriangle", description: "Semáforo 3 estados com color_map", minW: 1, minH: 1 },
   { type: "label", label: "Label", icon: "Tag", description: "Label estático para organização", minW: 1, minH: 1 },
   { type: "battery-bar", label: "Bateria", icon: "BatteryMedium", description: "Bar gauge de bateria com alerta crítico", minW: 1, minH: 1 },
+  { type: "hardware-map", label: "Hardware Twin", icon: "Cpu", description: "Gêmeo digital com LEDs, glow e overlays interativos", minW: 2, minH: 2 },
 ] as const;
 
 export const GLOW_PRESETS = [
