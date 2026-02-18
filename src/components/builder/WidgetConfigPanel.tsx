@@ -1,10 +1,11 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, lazy, Suspense } from "react";
 import type { WidgetConfig, WidgetStyle, ImageHotspot } from "@/types/builder";
 import { GLOW_PRESETS, FONT_OPTIONS, COLOR_PRESETS } from "@/types/builder";
 import { getIconNames } from "./DynamicIcon";
 import DynamicIcon from "./DynamicIcon";
 import ImageUploader from "./ImageUploader";
 import HotspotEditor from "./HotspotEditor";
+import HotspotEditorModal from "./HotspotEditorModal";
 import InfraIconBrowser from "./InfraIconBrowser";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trash2, X, Search, Palette, Type, Sparkles, Database, Settings2, ImageIcon } from "lucide-react";
+import { Trash2, X, Search, Palette, Type, Sparkles, Database, Settings2, ImageIcon, Maximize2 } from "lucide-react";
 import ZabbixItemBrowser from "./ZabbixItemBrowser";
 import ColorMapEditor from "./ColorMapEditor";
 import { Icon } from "@iconify/react";
@@ -54,6 +55,7 @@ function ColorPicker({ value, onChange, label }: { value?: string; onChange: (v:
 
 export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose, connectionId }: Props) {
   const [iconSearch, setIconSearch] = useState("");
+  const [showHotspotModal, setShowHotspotModal] = useState(false);
 
   const updateStyle = (patch: Partial<WidgetStyle>) => {
     onUpdate({ ...widget, style: { ...widget.style, ...patch } });
@@ -316,16 +318,39 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
             </div>
 
             {widget.extra?.imageUrl && (
-              <div className="space-y-1.5">
-                <Label className="text-[10px] text-muted-foreground">
-                  LEDs interativos ({((widget.extra?.hotspots as ImageHotspot[]) || []).length})
-                </Label>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label className="text-[10px] text-muted-foreground">
+                    LEDs interativos ({((widget.extra?.hotspots as ImageHotspot[]) || []).length})
+                  </Label>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1 text-[9px] h-6"
+                    onClick={() => setShowHotspotModal(true)}
+                  >
+                    <Maximize2 className="w-3 h-3" /> Editor Fullscreen
+                  </Button>
+                </div>
                 <HotspotEditor
                   imageUrl={widget.extra.imageUrl as string}
                   hotspots={((widget.extra?.hotspots as ImageHotspot[]) || [])}
                   onChange={(hotspots) => onUpdate({ ...widget, extra: { ...widget.extra, hotspots } })}
                 />
               </div>
+            )}
+
+            {/* Fullscreen Modal Editor */}
+            {showHotspotModal && widget.extra?.imageUrl && (
+              <HotspotEditorModal
+                imageUrl={widget.extra.imageUrl as string}
+                hotspots={((widget.extra?.hotspots as ImageHotspot[]) || [])}
+                onSave={(hotspots) => {
+                  onUpdate({ ...widget, extra: { ...widget.extra, hotspots } });
+                  setShowHotspotModal(false);
+                }}
+                onDiscard={() => setShowHotspotModal(false)}
+              />
             )}
 
             {!widget.extra?.imageUrl && (
