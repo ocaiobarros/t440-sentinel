@@ -3,7 +3,7 @@ import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryStatData } from "@/types/telemetry";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
-import { getThermalColor, getThermalGlow, isThermalMetric } from "@/lib/thermal-scale";
+import { getThermalStyle, isThermalMetric } from "@/lib/thermal-scale";
 import { useMemo } from "react";
 
 interface Props {
@@ -24,19 +24,12 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
       : <Minus className="w-3 h-3 text-muted-foreground" />
     : null;
 
-  // Thermal color logic
-  const thermal = useMemo(() => {
+  // Thermal neon style
+  const thermalStyle = useMemo(() => {
     if (!stat || typeof stat.value !== "number") return null;
     if (!isThermalMetric(title, stat.unit)) return null;
-    const color = getThermalColor(stat.value);
-    const glow = getThermalGlow(stat.value);
-    return { color, glow };
+    return getThermalStyle(stat.value);
   }, [stat?.value, title, stat?.unit]);
-
-  const valueColor = thermal?.color ?? undefined;
-  const valueShadow = thermal
-    ? thermal.glow
-    : '0 0 8px hsl(var(--primary) / 0.6), 0 0 24px hsl(var(--primary) / 0.25)';
 
   return (
     <motion.div
@@ -50,8 +43,8 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
       {stat ? (
         <>
           <span
-            className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono-data ${!thermal ? "text-primary" : ""}`}
-            style={{ color: valueColor, textShadow: valueShadow }}
+            className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono-data ${!thermalStyle ? "text-primary" : ""}`}
+            style={thermalStyle ?? { textShadow: '0 0 8px hsl(var(--primary) / 0.6), 0 0 24px hsl(var(--primary) / 0.25)' }}
           >
             {typeof stat.value === "number" ? stat.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : stat.value}
           </span>
