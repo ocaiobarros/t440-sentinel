@@ -196,42 +196,30 @@ export default function DashboardBuilder() {
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
   const mouseDownWidgetRef = useRef<string | null>(null);
 
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) return;
+  // Use React capture-phase handlers directly on the canvas div
+  // instead of useEffect-based native listeners, which fail when
+  // navigating via React Router without a full page reload.
+  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const widgetEl = target.closest("[data-widget-id]") as HTMLElement | null;
+    if (widgetEl) {
+      mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+      mouseDownWidgetRef.current = widgetEl.getAttribute("data-widget-id");
+    } else {
+      mouseDownPosRef.current = null;
+      mouseDownWidgetRef.current = null;
+    }
+  }, []);
 
-    const onMouseDown = (e: MouseEvent) => {
-      const target = e.target as HTMLElement;
-      const widgetEl = target.closest("[data-widget-id]") as HTMLElement | null;
-      
-      if (widgetEl) {
-        mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
-        mouseDownWidgetRef.current = widgetEl.getAttribute("data-widget-id");
-      } else {
-        mouseDownPosRef.current = null;
-        mouseDownWidgetRef.current = null;
-      }
-    };
-
-    const onClick = (e: MouseEvent) => {
-      const down = mouseDownPosRef.current;
-      const widgetId = mouseDownWidgetRef.current;
-      
-      if (!down || !widgetId) return;
-      const dist = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
-      
-      if (dist > 5) return;
-      setSelectedWidgetId(widgetId);
-      setSidebarMode("config");
-      setSidebarOpen(true);
-    };
-
-    el.addEventListener("mousedown", onMouseDown, true); // capture phase
-    el.addEventListener("click", onClick, true); // capture phase
-    return () => {
-      el.removeEventListener("mousedown", onMouseDown, true);
-      el.removeEventListener("click", onClick, true);
-    };
+  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
+    const down = mouseDownPosRef.current;
+    const widgetId = mouseDownWidgetRef.current;
+    if (!down || !widgetId) return;
+    const dist = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
+    if (dist > 5) return;
+    setSelectedWidgetId(widgetId);
+    setSidebarMode("config");
+    setSidebarOpen(true);
   }, []);
 
   const handleDragResizeStart = useCallback(() => {
@@ -475,7 +463,7 @@ export default function DashboardBuilder() {
             />
           )}
 
-          <div ref={canvasRef} className="p-4 relative z-10" style={{ width: '100%' }}>
+          <div ref={canvasRef} className="p-4 relative z-10" style={{ width: '100%' }} onMouseDownCapture={handleCanvasMouseDown} onClickCapture={handleCanvasClick}>
             {config.widgets.length === 0 ? (
               <div className="flex items-center justify-center min-h-[50vh]">
                 <motion.div
