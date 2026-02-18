@@ -64,7 +64,7 @@ export default function DashboardSettingsPanel({ config, onUpdate, connections }
           <Slider
             value={[config.settings.cols]}
             onValueChange={([v]) => updateSettings({ cols: v })}
-            min={6} max={24} step={1}
+            min={12} max={48} step={1}
           />
         </div>
 
@@ -73,7 +73,7 @@ export default function DashboardSettingsPanel({ config, onUpdate, connections }
           <Slider
             value={[config.settings.rowHeight]}
             onValueChange={([v]) => updateSettings({ rowHeight: v })}
-            min={30} max={120} step={5}
+            min={10} max={120} step={5}
           />
         </div>
 

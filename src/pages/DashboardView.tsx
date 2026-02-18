@@ -14,8 +14,8 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
 /** Grid constants — MUST match DashboardBuilder exactly */
-const GRID_COLS = 12;
-const ROW_HEIGHT = 80;
+const GRID_COLS = 24;
+const ROW_HEIGHT = 15;
 const GRID_MARGIN: [number, number] = [4, 4];
 const GRID_CONTAINER_PADDING: [number, number] = [0, 0];
 

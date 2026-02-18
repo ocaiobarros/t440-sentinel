@@ -28,8 +28,8 @@ const DEFAULT_CONFIG: DashboardConfig = {
   zabbix_connection_id: null,
   settings: {
     poll_interval_seconds: 60,
-    cols: 12,
-    rowHeight: 80,
+    cols: 24,
+    rowHeight: 15,
     showGrid: true,
     scanlines: true,
     ambientGlow: true,

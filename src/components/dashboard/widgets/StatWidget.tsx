@@ -3,6 +3,8 @@ import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryStatData } from "@/types/telemetry";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { getThermalColor, getThermalGlow, isThermalMetric } from "@/lib/thermal-scale";
+import { useMemo } from "react";
 
 interface Props {
   telemetryKey: string;
@@ -22,6 +24,20 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
       : <Minus className="w-3 h-3 text-muted-foreground" />
     : null;
 
+  // Thermal color logic
+  const thermal = useMemo(() => {
+    if (!stat || typeof stat.value !== "number") return null;
+    if (!isThermalMetric(title, stat.unit)) return null;
+    const color = getThermalColor(stat.value);
+    const glow = getThermalGlow(stat.value);
+    return { color, glow };
+  }, [stat?.value, title, stat?.unit]);
+
+  const valueColor = thermal?.color ?? undefined;
+  const valueShadow = thermal
+    ? thermal.glow
+    : '0 0 8px hsl(var(--primary) / 0.6), 0 0 24px hsl(var(--primary) / 0.25)';
+
   return (
     <motion.div
       initial={isInitial ? { opacity: 0, scale: 0.95 } : false}
@@ -33,7 +49,10 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
       </span>
       {stat ? (
         <>
-          <span className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono-data text-primary`} style={{ textShadow: '0 0 8px hsl(var(--primary) / 0.6), 0 0 24px hsl(var(--primary) / 0.25)' }}>
+          <span
+            className={`${compact ? "text-lg" : "text-2xl"} font-bold font-mono-data ${!thermal ? "text-primary" : ""}`}
+            style={{ color: valueColor, textShadow: valueShadow }}
+          >
             {typeof stat.value === "number" ? stat.value.toLocaleString(undefined, { maximumFractionDigits: 2 }) : stat.value}
           </span>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">

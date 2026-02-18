@@ -3,6 +3,8 @@ import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryGaugeData } from "@/types/telemetry";
 import { extractRawValue } from "@/lib/telemetry-utils";
+import { getThermalColor, isThermalMetric } from "@/lib/thermal-scale";
+import { useMemo } from "react";
 
 interface Props {
   telemetryKey: string;
@@ -28,8 +30,13 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
   const springPct = useSpring(pct, { stiffness: 60, damping: 20 });
   const animatedOffset = useTransform(springPct, (v) => circumference - (v / 100) * circumference);
 
-  // Use themed colors — green → amber → red based on percentage
-  const color = pct > 80 ? "hsl(var(--neon-red))" : pct > 60 ? "hsl(var(--neon-amber))" : "hsl(var(--primary))";
+  // Thermal-aware color: if the metric is temperature, use the thermal scale
+  const isThermal = useMemo(() => isThermalMetric(title, gauge?.unit), [title, gauge?.unit]);
+  const thermalColor = useMemo(() => isThermal ? getThermalColor(value) : null, [isThermal, value]);
+
+  // Fallback: green → amber → red based on percentage
+  const defaultColor = pct > 80 ? "hsl(var(--neon-red))" : pct > 60 ? "hsl(var(--neon-amber))" : "hsl(var(--primary))";
+  const color = thermalColor ?? defaultColor;
 
   return (
     <motion.div
@@ -48,13 +55,25 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
           strokeWidth="6"
           strokeLinecap="round"
         />
-        <defs>
-          <linearGradient id={`gauge-grad-${telemetryKey}`} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="hsl(var(--primary))" />
-            <stop offset="60%" stopColor="hsl(var(--neon-amber))" />
-            <stop offset="100%" stopColor="hsl(var(--neon-red))" />
-          </linearGradient>
-        </defs>
+        {isThermal ? (
+          <defs>
+            <linearGradient id={`gauge-grad-${telemetryKey}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="hsl(210, 100%, 55%)" />
+              <stop offset="40%" stopColor="hsl(170, 100%, 45%)" />
+              <stop offset="60%" stopColor="hsl(55, 100%, 50%)" />
+              <stop offset="80%" stopColor="hsl(30, 100%, 50%)" />
+              <stop offset="100%" stopColor="hsl(0, 100%, 45%)" />
+            </linearGradient>
+          </defs>
+        ) : (
+          <defs>
+            <linearGradient id={`gauge-grad-${telemetryKey}`} x1="0%" y1="0%" x2="100%" y2="0%">
+              <stop offset="0%" stopColor="hsl(var(--primary))" />
+              <stop offset="60%" stopColor="hsl(var(--neon-amber))" />
+              <stop offset="100%" stopColor="hsl(var(--neon-red))" />
+            </linearGradient>
+          </defs>
+        )}
         <motion.path
           d="M 10 55 A 40 40 0 0 1 90 55"
           fill="none"
