@@ -557,6 +557,65 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
 
             <div className="h-px bg-border/30" />
 
+            {/* ── Gauge Config ── */}
+            {widget.widget_type === "gauge" && (
+              <div className="space-y-3 p-2 rounded-md border border-primary/30 bg-primary/5">
+                <span className="text-[9px] font-display text-primary uppercase tracking-wider">🎯 Config Gauge</span>
+                <div className="space-y-2">
+                  <div className="space-y-1">
+                    <Label className="text-[9px] text-muted-foreground">Esquema de Cores</Label>
+                    <Select
+                      value={(widget.extra?.gaugePalette as string) || "thermal"}
+                      onValueChange={(v) => onUpdate({ ...widget, extra: { ...widget.extra, gaugePalette: v } })}
+                    >
+                      <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="thermal" className="text-xs">🌡️ Térmica (Azul → Vermelho)</SelectItem>
+                        <SelectItem value="energy" className="text-xs">⚡ Energia (Vermelho → Verde)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[9px] text-muted-foreground">Inverter Escala</Label>
+                    <Switch
+                      checked={(widget.extra?.gaugeInvert as boolean) ?? false}
+                      onCheckedChange={(v) => onUpdate({ ...widget, extra: { ...widget.extra, gaugeInvert: v } })}
+                    />
+                  </div>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-[9px] text-muted-foreground">Min</Label>
+                      <Input
+                        type="number"
+                        value={(widget.extra?.gaugeMin as number) ?? 0}
+                        onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, gaugeMin: parseFloat(e.target.value) || 0 } })}
+                        className="h-6 text-[10px] font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[9px] text-muted-foreground">Max</Label>
+                      <Input
+                        type="number"
+                        value={(widget.extra?.gaugeMax as number) ?? 100}
+                        onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, gaugeMax: parseFloat(e.target.value) || 0 } })}
+                        className="h-6 text-[10px] font-mono"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-[9px] text-muted-foreground">Decimais</Label>
+                      <Input
+                        type="number"
+                        value={(widget.extra?.gaugeDecimals as number) ?? 1}
+                        onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, gaugeDecimals: parseInt(e.target.value) || 0 } })}
+                        className="h-6 text-[10px] font-mono"
+                        min={0} max={4}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
             {/* ── Battery Config ── */}
             {widget.widget_type === "battery-bar" && (
               <div className="space-y-3 p-2 rounded-md border border-neon-amber/30 bg-neon-amber/5">
