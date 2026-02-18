@@ -34,6 +34,7 @@ const INFRA_ICONS = [
   { id: "simple-icons:hp", label: "HP / HPE", tags: ["hp", "hpe", "proliant", "ilo", "server"] },
   { id: "simple-icons:ubiquiti", label: "Ubiquiti", tags: ["ubiquiti", "unifi", "edgemax", "uisp"] },
   { id: "simple-icons:vmware", label: "VMware", tags: ["vmware", "esxi", "vcenter", "virtual"] },
+  { id: "mdi:server-network-outline", label: "Datacom", tags: ["datacom", "switch", "dm", "dgs", "dms", "olt", "telecom"] },
   
   // Servers
   { id: "mdi:server", label: "Servidor", tags: ["server", "servidor", "host", "bare", "metal"] },
