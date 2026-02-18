@@ -41,7 +41,7 @@ function matchesAny(text: string, keywords: string[]): boolean {
   return keywords.some((kw) => lower.includes(kw));
 }
 
-type DetectedContext = "temperature" | "voltage" | "bytes" | "bps" | "uptime" | "percent" | null;
+type DetectedContext = "temperature" | "voltage" | "amperage" | "bytes" | "bps" | "uptime" | "percent" | null;
 
 function detectContext(title: string, zabbixUnit?: string): DetectedContext {
   const u = (zabbixUnit || "").trim().toLowerCase();
@@ -52,6 +52,9 @@ function detectContext(title: string, zabbixUnit?: string): DetectedContext {
 
   // Voltage
   if (u === "v" || matchesAny(t, ["voltag", "bateria", "battery", "voltage"])) return "voltage";
+
+  // Amperage
+  if (u === "a" || u === "amp" || matchesAny(t, ["amperag", "ampere", "corrente", "current", "descarga", "discharge"])) return "amperage";
 
   // Bytes (disk/memory)
   if (["b", "bytes"].includes(u) || matchesAny(t, ["memória", "memory", "disco", "disk", "storage", "swap"])) return "bytes";
@@ -123,6 +126,9 @@ export function formatDynamicValue(
 
     case "voltage":
       return { display: num.toFixed(decimals), suffix: "V", numericValue: num };
+
+    case "amperage":
+      return { display: num.toFixed(decimals), suffix: "A", numericValue: num };
 
     case "bytes": {
       const { scaled, unit } = scaleBytes(num, decimals);

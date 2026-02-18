@@ -670,6 +670,23 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
                   </div>
                   {(widget.extra?.runtimeEnabled as boolean) && (
                     <>
+                      {/* Calculation Method */}
+                      <div className="space-y-1">
+                        <Label className="text-[9px] text-muted-foreground">Método de Cálculo</Label>
+                        <Select
+                          value={(widget.extra?.runtimeCalcMethod as string) || "auto"}
+                          onValueChange={(v) => onUpdate({ ...widget, extra: { ...widget.extra, runtimeCalcMethod: v } })}
+                        >
+                          <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto" className="text-xs">🤖 Auto (detecta melhor método)</SelectItem>
+                            <SelectItem value="xps" className="text-xs">⚡ XPS Precisão (Ah × V / A)</SelectItem>
+                            <SelectItem value="estimate" className="text-xs">📊 Estimativa (curva de descarga)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      {/* Status Item */}
                       <div className="space-y-1">
                         <Label className="text-[9px] text-muted-foreground">Status Item (Telemetry Key)</Label>
                         <Input
@@ -680,22 +697,71 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
                         />
                       </div>
                       <div className="space-y-1">
-                        <Label className="text-[9px] text-muted-foreground">Valor de Descarga</Label>
+                        <Label className="text-[9px] text-muted-foreground">Valor de Descarga (0/1, on/off)</Label>
                         <Input
                           value={(widget.extra?.runtimeDischargingValue as string) || ""}
                           onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, runtimeDischargingValue: e.target.value } })}
                           className="h-6 text-[10px] font-mono"
-                          placeholder='1 ou "Discharging"'
+                          placeholder='1, off, Discharging...'
                         />
                       </div>
+
+                      {/* Runtime Time Key (direct) */}
                       <div className="space-y-1">
-                        <Label className="text-[9px] text-muted-foreground">Runtime Item (Telemetry Key)</Label>
+                        <Label className="text-[9px] text-muted-foreground">Runtime Item (direto, opcional)</Label>
                         <Input
                           value={(widget.extra?.runtimeTimeKey as string) || ""}
                           onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, runtimeTimeKey: e.target.value } })}
                           className="h-6 text-[10px] font-mono"
                           placeholder="zbx:item:88888"
                         />
+                      </div>
+
+                      {/* XPS Precision fields */}
+                      <div className="border-t border-neon-amber/10 pt-2 space-y-2">
+                        <span className="text-[8px] text-neon-amber/60 uppercase tracking-wider">⚡ XPS Precisão</span>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] text-muted-foreground">Amperagem Key (Telemetry)</Label>
+                          <Input
+                            value={(widget.extra?.amperageKey as string) || ""}
+                            onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, amperageKey: e.target.value } })}
+                            className="h-6 text-[10px] font-mono"
+                            placeholder="zbx:item:77777"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] text-muted-foreground">Capacidade (Ah)</Label>
+                          <Input
+                            type="number"
+                            value={(widget.extra?.capacityAh as number) ?? ""}
+                            onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, capacityAh: parseFloat(e.target.value) || 0 } })}
+                            className="h-6 text-[10px] font-mono"
+                            placeholder="45"
+                          />
+                        </div>
+                      </div>
+
+                      {/* Secondary Alarm Key */}
+                      <div className="border-t border-destructive/20 pt-2 space-y-2">
+                        <span className="text-[8px] text-destructive/60 uppercase tracking-wider">🚨 Alarme Secundário</span>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] text-muted-foreground">Alarme Key (Telemetry)</Label>
+                          <Input
+                            value={(widget.extra?.secondaryAlarmKey as string) || ""}
+                            onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, secondaryAlarmKey: e.target.value } })}
+                            className="h-6 text-[10px] font-mono"
+                            placeholder="zbx:item:66666"
+                          />
+                        </div>
+                        <div className="space-y-1">
+                          <Label className="text-[9px] text-muted-foreground">Valor de Alarme</Label>
+                          <Input
+                            value={(widget.extra?.secondaryAlarmValue as string) || "1"}
+                            onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, secondaryAlarmValue: e.target.value } })}
+                            className="h-6 text-[10px] font-mono"
+                            placeholder="1"
+                          />
+                        </div>
                       </div>
                     </>
                   )}
