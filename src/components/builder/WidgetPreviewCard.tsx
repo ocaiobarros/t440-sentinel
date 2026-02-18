@@ -1,3 +1,4 @@
+import React from "react";
 import type { WidgetConfig, WidgetStyle } from "@/types/builder";
 import DynamicIcon from "./DynamicIcon";
 
@@ -52,7 +53,7 @@ function buildWidgetCSS(style: WidgetStyle): React.CSSProperties {
 /** Use themed primary color, fallback to explicit style color */
 const PRIMARY_CSS = "hsl(var(--primary))";
 
-export default function WidgetPreviewCard({ widget, isSelected, onClick, isPreview }: Props) {
+const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSelected, onClick, isPreview }: Props) {
   const s = widget.style;
   const inlineCSS = buildWidgetCSS(s);
 
@@ -61,7 +62,10 @@ export default function WidgetPreviewCard({ widget, isSelected, onClick, isPrevi
 
   return (
     <div
-      onClick={onClick}
+      onClick={(e) => {
+        e.stopPropagation();
+        onClick(e);
+      }}
       className={`h-full w-full rounded-lg border border-border/50 overflow-hidden cursor-pointer transition-all ${glassClass} ${selectedClass} ${isPreview ? "" : "hover:border-primary/30"}`}
       style={{
         ...inlineCSS,
@@ -97,7 +101,9 @@ export default function WidgetPreviewCard({ widget, isSelected, onClick, isPrevi
       </div>
     </div>
   );
-}
+});
+
+export default WidgetPreviewCard;
 
 function renderTypePreview(widget: WidgetConfig) {
   const s = widget.style;

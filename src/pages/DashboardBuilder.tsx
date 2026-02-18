@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo, useRef, useEffect } from "react";
+import { useState, useCallback, useMemo, useRef, useEffect, startTransition } from "react";
 import { Responsive, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -190,26 +190,25 @@ export default function DashboardBuilder() {
   // We do NOT use onLayoutChange because it fires on every width recalculation
   // (e.g. when sidebar opens/closes), which would corrupt saved widget sizes.
   // ─── Click vs Drag detection ───
-  // RGL fires onDragStart on mousedown (before click), so we can't use it
-  // to distinguish clicks from drags. Instead we use onDrag which only fires
-  // when actual movement occurs.
+  // draggableHandle ensures only the title bar starts drags.
+  // Widget content clicks fire onClick directly without RGL interference.
   const isDraggingRef = useRef(false);
 
   const handleDragMove = useCallback(() => {
     isDraggingRef.current = true;
   }, []);
 
-  const handleWidgetClick = useCallback((widgetId: string) => {
-    // Use setTimeout to ensure this runs after RGL's onDrag
-    setTimeout(() => {
-      if (isDraggingRef.current) {
-        isDraggingRef.current = false;
-        return;
-      }
+  const handleWidgetClick = useCallback((widgetId: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      return;
+    }
+    startTransition(() => {
       setSelectedWidgetId(widgetId);
       setSidebarMode("config");
       setSidebarOpen(true);
-    }, 0);
+    });
   }, []);
 
   const handleDragStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
@@ -486,7 +485,7 @@ export default function DashboardBuilder() {
                     <WidgetPreviewCard
                       widget={widget}
                       isSelected={selectedWidgetId === widget.id}
-                      onClick={() => handleWidgetClick(widget.id)}
+                      onClick={(e) => handleWidgetClick(widget.id, e!)}
                     />
                   </div>
                 ))}
