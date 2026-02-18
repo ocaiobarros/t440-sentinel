@@ -1,68 +1,66 @@
 /**
- * Thermal color scale with smooth HSL interpolation.
- * Maps temperature values to colors: Blue → Cyan → Green → Yellow → Orange → Red
- * No external dependencies — pure math interpolation.
+ * Thermal color scale with smooth RGB linear interpolation (Lerp).
+ * Maps temperature values to colors grau-a-grau:
+ *   ≤10°C Blue → 20°C Cyan → 25°C Yellow → 30°C Orange → ≥35°C Red
  */
 
-interface ThermalStop {
-  temp: number;
-  h: number; // hue
-  s: number; // saturation %
-  l: number; // lightness %
-}
+interface RGBStop { temp: number; r: number; g: number; b: number }
 
-const THERMAL_STOPS: ThermalStop[] = [
-  { temp: 10, h: 210, s: 100, l: 55 },  // Blue
-  { temp: 20, h: 170, s: 100, l: 45 },  // Cyan/Teal
-  { temp: 25, h: 55,  s: 100, l: 50 },  // Yellow
-  { temp: 30, h: 30,  s: 100, l: 50 },  // Orange
-  { temp: 35, h: 0,   s: 100, l: 45 },  // Red
+const THERMAL_STOPS: RGBStop[] = [
+  { temp: 10, r: 0,   g: 0,   b: 255 }, // Blue
+  { temp: 20, r: 0,   g: 255, b: 255 }, // Cyan
+  { temp: 25, r: 255, g: 255, b: 0   }, // Yellow
+  { temp: 30, r: 255, g: 165, b: 0   }, // Orange
+  { temp: 35, r: 255, g: 0,   b: 0   }, // Red
 ];
 
 function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
+  return Math.round(a + (b - a) * t);
 }
 
-/**
- * Get an interpolated thermal color for a given temperature in °C.
- * Returns an HSL string ready for CSS usage.
- */
-export function getThermalColor(tempC: number): string {
+function getRGB(tempC: number): [number, number, number] {
   if (tempC <= THERMAL_STOPS[0].temp) {
     const s = THERMAL_STOPS[0];
-    return `hsl(${s.h}, ${s.s}%, ${s.l}%)`;
+    return [s.r, s.g, s.b];
   }
-  if (tempC >= THERMAL_STOPS[THERMAL_STOPS.length - 1].temp) {
-    const s = THERMAL_STOPS[THERMAL_STOPS.length - 1];
-    return `hsl(${s.h}, ${s.s}%, ${s.l}%)`;
-  }
+  const last = THERMAL_STOPS[THERMAL_STOPS.length - 1];
+  if (tempC >= last.temp) return [last.r, last.g, last.b];
 
   for (let i = 0; i < THERMAL_STOPS.length - 1; i++) {
     const a = THERMAL_STOPS[i];
     const b = THERMAL_STOPS[i + 1];
     if (tempC >= a.temp && tempC <= b.temp) {
       const t = (tempC - a.temp) / (b.temp - a.temp);
-      const h = lerp(a.h, b.h, t);
-      const s = lerp(a.s, b.s, t);
-      const l = lerp(a.l, b.l, t);
-      return `hsl(${Math.round(h)}, ${Math.round(s)}%, ${Math.round(l)}%)`;
+      return [lerp(a.r, b.r, t), lerp(a.g, b.g, t), lerp(a.b, b.b, t)];
     }
   }
-
-  return `hsl(0, 0%, 60%)`; // fallback
+  return [128, 128, 128];
 }
 
-/**
- * Get a thermal glow box-shadow string for CSS.
- */
+/** Get interpolated thermal color as an rgb() CSS string. */
+export function getThermalColor(tempC: number): string {
+  const [r, g, b] = getRGB(tempC);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/** Get a neon glow text-shadow + box-shadow string. */
 export function getThermalGlow(tempC: number): string {
-  const color = getThermalColor(tempC);
-  return `0 0 8px ${color}, 0 0 20px ${color}40`;
+  const c = getThermalColor(tempC);
+  return `0 0 15px ${c}, 0 0 5px ${c}`;
 }
 
-/**
- * Check if a widget title/key looks like a temperature metric.
- */
+/** Build a full inline style object for thermal neon effect. */
+export function getThermalStyle(tempC: number): React.CSSProperties {
+  const c = getThermalColor(tempC);
+  return {
+    color: c,
+    textShadow: `0 0 15px ${c}80, 0 0 5px ${c}`,
+    filter: `drop-shadow(0 0 10px ${c}66)`,
+    transition: 'all 0.8s cubic-bezier(0.4, 0, 0.2, 1)',
+  };
+}
+
+/** Check if a widget title/key looks like a temperature metric. */
 export function isThermalMetric(title: string, unit?: string): boolean {
   const lower = (title + " " + (unit || "")).toLowerCase();
   return /temp|°c|°f|celsius|thermal|inlet|exhaust|cpu\s*temp/i.test(lower);

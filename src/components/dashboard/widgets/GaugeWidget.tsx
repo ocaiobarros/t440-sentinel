@@ -3,7 +3,7 @@ import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryGaugeData } from "@/types/telemetry";
 import { extractRawValue } from "@/lib/telemetry-utils";
-import { getThermalColor, isThermalMetric } from "@/lib/thermal-scale";
+import { getThermalColor, isThermalMetric, getThermalStyle } from "@/lib/thermal-scale";
 import { useMemo } from "react";
 
 interface Props {
@@ -83,7 +83,8 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
           strokeDasharray={circumference}
           style={{ strokeDashoffset: animatedOffset }}
         />
-        <text x="50" y="52" textAnchor="middle" fill={color} fontSize="14" fontFamily="'JetBrains Mono', monospace" fontWeight="bold">
+        <text x="50" y="52" textAnchor="middle" fill={color} fontSize="14" fontFamily="'JetBrains Mono', monospace" fontWeight="bold"
+          style={{ transition: 'fill 0.8s cubic-bezier(0.4, 0, 0.2, 1)' }}>
           {data ? value.toFixed(1) : "—"}
         </text>
       </svg>
