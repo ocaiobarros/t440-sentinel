@@ -5,7 +5,8 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Slider } from "@/components/ui/slider";
-import { Plus, Trash2, Target } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Plus, Trash2, Target, Move } from "lucide-react";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import ColorMapEditor from "./ColorMapEditor";
 
@@ -18,34 +19,67 @@ interface Props {
 export default function HotspotEditor({ imageUrl, hotspots, onChange }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [isPlacing, setIsPlacing] = useState(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const imgRef = useRef<HTMLDivElement>(null);
 
   const selected = hotspots.find((h) => h.id === selectedId) ?? null;
 
+  const getPercent = useCallback((e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
+    const rect = imgRef.current?.getBoundingClientRect();
+    if (!rect) return null;
+    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+    return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
+  }, []);
+
   const handleImageClick = useCallback(
     (e: React.MouseEvent<HTMLDivElement>) => {
+      if (draggingId) return;
       if (!isPlacing) return;
-      const rect = imgRef.current?.getBoundingClientRect();
-      if (!rect) return;
-
-      const x = ((e.clientX - rect.left) / rect.width) * 100;
-      const y = ((e.clientY - rect.top) / rect.height) * 100;
+      const pos = getPercent(e);
+      if (!pos) return;
 
       const newHotspot: ImageHotspot = {
         id: crypto.randomUUID(),
-        x: Math.round(x * 10) / 10,
-        y: Math.round(y * 10) / 10,
+        x: pos.x,
+        y: pos.y,
         telemetry_key: "",
         label: `LED ${hotspots.length + 1}`,
         size: 12,
         shape: "circle",
         default_color: "#39FF14",
+        glowRadius: 1,
+        blinkOnCritical: true,
+        showValue: false,
       };
       onChange([...hotspots, newHotspot]);
       setSelectedId(newHotspot.id);
       setIsPlacing(false);
     },
-    [isPlacing, hotspots, onChange],
+    [isPlacing, draggingId, hotspots, onChange, getPercent],
+  );
+
+  // Drag-to-reposition handlers
+  const handleDragStart = useCallback(
+    (e: React.MouseEvent, id: string) => {
+      e.stopPropagation();
+      e.preventDefault();
+      setDraggingId(id);
+
+      const handleMove = (ev: MouseEvent) => {
+        const pos = getPercent(ev as any);
+        if (!pos) return;
+        onChange(hotspots.map((h) => (h.id === id ? { ...h, x: pos.x, y: pos.y } : h)));
+      };
+      const handleUp = () => {
+        setDraggingId(null);
+        window.removeEventListener("mousemove", handleMove);
+        window.removeEventListener("mouseup", handleUp);
+      };
+      window.addEventListener("mousemove", handleMove);
+      window.addEventListener("mouseup", handleUp);
+    },
+    [hotspots, onChange, getPercent],
   );
 
   const updateHotspot = (id: string, patch: Partial<ImageHotspot>) => {
@@ -69,13 +103,14 @@ export default function HotspotEditor({ imageUrl, hotspots, onChange }: Props) {
         {hotspots.map((h) => (
           <div
             key={h.id}
+            onMouseDown={(e) => handleDragStart(e, h.id)}
             onClick={(e) => {
               e.stopPropagation();
               if (!isPlacing) setSelectedId(h.id);
             }}
-            className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all cursor-pointer ${
-              selectedId === h.id ? "ring-2 ring-primary z-10" : "hover:scale-125"
-            }`}
+            className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all ${
+              draggingId === h.id ? "cursor-grabbing z-20 scale-125" : "cursor-grab"
+            } ${selectedId === h.id ? "ring-2 ring-primary z-10" : "hover:scale-125"}`}
             style={{
               left: `${h.x}%`,
               top: `${h.y}%`,
@@ -83,9 +118,9 @@ export default function HotspotEditor({ imageUrl, hotspots, onChange }: Props) {
               height: h.shape === "bar-h" ? (h.size || 12) / 3 : h.shape === "bar-v" ? (h.size || 12) * 2 : h.size || 12,
               borderRadius: h.shape === "circle" ? "50%" : h.shape === "square" ? "2px" : "1px",
               backgroundColor: h.default_color || "#39FF14",
-              boxShadow: `0 0 ${(h.size || 12) * 0.8}px ${h.default_color || "#39FF14"}`,
+              boxShadow: `0 0 ${(h.size || 12) * (h.glowRadius || 1)}px ${h.default_color || "#39FF14"}`,
             }}
-            title={h.label}
+            title={`${h.label} — arraste para reposicionar`}
           />
         ))}
       </div>
@@ -103,8 +138,12 @@ export default function HotspotEditor({ imageUrl, hotspots, onChange }: Props) {
         </Button>
       </div>
 
+      <p className="text-[8px] text-muted-foreground/60 flex items-center gap-1">
+        <Move className="w-2.5 h-2.5" /> Arraste os LEDs na imagem para reposicionar
+      </p>
+
       {/* Hotspot list & editor */}
-      <ScrollArea className="max-h-[250px]">
+      <ScrollArea className="max-h-[300px]">
         <div className="space-y-1.5">
           {hotspots.map((h) => (
             <div
@@ -168,6 +207,35 @@ export default function HotspotEditor({ imageUrl, hotspots, onChange }: Props) {
                       />
                     </div>
                   </div>
+
+                  {/* Glow Radius */}
+                  <div className="space-y-1">
+                    <Label className="text-[9px] text-muted-foreground">Raio do Glow: {h.glowRadius || 1}x</Label>
+                    <Slider
+                      value={[h.glowRadius || 1]}
+                      onValueChange={([v]) => updateHotspot(h.id, { glowRadius: v })}
+                      min={1} max={5} step={0.5}
+                    />
+                  </div>
+
+                  {/* Blink on Critical */}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[9px] text-muted-foreground">Piscar em estado crítico</Label>
+                    <Switch
+                      checked={h.blinkOnCritical !== false}
+                      onCheckedChange={(v) => updateHotspot(h.id, { blinkOnCritical: v })}
+                    />
+                  </div>
+
+                  {/* Show Value Overlay */}
+                  <div className="flex items-center justify-between">
+                    <Label className="text-[9px] text-muted-foreground">Exibir valor sobre LED</Label>
+                    <Switch
+                      checked={h.showValue === true}
+                      onCheckedChange={(v) => updateHotspot(h.id, { showValue: v })}
+                    />
+                  </div>
+
                   <div className="space-y-1">
                     <Label className="text-[9px] text-muted-foreground">Cor padrão (sem match)</Label>
                     <Input

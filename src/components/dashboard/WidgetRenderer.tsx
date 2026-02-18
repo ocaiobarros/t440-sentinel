@@ -11,6 +11,7 @@ import TimeseriesWidget from "./widgets/TimeseriesWidget";
 import TableWidget from "./widgets/TableWidget";
 import TextWidget from "./widgets/TextWidget";
 import ImageMapWidget from "./widgets/ImageMapWidget";
+import HardwareMapWidget from "./widgets/HardwareMapWidget";
 import StatusWidget from "./widgets/StatusWidget";
 import ProgressWidget from "./widgets/ProgressWidget";
 import IconValueWidget from "./widgets/IconValueWidget";
@@ -118,6 +119,15 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
       case "image-map":
         return (
           <ImageMapWidget
+            imageUrl={(config?.imageUrl as string) || ""}
+            hotspots={((config?.hotspots as ImageHotspot[]) || [])}
+            cache={cache}
+            title={title}
+          />
+        );
+      case "hardware-map":
+        return (
+          <HardwareMapWidget
             imageUrl={(config?.imageUrl as string) || ""}
             hotspots={((config?.hotspots as ImageHotspot[]) || [])}
             cache={cache}
