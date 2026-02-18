@@ -31,10 +31,11 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
   const [isPanning, setIsPanning] = useState(false);
+  const [spaceHeld, setSpaceHeld] = useState(false);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
   const containerRef = useRef<HTMLDivElement>(null);
-  const imgRef = useRef<HTMLDivElement>(null);
+  const imgElRef = useRef<HTMLImageElement>(null);
 
   const selected = hotspots.find((h) => h.id === selectedId) ?? null;
 
@@ -56,10 +57,30 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
     return () => el.removeEventListener("wheel", handler);
   }, []);
 
+  // ── Spacebar hold for pan mode ──
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.code === "Space" && !e.repeat) {
+        e.preventDefault();
+        setSpaceHeld(true);
+      }
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.code === "Space") {
+        e.preventDefault();
+        setSpaceHeld(false);
+      }
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    return () => { window.removeEventListener("keydown", down); window.removeEventListener("keyup", up); };
+  }, []);
+
   // ── Keyboard nudge ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (!selectedId) return;
+      if (e.code === "Space") return; // handled above
       const step = e.shiftKey ? 0.5 : 0.1;
       let dx = 0, dy = 0;
       if (e.key === "ArrowUp") dy = -step;
@@ -84,16 +105,23 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
     return () => window.removeEventListener("keydown", handler);
   }, [selectedId]);
 
-  // ── Pan handlers ──
+  // ── Pan: left-click drag (default mode, not placing/not on hotspot) OR spacebar+click ──
   const handlePanStart = useCallback((e: React.MouseEvent) => {
-    if (isPlacing) return;
+    // Don't pan if clicking on a hotspot element
     if ((e.target as HTMLElement).closest("[data-hotspot]")) return;
-    if (e.button === 1 || (e.button === 0 && e.altKey)) {
-      e.preventDefault();
-      setIsPanning(true);
-      panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
-    }
-  }, [isPlacing, pan]);
+    
+    // Pan conditions: left-click in default mode (not placing), OR spacebar held
+    const canPan = e.button === 0 && (spaceHeld || !isPlacing);
+    if (!canPan) return;
+
+    // If not placing and not space-held, this is left-click pan (default navigation)
+    // If placing and not space-held, don't pan — let click-to-place handle it
+    if (isPlacing && !spaceHeld) return;
+
+    e.preventDefault();
+    setIsPanning(true);
+    panStart.current = { x: e.clientX, y: e.clientY, panX: pan.x, panY: pan.y };
+  }, [isPlacing, pan, spaceHeld]);
 
   useEffect(() => {
     if (!isPanning) return;
@@ -109,19 +137,23 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
     return () => { window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
   }, [isPanning]);
 
-  // ── Get % position from mouse ──
-  const getPercent = useCallback((e: React.MouseEvent<HTMLDivElement> | MouseEvent) => {
-    const rect = imgRef.current?.getBoundingClientRect();
-    if (!rect) return null;
-    const x = Math.max(0, Math.min(100, ((e.clientX - rect.left) / rect.width) * 100));
-    const y = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100));
+  // ── Get % position relative to the actual <img> element ──
+  const getPercentFromImg = useCallback((clientX: number, clientY: number) => {
+    const img = imgElRef.current;
+    if (!img) return null;
+    const rect = img.getBoundingClientRect();
+    const x = Math.max(0, Math.min(100, ((clientX - rect.left) / rect.width) * 100));
+    const y = Math.max(0, Math.min(100, ((clientY - rect.top) / rect.height) * 100));
     return { x: Math.round(x * 10) / 10, y: Math.round(y * 10) / 10 };
   }, []);
 
-  // ── Click to place ──
+  // ── Click to place (only in placing mode) ──
   const handleImageClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-    if (draggingId || !isPlacing) return;
-    const pos = getPercent(e);
+    if (draggingId || isPanning) return;
+    if (!isPlacing) return;
+    if (spaceHeld) return; // spacebar pan mode, don't place
+    
+    const pos = getPercentFromImg(e.clientX, e.clientY);
     if (!pos) return;
     const newH: ImageHotspot = {
       id: crypto.randomUUID(), x: pos.x, y: pos.y,
@@ -132,21 +164,22 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
     setHotspots((prev) => [...prev, newH]);
     setSelectedId(newH.id);
     setIsPlacing(false);
-  }, [isPlacing, draggingId, hotspots.length, getPercent]);
+  }, [isPlacing, draggingId, isPanning, spaceHeld, hotspots.length, getPercentFromImg]);
 
-  // ── Drag hotspot ──
+  // ── Drag hotspot (click on existing point) ──
   const handleDragStart = useCallback((e: React.MouseEvent, id: string) => {
+    if (spaceHeld) return; // don't drag points during pan mode
     e.stopPropagation(); e.preventDefault();
     setDraggingId(id);
     const onMove = (ev: MouseEvent) => {
-      const pos = getPercent(ev as any);
+      const pos = getPercentFromImg(ev.clientX, ev.clientY);
       if (!pos) return;
       setHotspots((prev) => prev.map((h) => (h.id === id ? { ...h, x: pos.x, y: pos.y } : h)));
     };
     const onUp = () => { setDraggingId(null); window.removeEventListener("mousemove", onMove); window.removeEventListener("mouseup", onUp); };
     window.addEventListener("mousemove", onMove);
     window.addEventListener("mouseup", onUp);
-  }, [getPercent]);
+  }, [getPercentFromImg, spaceHeld]);
 
   const updateHotspot = (id: string, patch: Partial<ImageHotspot>) => {
     setHotspots((prev) => prev.map((h) => (h.id === id ? { ...h, ...patch } : h)));
@@ -155,6 +188,13 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
   const deleteHotspot = (id: string) => {
     setHotspots((prev) => prev.filter((h) => h.id !== id));
     if (selectedId === id) setSelectedId(null);
+  };
+
+  // Determine cursor
+  const getCursor = () => {
+    if (isPanning || spaceHeld) return "cursor-grab";
+    if (isPlacing) return "cursor-crosshair";
+    return "cursor-default";
   };
 
   return (
@@ -215,15 +255,15 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
         {/* Canvas */}
         <div
           ref={containerRef}
-          className={`flex-1 overflow-hidden relative ${isPlacing ? "cursor-crosshair" : isPanning ? "cursor-grabbing" : "cursor-default"}`}
+          className={`flex-1 overflow-hidden relative ${getCursor()}`}
           onMouseDown={handlePanStart}
         >
+          {/* Transformed wrapper — only handles zoom/pan transform */}
           <div
-            ref={imgRef}
-            onClick={handleImageClick}
-            className="absolute origin-center transition-transform duration-100"
+            className="absolute transition-transform duration-100"
             style={{
               transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+              transformOrigin: "center center",
               left: "50%",
               top: "50%",
               marginLeft: "-40%",
@@ -231,61 +271,71 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
               width: "80%",
             }}
           >
-            <img src={imageUrl} alt="Device" className="w-full h-auto select-none" draggable={false} />
-            {/* Hotspot overlays */}
-            {hotspots.map((h) => {
-              const size = h.size || 12;
-              const glowMul = h.glowRadius || 1;
-              const height = h.shape === "bar-h" ? size / 3 : h.shape === "bar-v" ? size * 2 : size;
-              const radius = h.shape === "circle" ? "50%" : h.shape === "square" ? "2px" : "1px";
-              const color = h.default_color || "#39FF14";
+            {/* The image itself — used for coordinate calculations */}
+            <div className="relative" onClick={handleImageClick}>
+              <img
+                ref={imgElRef}
+                src={imageUrl}
+                alt="Device"
+                className="w-full h-auto select-none block"
+                draggable={false}
+              />
+              {/* Hotspot overlays positioned relative to image */}
+              {hotspots.map((h) => {
+                const size = h.size || 12;
+                const glowMul = h.glowRadius || 1;
+                const height = h.shape === "bar-h" ? size / 3 : h.shape === "bar-v" ? size * 2 : size;
+                const radius = h.shape === "circle" ? "50%" : h.shape === "square" ? "2px" : "1px";
+                const color = h.default_color || "#39FF14";
 
-              return (
-                <div
-                  key={h.id}
-                  data-hotspot
-                  onMouseDown={(e) => handleDragStart(e, h.id)}
-                  onClick={(e) => { e.stopPropagation(); if (!isPlacing) setSelectedId(h.id); }}
-                  className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all ${
-                    draggingId === h.id ? "cursor-grabbing z-20 scale-125" : "cursor-grab"
-                  } ${selectedId === h.id ? "ring-2 ring-primary z-10" : "hover:scale-110"}`}
-                  style={{ left: `${h.x}%`, top: `${h.y}%` }}
-                >
-                  {/* Glow */}
-                  {livePreview && (
+                return (
+                  <div
+                    key={h.id}
+                    data-hotspot
+                    onMouseDown={(e) => handleDragStart(e, h.id)}
+                    onClick={(e) => { e.stopPropagation(); if (!isPlacing) setSelectedId(h.id); }}
+                    className={`absolute transform -translate-x-1/2 -translate-y-1/2 transition-all ${
+                      draggingId === h.id ? "cursor-grabbing z-20 scale-125" : "cursor-grab"
+                    } ${selectedId === h.id ? "ring-2 ring-primary z-10" : "hover:scale-110"}`}
+                    style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                  >
+                    {/* Glow */}
+                    {livePreview && (
+                      <div
+                        className="absolute inset-0"
+                        style={{
+                          width: size, height, borderRadius: radius,
+                          boxShadow: `0 0 ${size * glowMul}px ${color}, 0 0 ${size * glowMul * 2}px ${color}50`,
+                        }}
+                      />
+                    )}
+                    {/* Core */}
                     <div
-                      className="absolute inset-0"
                       style={{
                         width: size, height, borderRadius: radius,
-                        boxShadow: `0 0 ${size * glowMul}px ${color}, 0 0 ${size * glowMul * 2}px ${color}50`,
+                        backgroundColor: color,
+                        boxShadow: livePreview ? `inset 0 0 ${size / 3}px rgba(255,255,255,0.3)` : undefined,
+                        border: !livePreview ? "1px solid hsl(var(--primary))" : undefined,
                       }}
                     />
-                  )}
-                  {/* Core */}
-                  <div
-                    style={{
-                      width: size, height, borderRadius: radius,
-                      backgroundColor: color,
-                      boxShadow: livePreview ? `inset 0 0 ${size / 3}px rgba(255,255,255,0.3)` : undefined,
-                      border: !livePreview ? "1px solid hsl(var(--primary))" : undefined,
-                    }}
-                  />
-                  {/* Label */}
-                  <div className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none text-[8px] font-mono text-muted-foreground"
-                    style={{ top: height + 3 }}
-                  >
-                    {h.label}
+                    {/* Label */}
+                    <div className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none text-[8px] font-mono text-muted-foreground"
+                      style={{ top: height + 3 }}
+                    >
+                      {h.label}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
+                );
+              })}
+            </div>
           </div>
 
           {/* Help text */}
-          <div className="absolute bottom-3 left-3 text-[9px] text-muted-foreground/60 flex flex-col gap-0.5">
-            <span><Move className="w-2.5 h-2.5 inline mr-1" />Arraste LEDs para reposicionar</span>
+          <div className="absolute bottom-3 left-3 text-[9px] text-muted-foreground/60 flex flex-col gap-0.5 pointer-events-none">
+            <span><Move className="w-2.5 h-2.5 inline mr-1" />Arraste para navegar • Scroll = Zoom</span>
+            <span>Espaço+Drag = Pan alternativo</span>
             <span>⬆⬇⬅➡ Setas = nudge 0.1% (Shift = 0.5%)</span>
-            <span>Alt+Drag ou Middle-click = Pan • Scroll = Zoom</span>
+            <span>Use "Adicionar LED" para posicionar novos pontos</span>
           </div>
         </div>
 
