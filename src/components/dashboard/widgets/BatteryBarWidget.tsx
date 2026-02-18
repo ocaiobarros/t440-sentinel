@@ -97,14 +97,12 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
   // Read the status item from the cache
   const statusEntry = runtimeEnabled && runtimeStatusKey ? cache.get(runtimeStatusKey) : undefined;
   const statusRaw = statusEntry ? extractRawValue(statusEntry.data) : null;
+
+  // Determine if actively discharging (strict comparison)
   const isDischarging = useMemo(() => {
     if (!runtimeEnabled) return false;
-    // No status data yet — treat as discharging for preview placeholder
-    if (statusRaw === null || statusRaw === undefined) return true;
-    const normalized = String(statusRaw).trim();
-    const target = runtimeDischargingValue.trim();
-    // Strict comparison (case-sensitive, exact match)
-    return normalized === target;
+    if (statusRaw === null || statusRaw === undefined) return true; // no data → assume discharging for preview
+    return String(statusRaw).trim() === runtimeDischargingValue.trim();
   }, [runtimeEnabled, statusRaw, runtimeDischargingValue]);
 
   // Read the runtime/time-remaining item from the cache
@@ -114,13 +112,13 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
     if (runtimeRaw !== null && runtimeRaw !== undefined) {
       return formatDynamicValue(runtimeRaw, "Uptime", { zabbixUnit: "s", decimals: 0 });
     }
-    // Placeholder when runtime mode is on but no data yet
-    if (runtimeEnabled) return { display: "--", suffix: "h --m", numericValue: null };
-    return null;
-  }, [runtimeRaw, runtimeEnabled]);
+    // Placeholder for preview
+    return { display: "--", suffix: "h --m", numericValue: null };
+  }, [runtimeRaw]);
 
-  // Show runtime display instead of bar when discharging
-  const showRuntime = isDischarging && runtimeFormatted !== null;
+  // KEY FIX: If runtimeEnabled is ON, ALWAYS show runtime layout
+  // (either real data when discharging, or placeholder for preview)
+  const showRuntime = runtimeEnabled;
 
   const pct = useMemo(() => {
     if (maxVoltage <= minVoltage) return 0;
