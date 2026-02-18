@@ -98,9 +98,12 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
   const statusEntry = runtimeEnabled && runtimeStatusKey ? cache.get(runtimeStatusKey) : undefined;
   const statusRaw = statusEntry ? extractRawValue(statusEntry.data) : null;
   const isDischarging = useMemo(() => {
-    if (!runtimeEnabled || !statusRaw) return false;
-    const normalized = String(statusRaw).trim().toLowerCase();
-    const target = runtimeDischargingValue.trim().toLowerCase();
+    if (!runtimeEnabled) return false;
+    // No status data yet — treat as discharging for preview placeholder
+    if (statusRaw === null || statusRaw === undefined) return true;
+    const normalized = String(statusRaw).trim();
+    const target = runtimeDischargingValue.trim();
+    // Strict comparison (case-sensitive, exact match)
     return normalized === target;
   }, [runtimeEnabled, statusRaw, runtimeDischargingValue]);
 
@@ -108,12 +111,16 @@ function BatteryBarWidgetInner({ telemetryKey, title, cache, config, compact }: 
   const runtimeEntry = runtimeEnabled && runtimeTimeKey ? cache.get(runtimeTimeKey) : undefined;
   const runtimeRaw = runtimeEntry ? extractRawValue(runtimeEntry.data) : null;
   const runtimeFormatted = useMemo(() => {
-    if (!runtimeRaw) return null;
-    return formatDynamicValue(runtimeRaw, "Uptime", { zabbixUnit: "s", decimals: 0 });
-  }, [runtimeRaw]);
+    if (runtimeRaw !== null && runtimeRaw !== undefined) {
+      return formatDynamicValue(runtimeRaw, "Uptime", { zabbixUnit: "s", decimals: 0 });
+    }
+    // Placeholder when runtime mode is on but no data yet
+    if (runtimeEnabled) return { display: "--", suffix: "h --m", numericValue: null };
+    return null;
+  }, [runtimeRaw, runtimeEnabled]);
 
   // Show runtime display instead of bar when discharging
-  const showRuntime = isDischarging && runtimeFormatted;
+  const showRuntime = isDischarging && runtimeFormatted !== null;
 
   const pct = useMemo(() => {
     if (maxVoltage <= minVoltage) return 0;
