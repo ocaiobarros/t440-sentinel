@@ -26,15 +26,44 @@ const INFRA_ICONS = [
   { id: "mdi:transit-connection-variant", label: "Fibra Óptica", tags: ["fiber", "fibra", "optica", "cable"] },
   { id: "mdi:signal-variant", label: "Sinal RF", tags: ["signal", "rf", "radio", "antena", "antenna"] },
   
-  // Vendors
+  // Vendors – Networking
   { id: "simple-icons:cisco", label: "Cisco", tags: ["cisco", "switch", "router"] },
   { id: "simple-icons:huawei", label: "Huawei", tags: ["huawei", "switch", "olt", "onu"] },
   { id: "simple-icons:mikrotik", label: "MikroTik", tags: ["mikrotik", "routeros", "rb", "ccr"] },
+  { id: "simple-icons:ubiquiti", label: "Ubiquiti", tags: ["ubiquiti", "unifi", "edgemax", "uisp"] },
+  { id: "mdi:server-network-outline", label: "Datacom", tags: ["datacom", "switch", "dm", "dgs", "dms", "olt", "telecom"] },
+  { id: "simple-icons:fortinet", label: "Fortinet", tags: ["fortinet", "fortigate", "firewall", "vpn", "utm"] },
+  { id: "simple-icons:sophos", label: "Sophos", tags: ["sophos", "firewall", "xg", "sg", "utm"] },
+  { id: "simple-icons:sonicwall", label: "SonicWall", tags: ["sonicwall", "firewall", "tz", "nsa"] },
+  { id: "simple-icons:pfsense", label: "pfSense", tags: ["pfsense", "firewall", "opnsense", "freebsd"] },
+
+  // Vendors – Hardware
   { id: "simple-icons:dell", label: "Dell", tags: ["dell", "server", "servidor", "idrac", "poweredge"] },
   { id: "simple-icons:hp", label: "HP / HPE", tags: ["hp", "hpe", "proliant", "ilo", "server"] },
-  { id: "simple-icons:ubiquiti", label: "Ubiquiti", tags: ["ubiquiti", "unifi", "edgemax", "uisp"] },
+
+  // OS & Distros
+  { id: "simple-icons:linux", label: "Linux", tags: ["linux", "tux", "kernel", "os"] },
+  { id: "simple-icons:debian", label: "Debian", tags: ["debian", "linux", "distro", "apt"] },
+  { id: "simple-icons:ubuntu", label: "Ubuntu", tags: ["ubuntu", "linux", "distro", "canonical"] },
+  { id: "simple-icons:gnu", label: "GNU", tags: ["gnu", "gpl", "free", "software"] },
+  { id: "simple-icons:windows", label: "Windows", tags: ["windows", "microsoft", "server", "ad"] },
+
+  // Virtualization & Containers
+  { id: "simple-icons:proxmox", label: "Proxmox", tags: ["proxmox", "pve", "vm", "virtual", "lxc"] },
   { id: "simple-icons:vmware", label: "VMware", tags: ["vmware", "esxi", "vcenter", "virtual"] },
-  { id: "mdi:server-network-outline", label: "Datacom", tags: ["datacom", "switch", "dm", "dgs", "dms", "olt", "telecom"] },
+  { id: "simple-icons:docker", label: "Docker", tags: ["docker", "container", "compose", "swarm"] },
+
+  // Web & Database
+  { id: "simple-icons:nginx", label: "Nginx", tags: ["nginx", "web", "proxy", "reverse"] },
+  { id: "simple-icons:apache", label: "Apache", tags: ["apache", "httpd", "web", "server"] },
+  { id: "simple-icons:postgresql", label: "PostgreSQL", tags: ["postgresql", "postgres", "sql", "db", "banco"] },
+  { id: "simple-icons:mysql", label: "MySQL", tags: ["mysql", "mariadb", "sql", "db", "banco"] },
+  { id: "simple-icons:php", label: "PHP", tags: ["php", "laravel", "web", "backend"] },
+  { id: "simple-icons:python", label: "Python", tags: ["python", "django", "flask", "script"] },
+
+  // Monitoring
+  { id: "simple-icons:zabbix", label: "Zabbix", tags: ["zabbix", "monitor", "snmp", "agente"] },
+  { id: "simple-icons:grafana", label: "Grafana", tags: ["grafana", "dashboard", "monitor", "graph"] },
   
   // Servers
   { id: "mdi:server", label: "Servidor", tags: ["server", "servidor", "host", "bare", "metal"] },
