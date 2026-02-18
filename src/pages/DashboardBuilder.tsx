@@ -189,43 +189,27 @@ export default function DashboardBuilder() {
   // CRITICAL: We ONLY update widget positions on drag/resize STOP events.
   // We do NOT use onLayoutChange because it fires on every width recalculation
   // (e.g. when sidebar opens/closes), which would corrupt saved widget sizes.
-  // ─── Click vs Drag detection via native DOM listeners on canvas ───
-  // React synthetic events are unreliable with RGL because RGL intercepts
-  // mousedown in bubble phase. Instead, we attach native capture-phase
-  // listeners directly to the canvas element.
-  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
-  const mouseDownWidgetRef = useRef<string | null>(null);
+  // ─── Click vs Drag detection ───
+  // RGL fires onDragStart on mousedown (before click), so we can't use it
+  // to distinguish clicks from drags. Instead we use onDrag which only fires
+  // when actual movement occurs.
+  const isDraggingRef = useRef(false);
 
-  // Use React capture-phase handlers directly on the canvas div
-  // instead of useEffect-based native listeners, which fail when
-  // navigating via React Router without a full page reload.
-  const handleCanvasMouseDown = useCallback((e: React.MouseEvent) => {
-    const target = e.target as HTMLElement;
-    const widgetEl = target.closest("[data-widget-id]") as HTMLElement | null;
-    if (widgetEl) {
-      mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
-      mouseDownWidgetRef.current = widgetEl.getAttribute("data-widget-id");
-    } else {
-      mouseDownPosRef.current = null;
-      mouseDownWidgetRef.current = null;
-    }
+  const handleDragMove = useCallback(() => {
+    isDraggingRef.current = true;
   }, []);
 
-  const handleCanvasClick = useCallback((e: React.MouseEvent) => {
-    const down = mouseDownPosRef.current;
-    const widgetId = mouseDownWidgetRef.current;
-    if (!down || !widgetId) return;
-    const dist = Math.abs(e.clientX - down.x) + Math.abs(e.clientY - down.y);
-    if (dist > 5) return;
-    setSelectedWidgetId(widgetId);
-    setSidebarMode("config");
-    setSidebarOpen(true);
-  }, []);
-
-  const handleDragResizeStart = useCallback(() => {
-    
-    // Do NOT null mouseDownPosRef here — RGL fires this on mousedown,
-    // before the click event, which would prevent click detection.
+  const handleWidgetClick = useCallback((widgetId: string) => {
+    // Use setTimeout to ensure this runs after RGL's onDrag
+    setTimeout(() => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        return;
+      }
+      setSelectedWidgetId(widgetId);
+      setSidebarMode("config");
+      setSidebarOpen(true);
+    }, 0);
   }, []);
 
   const handleDragStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
@@ -463,7 +447,7 @@ export default function DashboardBuilder() {
             />
           )}
 
-          <div ref={canvasRef} className="p-4 relative z-10" style={{ width: '100%' }} onMouseDownCapture={handleCanvasMouseDown} onClickCapture={handleCanvasClick}>
+          <div ref={canvasRef} className="p-4 relative z-10" style={{ width: '100%' }}>
             {config.widgets.length === 0 ? (
               <div className="flex items-center justify-center min-h-[50vh]">
                 <motion.div
@@ -485,9 +469,10 @@ export default function DashboardBuilder() {
                 breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
                 cols={{ lg: config.settings.cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
                 rowHeight={config.settings.rowHeight}
-                onDragStart={handleDragResizeStart}
+                draggableHandle=".widget-drag-handle"
+                onDrag={handleDragMove}
                 onDragStop={handleDragStop}
-                onResizeStart={handleDragResizeStart}
+                onResize={handleDragMove}
                 onResizeStop={handleResizeStop}
                 isDraggable
                 isResizable
@@ -501,7 +486,7 @@ export default function DashboardBuilder() {
                     <WidgetPreviewCard
                       widget={widget}
                       isSelected={selectedWidgetId === widget.id}
-                      onClick={() => {}}
+                      onClick={() => handleWidgetClick(widget.id)}
                     />
                   </div>
                 ))}

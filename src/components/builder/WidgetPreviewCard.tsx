@@ -69,7 +69,7 @@ export default function WidgetPreviewCard({ widget, isSelected, onClick, isPrevi
       }}
     >
       {/* Title bar */}
-      <div className="flex items-center gap-1.5 mb-1" style={{ padding: `${(s.padding ?? 16) * 0.5}px ${s.padding ?? 16}px 0` }}>
+      <div className="flex items-center gap-1.5 mb-1 widget-drag-handle cursor-grab active:cursor-grabbing" style={{ padding: `${(s.padding ?? 16) * 0.5}px ${s.padding ?? 16}px 0` }}>
         {s.icon && (
           <DynamicIcon
             name={s.icon}
