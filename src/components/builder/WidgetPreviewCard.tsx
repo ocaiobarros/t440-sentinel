@@ -1,6 +1,7 @@
 import React from "react";
-import type { WidgetConfig, WidgetStyle } from "@/types/builder";
+import type { WidgetConfig } from "@/types/builder";
 import DynamicIcon from "./DynamicIcon";
+import { buildWidgetCSS, getGlassClass } from "@/lib/widget-style-utils";
 
 interface Props {
   widget: WidgetConfig;
@@ -9,55 +10,14 @@ interface Props {
   isPreview?: boolean;
 }
 
-/** Build inline CSS from widget style config */
-function buildWidgetCSS(style: WidgetStyle): React.CSSProperties {
-  const css: React.CSSProperties = {};
-
-  if (style.bgGradient) {
-    css.background = style.bgGradient;
-  } else if (style.bg) {
-    css.backgroundColor = style.bg;
-  }
-
-  if (style.borderColor) css.borderColor = style.borderColor;
-  if (style.borderWidth !== undefined) css.borderWidth = style.borderWidth;
-  if (style.borderRadius !== undefined) css.borderRadius = style.borderRadius;
-  if (style.opacity !== undefined) css.opacity = style.opacity / 100;
-  if (style.padding !== undefined) css.padding = style.padding;
-  if (style.textColor) css.color = style.textColor;
-
-  // Glow box-shadow
-  if (style.glow && style.glow !== "none") {
-    const glowColors: Record<string, string> = {
-      green: "110, 100%, 54%",
-      red: "0, 100%, 40%",
-      amber: "43, 100%, 50%",
-      blue: "210, 100%, 60%",
-      cyan: "180, 100%, 50%",
-    };
-    const hsl = style.glow === "custom" && style.glowColor
-      ? style.glowColor
-      : glowColors[style.glow]
-        ? `hsl(${glowColors[style.glow]})`
-        : undefined;
-
-    if (hsl) {
-      const c = style.glow === "custom" ? hsl : hsl;
-      css.boxShadow = `0 0 8px ${c}4D, 0 0 20px ${c}26, inset 0 0 8px ${c}0D`;
-    }
-  }
-
-  return css;
-}
-
 /** Use themed primary color, fallback to explicit style color */
 const PRIMARY_CSS = "hsl(var(--primary))";
 
 const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSelected, onClick, isPreview }: Props) {
   const s = widget.style;
-  const inlineCSS = buildWidgetCSS(s);
+  const inlineCSS = buildWidgetCSS(s as any);
 
-  const glassClass = s.glass !== false ? "glass-card" : "";
+  const glassClass = getGlassClass(s as any);
   const selectedClass = isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : "";
 
   return (

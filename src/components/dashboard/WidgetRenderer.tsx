@@ -1,8 +1,9 @@
-import { memo, useEffect, useRef } from "react";
+import { memo, useEffect, useRef, useMemo } from "react";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { ImageHotspot } from "@/types/builder";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
+import { buildWidgetCSS, getGlassClass } from "@/lib/widget-style-utils";
 import WidgetSkeleton from "./widgets/WidgetSkeleton";
 import StatWidget from "./widgets/StatWidget";
 import GaugeWidget from "./widgets/GaugeWidget";
@@ -34,6 +35,11 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
   const entry = cache.get(telemetryKey);
   const colorMap = config?.color_map as Record<string, unknown> | undefined;
 
+  // Build inline styles from the saved style config (must be before early returns)
+  const styleConfig = (config?.style as Record<string, unknown>) || {};
+  const customCSS = useMemo(() => buildWidgetCSS(styleConfig as any), [styleConfig]);
+  const glassClass = getGlassClass(styleConfig as any);
+
   useEffect(() => {
     if (!entry || !colorMap || !widgetId || !onCritical) return;
     const rawValue = extractRawValue(entry.data);
@@ -54,7 +60,6 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
   const containStyle: React.CSSProperties = { contain: "layout style paint" };
 
   // Show skeleton if no data yet for data-driven widgets
-  // For multi-series timeseries, data lives under individual item keys, not the main telemetryKey
   const needsData = !["label", "text"].includes(widgetType);
   const hasMultiSeriesData = (() => {
     if (widgetType !== "timeseries") return false;
@@ -67,8 +72,7 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
     return <div ref={containerRef} className="h-full"><WidgetSkeleton type={widgetType} /></div>;
   }
 
-  // When off-screen: render a lightweight frozen placeholder instead of live charts
-  // Critical alerts still process in background (useEffect above), but no expensive SVG rendering
+  // When off-screen: render a lightweight frozen placeholder
   if (!isVisible) {
     return (
       <div ref={containerRef} className={wrapperClass} style={containStyle}>
@@ -126,7 +130,23 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
     }
   })();
 
-  return <div ref={containerRef} className={wrapperClass} style={containStyle}>{inner}</div>;
+  // Apply the same style envelope used in the Builder's WidgetPreviewCard
+  const hasCustomStyle = Object.keys(styleConfig).length > 0;
+
+  return (
+    <div ref={containerRef} className={wrapperClass} style={containStyle}>
+      {hasCustomStyle ? (
+        <div
+          className={`h-full w-full rounded-lg border border-border/50 overflow-hidden ${glassClass}`}
+          style={{ ...customCSS, borderStyle: "solid" }}
+        >
+          {inner}
+        </div>
+      ) : (
+        inner
+      )}
+    </div>
+  );
 }
 
 const WidgetRenderer = memo(WidgetRendererInner);

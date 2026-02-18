@@ -312,8 +312,8 @@ export default function DashboardBuilder() {
     y: w.y,
     w: w.w,
     h: w.h,
-    minW: w.minW || 2,
-    minH: w.minH || 2,
+    minW: 1,
+    minH: 1,
   }));
 
   const isLightTheme = (config.settings.category || "") === "cameras";
