@@ -3,6 +3,7 @@ import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryGaugeData } from "@/types/telemetry";
 import { extractRawValue } from "@/lib/telemetry-utils";
+import { formatDynamicValue } from "@/lib/format-utils";
 import { useMemo } from "react";
 
 interface Props {
@@ -85,6 +86,16 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
   const pct = Math.min(100, Math.max(0, ((value - min) / (max - min)) * 100));
   const pct01 = pct / 100;
 
+  // ── Auto-suffix formatting ──
+  const manualUnit = (extra.unit as string) || (config?.unit as string) || undefined;
+  const formatted = useMemo(() => {
+    return formatDynamicValue(value, title, {
+      manualUnit,
+      zabbixUnit: gauge?.unit,
+      decimals,
+    });
+  }, [value, title, manualUnit, gauge?.unit, decimals]);
+
   // Arc geometry — 180° semicircle
   const R = 42;
   const STROKE = 7;
@@ -109,7 +120,6 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
   const gradId = `gg-${telemetryKey}`;
   const glowId = `gg-glow-${telemetryKey}`;
 
-  // Needle position on the arc
   const needleCx = useTransform(springPct, (v) => {
     const angle = Math.PI - (v / 100) * Math.PI;
     return CX + R * Math.cos(angle);
@@ -120,6 +130,10 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
   });
 
   const arcPath = `M ${CX - R} ${CY} A ${R} ${R} 0 0 1 ${CX + R} ${CY}`;
+
+  // Suffix font size proportional to value font
+  const valFs = valueFontSize ? Math.min(valueFontSize, 16) : 13;
+  const suffixFs = valFs * 0.65;
 
   return (
     <motion.div
@@ -139,13 +153,11 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
       {/* SVG Gauge */}
       <svg viewBox="0 0 100 64" className="w-full max-w-[140px]">
         <defs>
-          {/* Gradient for the arc */}
           <linearGradient id={gradId} x1="0%" y1="0%" x2="100%" y2="0%">
             {gradStops.map((s, i) => (
               <stop key={i} offset={s.offset} stopColor={s.color} />
             ))}
           </linearGradient>
-          {/* Glow filter for the foreground arc */}
           <filter id={glowId} x="-30%" y="-30%" width="160%" height="160%">
             <feGaussianBlur in="SourceGraphic" stdDeviation="2.5" result="blur" />
             <feMerge>
@@ -155,14 +167,8 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
           </filter>
         </defs>
 
-        {/* Background arc — dim track */}
-        <path
-          d={arcPath}
-          fill="none"
-          stroke="hsl(var(--muted) / 0.35)"
-          strokeWidth={STROKE}
-          strokeLinecap="round"
-        />
+        {/* Background arc */}
+        <path d={arcPath} fill="none" stroke="hsl(var(--muted) / 0.35)" strokeWidth={STROKE} strokeLinecap="round" />
 
         {/* Foreground arc — gradient + glow */}
         <motion.path
@@ -178,32 +184,20 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
 
         {/* Needle dot */}
         <motion.circle
-          cx={needleCx}
-          cy={needleCy}
-          r="4"
-          fill={currentColor}
+          cx={needleCx} cy={needleCy} r="4" fill={currentColor}
           style={{
             filter: `drop-shadow(0 0 6px ${currentColor}) drop-shadow(0 0 12px ${rgba(currentRGB, 0.5)})`,
             transition: "fill 0.6s ease",
           }}
         />
-        {/* Needle inner highlight */}
-        <motion.circle
-          cx={needleCx}
-          cy={needleCy}
-          r="1.8"
-          fill="white"
-          opacity={0.7}
-        />
+        <motion.circle cx={needleCx} cy={needleCy} r="1.8" fill="white" opacity={0.7} />
 
-        {/* Value text */}
+        {/* Value + suffix */}
         <text
-          x={CX}
-          y={CY - 4}
-          textAnchor="middle"
-          dominantBaseline="middle"
+          x={CX} y={CY - 4}
+          textAnchor="middle" dominantBaseline="middle"
           fill={displayColor}
-          fontSize={valueFontSize ? Math.min(valueFontSize, 16) : 13}
+          fontSize={valFs}
           fontFamily={valueFont}
           fontWeight="bold"
           style={{
@@ -211,20 +205,16 @@ export default function GaugeWidget({ telemetryKey, title, cache, config, compac
             filter: `drop-shadow(0 0 10px ${rgba(currentRGB, 0.6)})`,
           }}
         >
-          {data ? value.toFixed(decimals) : "—"}
+          {data ? formatted.display : "—"}
+          {data && formatted.suffix && (
+            <tspan fontSize={suffixFs} opacity={0.85}>{formatted.suffix}</tspan>
+          )}
         </text>
 
         {/* Min / Max labels */}
         <text x={CX - R} y={CY + 9} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4.5" fontFamily={valueFont}>{min}</text>
         <text x={CX + R} y={CY + 9} textAnchor="middle" fill="hsl(var(--muted-foreground))" fontSize="4.5" fontFamily={valueFont}>{max}</text>
       </svg>
-
-      {/* Unit label */}
-      {gauge?.unit && (
-        <span className="text-[10px] text-muted-foreground -mt-1" style={{ fontFamily: valueFont }}>
-          {gauge.unit}
-        </span>
-      )}
     </motion.div>
   );
 }

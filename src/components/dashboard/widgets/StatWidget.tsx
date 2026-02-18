@@ -5,6 +5,7 @@ import type { TelemetryStatData } from "@/types/telemetry";
 import { TrendingUp, TrendingDown, Minus } from "lucide-react";
 import { getThermalStyle, isThermalMetric } from "@/lib/thermal-scale";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
+import { formatDynamicValue } from "@/lib/format-utils";
 import { useMemo } from "react";
 
 interface Props {
@@ -49,6 +50,20 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
   const labelColor = styleConfig.labelColor as string | undefined;
   const titleFont = styleConfig.titleFont as string | undefined;
 
+  // ── Auto-suffix formatting ──
+  const manualUnit = (extra.unit as string) || (config?.unit as string) || undefined;
+  const decimals = (extra.decimals as number) ?? 2;
+  const formatted = useMemo(() => {
+    if (hasMapping) {
+      return formatDynamicValue(mappedStatus.label, title, { isMappedLabel: true });
+    }
+    return formatDynamicValue(
+      stat?.value ?? rawValue,
+      title,
+      { manualUnit, zabbixUnit: stat?.unit, decimals },
+    );
+  }, [hasMapping, mappedStatus.label, stat?.value, rawValue, title, manualUnit, stat?.unit, decimals]);
+
   // Final value color: color_map > builder valueColor > thermal > default
   const finalValueStyle = useMemo((): React.CSSProperties => {
     if (hasMapping) {
@@ -69,15 +84,7 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
     return { textShadow: '0 0 8px hsl(var(--primary) / 0.6), 0 0 24px hsl(var(--primary) / 0.25)' };
   }, [hasMapping, mappedStatus.color, thermalStyle, valueColor]);
 
-  // Display: mapped label > formatted stat > raw
-  const displayValue = useMemo(() => {
-    if (hasMapping) return mappedStatus.label;
-    if (stat && typeof stat.value === "number") {
-      return stat.value.toLocaleString(undefined, { maximumFractionDigits: 2 });
-    }
-    if (stat) return stat.value;
-    return null;
-  }, [hasMapping, mappedStatus.label, stat]);
+  const hasData = formatted.display !== "—";
 
   return (
     <motion.div
@@ -94,7 +101,7 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
       >
         {title}
       </span>
-      {displayValue !== null ? (
+      {hasData ? (
         <>
           <span
             className={`font-bold font-mono-data ${!hasMapping && !thermalStyle && !valueColor ? "text-primary" : ""}`}
@@ -104,10 +111,12 @@ export default function StatWidget({ telemetryKey, title, cache, config, compact
               fontSize: valueFontSize ? `${valueFontSize}px` : (compact ? "18px" : "24px"),
             }}
           >
-            {displayValue}
+            {formatted.display}
+            {formatted.suffix && (
+              <span style={{ fontSize: "0.7em", opacity: 0.9 }}>{formatted.suffix}</span>
+            )}
           </span>
           <div className="flex items-center gap-2 text-[10px] text-muted-foreground">
-            {!hasMapping && stat?.unit && <span>{stat.unit}</span>}
             {trendIcon}
           </div>
         </>
