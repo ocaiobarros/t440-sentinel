@@ -9,7 +9,7 @@ import { motion } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
 import { useAudioAlert } from "@/hooks/useAudioAlert";
-import { Responsive, type Layout } from "react-grid-layout";
+import ReactGridLayout, { type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 
@@ -320,11 +320,10 @@ function ViewGrid({
   return (
     <div ref={containerRef} style={{ width: '100%' }}>
       {containerWidth > 0 && (
-        <Responsive
+        <ReactGridLayout
           width={containerWidth}
-          layouts={{ lg: gridLayout }}
-          breakpoints={{ lg: 0 }}
-          cols={{ lg: cols }}
+          layout={gridLayout}
+          cols={cols}
           rowHeight={rowHeight}
           isDraggable={false}
           isResizable={false}
@@ -356,7 +355,7 @@ function ViewGrid({
               </div>
             );
           })}
-        </Responsive>
+        </ReactGridLayout>
       )}
     </div>
   );
