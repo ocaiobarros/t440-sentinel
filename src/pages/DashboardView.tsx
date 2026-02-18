@@ -322,12 +322,13 @@ function ViewGrid({
         <Responsive
           width={containerWidth}
           layouts={{ lg: gridLayout }}
-          breakpoints={{ lg: 1200, md: 996, sm: 768, xs: 480, xxs: 0 }}
-          cols={{ lg: cols, md: 8, sm: 6, xs: 4, xxs: 2 }}
+          breakpoints={{ lg: 0 }}
+          cols={{ lg: cols }}
           rowHeight={rowHeight}
           isDraggable={false}
           isResizable={false}
           compactType={null}
+          preventCollision
           margin={GRID_MARGIN}
           containerPadding={GRID_CONTAINER_PADDING}
           useCSSTransforms
