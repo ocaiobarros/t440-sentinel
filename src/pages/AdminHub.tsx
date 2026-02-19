@@ -749,6 +749,26 @@ export default function AdminHub() {
 
             {/* ─── CONNECTIONS TAB ─── */}
             <TabsContent value="connections" className="space-y-6">
+              {/* Tenant selector for super admin */}
+              {isSuperAdmin && tenants.length > 1 && (
+                <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-4">
+                  <div className="flex items-center gap-3 flex-wrap">
+                    <Building2 className="w-4 h-4 text-primary" />
+                    <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Configurando para:</span>
+                    <Select value={selectedTenantId ?? ""} onValueChange={setSelectedTenantId}>
+                      <SelectTrigger className="w-52 h-9 bg-muted/50 border-border text-xs">
+                        <SelectValue placeholder="Selecione o tenant" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {tenants.map((t) => (
+                          <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[10px] text-muted-foreground">As conexões criadas serão vinculadas a esta organização.</p>
+                  </div>
+                </section>
+              )}
               {/* RMS Section */}
               <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-6">
                 <div className="flex items-center justify-between mb-4">
