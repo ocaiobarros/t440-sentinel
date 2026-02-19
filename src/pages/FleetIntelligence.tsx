@@ -302,6 +302,56 @@ export default function FleetIntelligence() {
               />
             </div>
 
+            {/* AI Insight Banner */}
+            {(() => {
+              const totalWaste = bottom10.reduce((sum, d) => {
+                const model = d.equipment_name?.split(/[\s-]+/).slice(0, 3).join(" ") || "";
+                const cluster = summary.model_clusters.find((c) => c.model === model);
+                const modelAvg = cluster?.avg_km_l || summary.fleet_avg_km_l;
+                if (d.avg_km_l >= modelAvg || d.total_liters <= 0) return sum;
+                const idealLiters = d.total_km / modelAvg;
+                const wastedLiters = d.total_liters - idealLiters;
+                return sum + wastedLiters * (d.avg_price_per_liter > 0 ? d.avg_price_per_liter : 5.5);
+              }, 0);
+              if (totalWaste <= 0) return null;
+              return (
+                <div
+                  className="glass-card rounded-xl p-4 flex items-center gap-4 relative overflow-hidden"
+                  style={{ borderColor: "hsl(280 80% 60% / 0.3)", background: "hsl(280 40% 8% / 0.5)" }}
+                >
+                  <div
+                    className="absolute inset-0 opacity-30"
+                    style={{ background: "linear-gradient(90deg, hsl(280 80% 60% / 0.08), transparent 60%)" }}
+                  />
+                  <div className="relative z-10 flex items-center gap-4 w-full">
+                    <div
+                      className="w-10 h-10 rounded-lg flex items-center justify-center shrink-0"
+                      style={{ background: "hsl(280 80% 60% / 0.15)", border: "1px solid hsl(280 80% 60% / 0.3)" }}
+                    >
+                      <TrendingUp className="w-5 h-5" style={{ color: "hsl(280 80% 60%)" }} />
+                    </div>
+                    <div className="flex-1">
+                      <p className="text-[10px] uppercase tracking-[0.15em] text-muted-foreground font-['Orbitron'] mb-1">
+                        🧠 Insight de IA — Potencial de Economia
+                      </p>
+                      <p className="text-sm">
+                        <span className="font-['JetBrains_Mono'] font-bold" style={{ color: "hsl(0 90% 50%)" }}>
+                          {formatCurrency(totalWaste)}
+                        </span>
+                        <span className="text-muted-foreground ml-2">
+                          desperdiçados por ineficiência no período. Meta: reduzir em{" "}
+                          <span className="font-['JetBrains_Mono'] font-bold" style={{ color: "hsl(142 100% 50%)" }}>
+                            {formatCurrency(totalWaste * 0.3)}
+                          </span>{" "}
+                          com treinamento direcionado.
+                        </span>
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+
             {/* Ranking Table */}
             <div className="glass-card rounded-xl overflow-hidden" style={{ borderColor: "hsl(186 100% 50% / 0.15)" }}>
               <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(222 15% 14% / 0.5)" }}>
@@ -402,7 +452,7 @@ export default function FleetIntelligence() {
                 <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(222 15% 14% / 0.5)" }}>
                   <h2 className="font-['Orbitron'] text-sm tracking-wider flex items-center gap-2" style={{ color: "hsl(0 90% 50%)" }}>
                     <ShieldAlert className="w-4 h-4" />
-                    BOTTOM 10 — TREINAMENTO
+                    TOP 10 — NÃO EFICIÊNCIA
                   </h2>
                   <span className="text-[10px] text-muted-foreground font-['JetBrains_Mono']">
                     Ação imediata recomendada
@@ -413,7 +463,7 @@ export default function FleetIntelligence() {
                   <table className="w-full text-xs">
                     <thead>
                       <tr style={{ background: "hsl(222 15% 8% / 0.6)" }}>
-                        {["#", "Motorista", "Modelo", "Placa", "Hodômetro", "KM", "Litros", "Preço/L", "Gasto (R$)", "KM/L", "Status"].map((h) => (
+                        {["#", "Motorista", "Modelo", "Placa", "Hodômetro", "KM", "Litros", "Preço/L", "Gasto (R$)", "Impacto (R$)", "KM/L", "Status"].map((h) => (
                           <th key={h} className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-['Orbitron'] font-normal">
                             {h}
                           </th>
@@ -426,6 +476,12 @@ export default function FleetIntelligence() {
                         const rowStyle: React.CSSProperties = isWorst
                           ? { background: "hsl(0 90% 50% / 0.06)", boxShadow: "inset 0 0 30px hsl(0 90% 50% / 0.04)" }
                           : {};
+                        const model = d.equipment_name?.split(/[\s-]+/).slice(0, 3).join(" ") || "";
+                        const cluster = summary.model_clusters.find((c) => c.model === model);
+                        const modelAvg = cluster?.avg_km_l || summary.fleet_avg_km_l;
+                        const idealLiters = modelAvg > 0 ? d.total_km / modelAvg : d.total_liters;
+                        const wastedLiters = Math.max(0, d.total_liters - idealLiters);
+                        const financialImpact = wastedLiters * (d.avg_price_per_liter > 0 ? d.avg_price_per_liter : 5.5);
 
                         return (
                           <tr
@@ -446,6 +502,7 @@ export default function FleetIntelligence() {
                             <td className="px-4 py-3 font-['JetBrains_Mono']">{formatNumber(d.total_liters)}</td>
                             <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.avg_price_per_liter > 0 ? formatDecimal(d.avg_price_per_liter) : "—"}</td>
                             <td className="px-4 py-3 font-['JetBrains_Mono']" style={{ color: "hsl(280 80% 60%)" }}>{d.total_cost > 0 ? formatCurrency(d.total_cost) : "—"}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono'] font-bold" style={{ color: "hsl(0 90% 50%)" }}>{financialImpact > 0 ? formatCurrency(financialImpact) : "—"}</td>
                             <td className="px-4 py-3 font-['JetBrains_Mono'] font-bold" style={{ color: d.badge === "green" ? "hsl(142 100% 50%)" : "hsl(0 90% 50%)" }}>
                               {formatDecimal(d.avg_km_l)}
                             </td>
