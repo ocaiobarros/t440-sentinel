@@ -1024,6 +1024,7 @@ export type Database = {
         Args: { p_now: string; p_scope?: Json; p_tenant_id: string }
         Returns: string
       }
+      is_super_admin: { Args: { p_user_id: string }; Returns: boolean }
       sla_sweep_breaches: { Args: { p_tenant_id?: string }; Returns: number }
     }
     Enums: {

@@ -83,9 +83,11 @@ export default function AdminHub() {
   const navigate = useNavigate();
 
   const [isAdmin, setIsAdmin] = useState<boolean | null>(null);
+  const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [roles, setRoles] = useState<UserRole[]>([]);
-  const [tenant, setTenant] = useState<TenantInfo | null>(null);
+  const [tenants, setTenants] = useState<TenantInfo[]>([]);
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
@@ -95,6 +97,11 @@ export default function AdminHub() {
   const [teamName, setTeamName] = useState("");
   const [teamSlug, setTeamSlug] = useState("");
   const [savingTeam, setSavingTeam] = useState(false);
+
+  // Create org
+  const [createOrgOpen, setCreateOrgOpen] = useState(false);
+  const [newOrgForm, setNewOrgForm] = useState({ name: "", slug: "" });
+  const [creatingOrg, setCreatingOrg] = useState(false);
 
   // Invite user
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -136,12 +143,23 @@ export default function AdminHub() {
         return;
       }
       setIsAdmin(true);
-      const [tenantRes, profilesRes, rolesRes] = await Promise.all([
-        supabase.from("tenants").select("*").single(),
+
+      // Check super admin
+      const isSA = user.email === "caio.barros@madeplant.com.br";
+      setIsSuperAdmin(isSA);
+
+      const [tenantsRes, profilesRes, rolesRes] = await Promise.all([
+        supabase.from("tenants").select("*").order("created_at", { ascending: true }),
         supabase.from("profiles").select("*").order("created_at", { ascending: true }),
         supabase.from("user_roles").select("*"),
       ]);
-      if (tenantRes.data) { setTenant(tenantRes.data); setTeamName(tenantRes.data.name); setTeamSlug(tenantRes.data.slug); }
+      const allTenants = tenantsRes.data ?? [];
+      setTenants(allTenants);
+      if (allTenants.length > 0 && !selectedTenantId) {
+        setSelectedTenantId(allTenants[0].id);
+        setTeamName(allTenants[0].name);
+        setTeamSlug(allTenants[0].slug);
+      }
       if (profilesRes.data) setProfiles(profilesRes.data);
       if (rolesRes.data) setRoles(rolesRes.data as UserRole[]);
     } catch {
@@ -149,11 +167,24 @@ export default function AdminHub() {
     } finally {
       setLoading(false);
     }
-  }, [user, toast]);
+  }, [user, toast, selectedTenantId]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const getRoleForUser = (userId: string) => roles.find((r) => r.user_id === userId)?.role ?? "viewer";
+  const tenant = tenants.find((t) => t.id === selectedTenantId) ?? null;
+
+  // When selected tenant changes, update edit fields
+  useEffect(() => {
+    if (tenant) {
+      setTeamName(tenant.name);
+      setTeamSlug(tenant.slug);
+    }
+  }, [selectedTenantId, tenant?.name, tenant?.slug]);
+
+  const tenantProfiles = profiles.filter((p) => p.tenant_id === selectedTenantId);
+  const tenantRoles = roles.filter((r) => r.tenant_id === selectedTenantId);
+
+  const getRoleForUser = (userId: string) => tenantRoles.find((r) => r.user_id === userId)?.role ?? "viewer";
 
   const getRoleBadgeVariant = (role: string) => {
     if (role === "admin") return "default";
@@ -299,13 +330,35 @@ export default function AdminHub() {
     }
   };
 
-  const filteredProfiles = profiles.filter((p) => {
+  const filteredProfiles = tenantProfiles.filter((p) => {
     const term = search.toLowerCase();
     const matchesSearch = (p.display_name?.toLowerCase().includes(term) ?? false) ||
       (p.email?.toLowerCase().includes(term) ?? false);
     const matchesRole = roleFilter === "all" || getRoleForUser(p.id) === roleFilter;
     return matchesSearch && matchesRole;
   });
+
+  const handleCreateOrg = async () => {
+    if (!newOrgForm.name.trim()) return;
+    setCreatingOrg(true);
+    try {
+      const slugValue = (newOrgForm.slug.trim() || newOrgForm.name.trim())
+        .toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+      const { error } = await supabase.from("tenants").insert({
+        name: newOrgForm.name.trim(),
+        slug: slugValue,
+      });
+      if (error) throw error;
+      toast({ title: "Organização criada", description: `"${newOrgForm.name.trim()}" foi criada com sucesso.` });
+      setCreateOrgOpen(false);
+      setNewOrgForm({ name: "", slug: "" });
+      await fetchData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao criar organização." });
+    } finally {
+      setCreatingOrg(false);
+    }
+  };
 
   // Access denied
   if (isAdmin === false) {
@@ -340,6 +393,11 @@ export default function AdminHub() {
               <p className="text-xs text-muted-foreground font-mono">FLOWPULSE INTELLIGENCE — Gerenciamento</p>
             </div>
           </div>
+          {isSuperAdmin && (
+            <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs font-mono">
+              <Crown className="w-3 h-3 mr-1" /> SUPER ADMIN
+            </Badge>
+          )}
         </div>
       </header>
 
@@ -376,6 +434,18 @@ export default function AdminHub() {
                     </Button>
                   </div>
                   <div className="flex items-center gap-2">
+                    {isSuperAdmin && tenants.length > 1 && (
+                      <Select value={selectedTenantId ?? ""} onValueChange={setSelectedTenantId}>
+                        <SelectTrigger className="w-40 h-9 bg-muted/50 border-border text-xs">
+                          <SelectValue placeholder="Organização" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {tenants.map((t) => (
+                            <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <Select value={roleFilter} onValueChange={setRoleFilter}>
                       <SelectTrigger className="w-32 h-9 bg-muted/50 border-border text-xs">
                         <SelectValue placeholder="Filtrar role" />
@@ -466,12 +536,52 @@ export default function AdminHub() {
             </TabsContent>
 
             {/* ─── TEAM TAB ─── */}
-            <TabsContent value="team">
+            <TabsContent value="team" className="space-y-6">
+              {/* Tenant Selector (super admin sees all) */}
+              {isSuperAdmin && tenants.length > 1 && (
+                <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-4">
+                  <div className="flex items-center justify-between flex-wrap gap-3">
+                    <div className="flex items-center gap-3">
+                      <Building2 className="w-5 h-5 text-primary" />
+                      <h3 className="text-sm font-bold font-[Orbitron] tracking-wide text-foreground">ORGANIZAÇÕES ({tenants.length})</h3>
+                    </div>
+                    <Button size="sm" onClick={() => setCreateOrgOpen(true)}>
+                      <Plus className="w-4 h-4 mr-1" /> Nova Organização
+                    </Button>
+                  </div>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {tenants.map((t) => (
+                      <Button key={t.id} size="sm"
+                        variant={t.id === selectedTenantId ? "default" : "outline"}
+                        onClick={() => setSelectedTenantId(t.id)}
+                        className="text-xs">
+                        {t.name}
+                        <Badge variant="secondary" className="ml-2 text-[10px]">
+                          {profiles.filter((p) => p.tenant_id === t.id).length}
+                        </Badge>
+                      </Button>
+                    ))}
+                  </div>
+                </section>
+              )}
+
+              {/* Single org create button for super admin with only 1 tenant */}
+              {isSuperAdmin && tenants.length <= 1 && (
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={() => setCreateOrgOpen(true)}>
+                    <Plus className="w-4 h-4 mr-1" /> Nova Organização
+                  </Button>
+                </div>
+              )}
+
+              {/* Selected Org Details */}
               <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-6">
                 <div className="flex items-center justify-between mb-6">
                   <div className="flex items-center gap-3">
                     <Building2 className="w-5 h-5 text-primary" />
-                    <h2 className="text-base font-bold font-[Orbitron] tracking-wide text-foreground">ORGANIZAÇÃO</h2>
+                    <h2 className="text-base font-bold font-[Orbitron] tracking-wide text-foreground">
+                      {tenant?.name ?? "ORGANIZAÇÃO"}
+                    </h2>
                   </div>
                   {!editingTeam && (
                     <Button variant="ghost" size="sm" onClick={() => setEditingTeam(true)}>
@@ -515,7 +625,7 @@ export default function AdminHub() {
                     </div>
                     <div className="space-y-1">
                       <p className="text-xs text-muted-foreground">Membros</p>
-                      <p className="text-sm font-medium text-foreground">{profiles.length}</p>
+                      <p className="text-sm font-medium text-foreground">{tenantProfiles.length}</p>
                     </div>
                   </div>
                 )}
@@ -525,7 +635,7 @@ export default function AdminHub() {
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Membros por Role</h3>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     {(["admin", "editor", "viewer"] as const).map((r) => {
-                      const members = profiles.filter((p) => getRoleForUser(p.id) === r);
+                      const members = tenantProfiles.filter((p) => getRoleForUser(p.id) === r);
                       return (
                         <div key={r} className="rounded-lg border border-border bg-muted/30 p-4">
                           <div className="flex items-center gap-2 mb-3">
@@ -823,6 +933,40 @@ export default function AdminHub() {
             <Button onClick={handleInviteUser} disabled={inviting || !inviteForm.email.trim()}>
               {inviting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
               Adicionar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── CREATE ORG DIALOG ─── */}
+      <Dialog open={createOrgOpen} onOpenChange={(o) => !creatingOrg && setCreateOrgOpen(o)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Nova Organização</DialogTitle>
+            <DialogDescription>
+              Crie uma nova organização (time) para agrupar usuários e recursos.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Nome da Organização *</Label>
+              <Input value={newOrgForm.name}
+                onChange={(e) => setNewOrgForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Madeplant Logística" className="bg-muted/50 border-border" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Slug (opcional)</Label>
+              <Input value={newOrgForm.slug}
+                onChange={(e) => setNewOrgForm((f) => ({ ...f, slug: e.target.value }))}
+                placeholder="madeplant-logistica" className="bg-muted/50 border-border font-mono text-xs" />
+              <p className="text-[10px] text-muted-foreground">Gerado automaticamente se vazio.</p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setCreateOrgOpen(false)} disabled={creatingOrg}>Cancelar</Button>
+            <Button onClick={handleCreateOrg} disabled={creatingOrg || !newOrgForm.name.trim()}>
+              {creatingOrg ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+              Criar
             </Button>
           </DialogFooter>
         </DialogContent>
