@@ -145,6 +145,7 @@ export default function FleetIntelligence() {
   }, [selectedDriver, summary]);
 
   const top10 = filteredDrivers.slice(0, 10);
+  const bottom10 = filteredDrivers.length > 10 ? filteredDrivers.slice(-10).reverse() : [];
 
   // Scatter data
   const scatterData = useMemo(() => {
@@ -182,7 +183,7 @@ export default function FleetIntelligence() {
             </button>
             <div>
               <h1 className="font-['Orbitron'] text-xl font-bold tracking-wider text-glow-cyan" style={{ color: "hsl(186 100% 50%)" }}>
-                FLEET INTELLIGENCE
+                FLOWPULSE INTELLIGENCE
               </h1>
               <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-['JetBrains_Mono']">
                 Diesel Performance Analytics
@@ -316,7 +317,7 @@ export default function FleetIntelligence() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ background: "hsl(222 15% 8% / 0.6)" }}>
-                      {["#", "Motorista", "Modelo", "Placa", "Horímetro", "KM", "Litros", "Preço/L", "Gasto (R$)", "KM/L", "Status"].map((h) => (
+                      {["#", "Motorista", "Modelo", "Placa", "Hodômetro", "KM", "Litros", "Preço/L", "Gasto (R$)", "KM/L", "Status"].map((h) => (
                         <th key={h} className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-['Orbitron'] font-normal">
                           {h}
                         </th>
@@ -348,7 +349,7 @@ export default function FleetIntelligence() {
                           <td className="px-4 py-3 font-medium">{d.driver_name}</td>
                           <td className="px-4 py-3 text-muted-foreground">{d.equipment_name || "—"}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.fleet_number || "—"}</td>
-                          <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.hourmeter ? formatNumber(d.hourmeter) : "—"}</td>
+                          <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.total_km > 0 ? formatNumber(d.total_km + (d.daily_entries[0]?.km || 0)) : "—"}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono']">{formatNumber(d.total_km)}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono']">{formatNumber(d.total_liters)}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.avg_price_per_liter > 0 ? formatDecimal(d.avg_price_per_liter) : "—"}</td>
@@ -395,7 +396,91 @@ export default function FleetIntelligence() {
               </div>
             </div>
 
-            {/* Charts Row */}
+            {/* Bottom 10 Ranking */}
+            {bottom10.length > 0 && (
+              <div className="glass-card rounded-xl overflow-hidden" style={{ borderColor: "hsl(0 90% 50% / 0.15)" }}>
+                <div className="px-5 py-3 flex items-center justify-between" style={{ borderBottom: "1px solid hsl(222 15% 14% / 0.5)" }}>
+                  <h2 className="font-['Orbitron'] text-sm tracking-wider flex items-center gap-2" style={{ color: "hsl(0 90% 50%)" }}>
+                    <ShieldAlert className="w-4 h-4" />
+                    BOTTOM 10 — TREINAMENTO
+                  </h2>
+                  <span className="text-[10px] text-muted-foreground font-['JetBrains_Mono']">
+                    Ação imediata recomendada
+                  </span>
+                </div>
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr style={{ background: "hsl(222 15% 8% / 0.6)" }}>
+                        {["#", "Motorista", "Modelo", "Placa", "Hodômetro", "KM", "Litros", "Preço/L", "Gasto (R$)", "KM/L", "Status"].map((h) => (
+                          <th key={h} className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-['Orbitron'] font-normal">
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bottom10.map((d, i) => {
+                        const isWorst = i === 0;
+                        const rowStyle: React.CSSProperties = isWorst
+                          ? { background: "hsl(0 90% 50% / 0.06)", boxShadow: "inset 0 0 30px hsl(0 90% 50% / 0.04)" }
+                          : {};
+
+                        return (
+                          <tr
+                            key={d.driver_name}
+                            className="border-t border-border/20 hover:bg-secondary/30 cursor-pointer transition-colors"
+                            style={rowStyle}
+                            onClick={() => setSelectedDriver(d)}
+                          >
+                            <td className="px-4 py-3 font-['JetBrains_Mono'] font-bold" style={{ color: isWorst ? "hsl(0 90% 50%)" : "hsl(218 12% 42%)" }}>
+                              {isWorst && <ShieldAlert className="w-3.5 h-3.5 inline mr-1" style={{ color: "hsl(0 90% 50%)" }} />}
+                              {filteredDrivers.length - 10 + i + 1}
+                            </td>
+                            <td className="px-4 py-3 font-medium">{d.driver_name}</td>
+                            <td className="px-4 py-3 text-muted-foreground">{d.equipment_name || "—"}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.fleet_number || "—"}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.total_km > 0 ? formatNumber(d.total_km + (d.daily_entries[0]?.km || 0)) : "—"}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono']">{formatNumber(d.total_km)}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono']">{formatNumber(d.total_liters)}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.avg_price_per_liter > 0 ? formatDecimal(d.avg_price_per_liter) : "—"}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono']" style={{ color: "hsl(280 80% 60%)" }}>{d.total_cost > 0 ? formatCurrency(d.total_cost) : "—"}</td>
+                            <td className="px-4 py-3 font-['JetBrains_Mono'] font-bold" style={{ color: d.badge === "green" ? "hsl(142 100% 50%)" : "hsl(0 90% 50%)" }}>
+                              {formatDecimal(d.avg_km_l)}
+                            </td>
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-1.5">
+                                <Badge
+                                  variant="outline"
+                                  className="text-[9px] px-1.5 py-0"
+                                  style={{
+                                    borderColor: d.badge === "green" ? "hsl(142 100% 50% / 0.4)" : "hsl(0 90% 50% / 0.4)",
+                                    color: d.badge === "green" ? "hsl(142 100% 50%)" : "hsl(0 90% 50%)",
+                                  }}
+                                >
+                                  {d.badge === "green" ? "▲ Acima" : "▼ Abaixo"}
+                                </Badge>
+                                {d.is_outlier && (
+                                  <Tooltip>
+                                    <TooltipTrigger>
+                                      <AlertTriangle className="w-3 h-3" style={{ color: "hsl(43 100% 50%)" }} />
+                                    </TooltipTrigger>
+                                    <TooltipContent>
+                                      <p className="text-xs">Suspeita de erro/desvio (KM/L fora da faixa 1.0–3.5)</p>
+                                    </TooltipContent>
+                                  </Tooltip>
+                                )}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               {/* Scatter */}
               <div className="glass-card rounded-xl p-5" style={{ borderColor: "hsl(210 100% 56% / 0.15)" }}>
