@@ -725,6 +725,59 @@ export type Database = {
           },
         ]
       }
+      rms_connections: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          encryption_version: number
+          id: string
+          is_active: boolean
+          name: string
+          tenant_id: string
+          token_ciphertext: string
+          token_iv: string
+          token_tag: string
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          encryption_version?: number
+          id?: string
+          is_active?: boolean
+          name: string
+          tenant_id: string
+          token_ciphertext: string
+          token_iv: string
+          token_tag: string
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          encryption_version?: number
+          id?: string
+          is_active?: boolean
+          name?: string
+          tenant_id?: string
+          token_ciphertext?: string
+          token_iv?: string
+          token_tag?: string
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rms_connections_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sla_policies: {
         Row: {
           ack_target_seconds: number
