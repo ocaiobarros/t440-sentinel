@@ -17,6 +17,7 @@ import DashboardBuilder from "./pages/DashboardBuilder";
 import DashboardList from "./pages/DashboardList";
 import NotFound from "./pages/NotFound";
 import FleetIntelligence from "./pages/FleetIntelligence";
+import AdminHub from "./pages/AdminHub";
 
 const queryClient = new QueryClient();
 
@@ -93,6 +94,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <FleetIntelligence />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <ProtectedRoute>
+                  <AdminHub />
                 </ProtectedRoute>
               }
             />
