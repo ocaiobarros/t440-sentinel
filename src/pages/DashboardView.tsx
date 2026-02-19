@@ -80,7 +80,24 @@ export default function DashboardView() {
     }
   }, [activeDashId]);
 
-  const { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs } = useDashboardData(activeDashId, pollInterval);
+  const { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs, oldestZabbixTs } = useDashboardData(activeDashId, pollInterval);
+
+  // ── Zabbix Data Age: ticking display showing seconds since last Zabbix server timestamp ──
+  const [dataAgeSec, setDataAgeSec] = useState<number | null>(null);
+  useEffect(() => {
+    if (oldestZabbixTs === null) {
+      setDataAgeSec(null);
+      return;
+    }
+    const tick = () => {
+      // oldestZabbixTs is in epoch SECONDS (Zabbix lastclock)
+      const tsMs = oldestZabbixTs > 1e12 ? oldestZabbixTs : oldestZabbixTs * 1000;
+      setDataAgeSec(Math.max(0, Math.round((Date.now() - tsMs) / 1000)));
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [oldestZabbixTs]);
 
   // ── Window focus refetch: re-poll immediately when tab regains focus ──
   useEffect(() => {
@@ -212,10 +229,17 @@ export default function DashboardView() {
               </span>
             )}
 
+            {/* Zabbix Data Age */}
+            {dataAgeSec !== null && (
+              <span className={`text-[9px] font-mono flex items-center gap-0.5 ${dataAgeSec > 5 ? "text-yellow-400 animate-pulse" : "text-muted-foreground/60"}`}>
+                Zabbix: {dataAgeSec}s ago
+              </span>
+            )}
+
             {/* Latency indicator */}
             {lastPollLatencyMs !== null && (
               <span className={`text-[9px] font-mono ${lastPollLatencyMs > 3000 ? "text-yellow-400" : "text-muted-foreground/60"}`}>
-                {lastPollLatencyMs}ms
+                RTT {lastPollLatencyMs}ms
               </span>
             )}
 

@@ -70,6 +70,9 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       };
     },
     enabled: !!dashboardId,
+    staleTime: 0,
+    gcTime: 0,
+    refetchOnWindowFocus: true,
   });
 
   // Collect priority keys for instant flush (ac_status, battery voltage keys)
@@ -190,12 +193,13 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     const pollStart = performance.now();
     try {
       await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zabbix-poller`,
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zabbix-poller?t=${Date.now()}`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${session.session.access_token}`,
+            "Cache-Control": "no-cache, no-store",
           },
           body: JSON.stringify({
             connection_id: dash.zabbix_connection_id,
@@ -241,5 +245,15 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     return () => clearCache();
   }, [dashboardId]);
 
-  return { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs };
+  // Compute oldest Zabbix server timestamp across all cache entries
+  const oldestZabbixTs = useMemo(() => {
+    if (telemetryCache.size === 0) return null;
+    let newest = 0;
+    for (const [, entry] of telemetryCache) {
+      if (entry.ts > newest) newest = entry.ts;
+    }
+    return newest > 0 ? newest : null;
+  }, [telemetryCache]);
+
+  return { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs, oldestZabbixTs };
 }

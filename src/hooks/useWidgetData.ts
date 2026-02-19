@@ -28,7 +28,7 @@ interface WidgetDataState {
 export function useWidgetData({
   telemetryKey,
   cache,
-  minIntervalMs = 300,
+  minIntervalMs = 0,
 }: UseWidgetDataOptions): WidgetDataState {
   const [state, setState] = useState<WidgetDataState>({
     data: null,
