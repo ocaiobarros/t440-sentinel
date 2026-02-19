@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useRMSFueling } from "@/hooks/useRMSFueling";
-import { processFleetData, formatNumber, formatDecimal, DriverStats, FleetSummary } from "@/lib/fleet-intelligence-utils";
+import { processFleetData, formatNumber, formatDecimal, formatCurrency, DriverStats, FleetSummary } from "@/lib/fleet-intelligence-utils";
 import DriverDetailDrawer from "@/components/fleet/DriverDetailDrawer";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +41,7 @@ import {
   Trophy,
   ShieldAlert,
   ChevronLeft,
+  DollarSign,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -262,7 +263,7 @@ export default function FleetIntelligence() {
         {summary && (
           <>
             {/* KPI Row */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
               <KPICard
                 label="Média Frota"
                 value={`${formatDecimal(summary.fleet_avg_km_l)} km/l`}
@@ -283,6 +284,13 @@ export default function FleetIntelligence() {
                 sub="Odômetro calculado"
                 icon={Route}
                 color="142 100% 50%"
+              />
+              <KPICard
+                label="Custo Total Diesel"
+                value={formatCurrency(summary.total_cost)}
+                sub="Baseado em Preço/L registrado"
+                icon={DollarSign}
+                color="280 80% 60%"
               />
               <KPICard
                 label="Índice Eficiência"
@@ -308,7 +316,7 @@ export default function FleetIntelligence() {
                 <table className="w-full text-xs">
                   <thead>
                     <tr style={{ background: "hsl(222 15% 8% / 0.6)" }}>
-                      {["#", "Motorista", "Modelo", "Placa", "KM", "Litros", "KM/L", "Status"].map((h) => (
+                      {["#", "Motorista", "Modelo", "Placa", "Horímetro", "KM", "Litros", "Preço/L", "Gasto (R$)", "KM/L", "Status"].map((h) => (
                         <th key={h} className="text-left px-4 py-2.5 text-[10px] uppercase tracking-wider text-muted-foreground font-['Orbitron'] font-normal">
                           {h}
                         </th>
@@ -340,8 +348,11 @@ export default function FleetIntelligence() {
                           <td className="px-4 py-3 font-medium">{d.driver_name}</td>
                           <td className="px-4 py-3 text-muted-foreground">{d.equipment_name || "—"}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.fleet_number || "—"}</td>
+                          <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.hourmeter ? formatNumber(d.hourmeter) : "—"}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono']">{formatNumber(d.total_km)}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono']">{formatNumber(d.total_liters)}</td>
+                          <td className="px-4 py-3 font-['JetBrains_Mono'] text-muted-foreground">{d.avg_price_per_liter > 0 ? formatDecimal(d.avg_price_per_liter) : "—"}</td>
+                          <td className="px-4 py-3 font-['JetBrains_Mono']" style={{ color: "hsl(280 80% 60%)" }}>{d.total_cost > 0 ? formatCurrency(d.total_cost) : "—"}</td>
                           <td className="px-4 py-3 font-['JetBrains_Mono'] font-bold" style={{ color: d.badge === "green" ? "hsl(142 100% 50%)" : "hsl(0 90% 50%)" }}>
                             {formatDecimal(d.avg_km_l)}
                           </td>
@@ -374,7 +385,7 @@ export default function FleetIntelligence() {
                     })}
                     {top10.length === 0 && (
                       <tr>
-                        <td colSpan={8} className="text-center py-8 text-muted-foreground">
+                        <td colSpan={11} className="text-center py-8 text-muted-foreground">
                           Nenhum motorista qualificado encontrado
                         </td>
                       </tr>
