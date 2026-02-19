@@ -1,76 +1,43 @@
 import { useState } from "react";
-import { useZabbixConnections, type ZabbixConnectionItem } from "@/hooks/useZabbixConnections";
+import { useRMSConnections, type RMSConnectionItem } from "@/hooks/useRMSConnections";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
 import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-  DialogClose,
+  Dialog, DialogContent, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import {
-  Activity,
-  Plus,
-  Pencil,
-  Trash2,
-  Wifi,
-  WifiOff,
-  Loader2,
-  CheckCircle2,
-  XCircle,
-  ArrowLeft,
-  Zap,
-  Server,
+  Plus, Pencil, Trash2, Wifi, WifiOff, Loader2, CheckCircle2, XCircle,
+  ArrowLeft, Zap, Fuel,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 
-export default function ZabbixConnections() {
+export default function RMSConnections() {
   const {
-    connections,
-    isLoading,
-    create,
-    isCreating,
-    update,
-    isUpdating,
-    remove,
-    isDeleting,
-    testConnection,
-    testing,
-    testResult,
-    clearTestResult,
-  } = useZabbixConnections();
+    connections, isLoading, create, isCreating, update, isUpdating,
+    remove, isDeleting, testConnection, testing, testResult, clearTestResult,
+  } = useRMSConnections();
 
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editing, setEditing] = useState<ZabbixConnectionItem | null>(null);
-
-  const [form, setForm] = useState({ name: "", url: "", username: "", password: "" });
+  const [editing, setEditing] = useState<RMSConnectionItem | null>(null);
+  const [form, setForm] = useState({ name: "", url: "", api_token: "" });
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ name: "", url: "", username: "", password: "" });
+    setForm({ name: "", url: "https://supabase.rmsgroup.app/functions/v1/fueling-entries-api", api_token: "" });
     clearTestResult();
     setDialogOpen(true);
   };
 
-  const openEdit = (conn: ZabbixConnectionItem) => {
+  const openEdit = (conn: RMSConnectionItem) => {
     setEditing(conn);
-    setForm({ name: conn.name, url: conn.url, username: conn.username, password: "" });
+    setForm({ name: conn.name, url: conn.url, api_token: "" });
     clearTestResult();
     setDialogOpen(true);
   };
@@ -81,8 +48,7 @@ export default function ZabbixConnections() {
       const payload: Record<string, unknown> = { id: editing.id };
       if (form.name !== editing.name) payload.name = form.name;
       if (form.url !== editing.url) payload.url = form.url;
-      if (form.username !== editing.username) payload.username = form.username;
-      if (form.password) payload.password = form.password;
+      if (form.api_token) payload.api_token = form.api_token;
       await update(payload as Parameters<typeof update>[0]);
     } else {
       await create(form);
@@ -92,14 +58,13 @@ export default function ZabbixConnections() {
 
   const handleTest = () => {
     if (editing) {
-      // Test stored connection (uses decrypted password on backend)
-      if (form.password) {
-        testConnection({ url: form.url, username: form.username, password: form.password });
+      if (form.api_token) {
+        testConnection({ url: form.url, api_token: form.api_token });
       } else {
         testConnection({ id: editing.id });
       }
     } else {
-      testConnection({ url: form.url, username: form.username, password: form.password });
+      testConnection({ url: form.url, api_token: form.api_token });
     }
   };
 
@@ -116,23 +81,24 @@ export default function ZabbixConnections() {
             </Button>
           </Link>
           <div className="flex items-center gap-2">
-            <Activity className="w-6 h-6 text-primary" />
+            <Fuel className="w-6 h-6 text-primary" />
             <h1 className="font-display text-xl font-bold tracking-wider text-primary text-glow-green">
-              CONEXÕES ZABBIX
+              CONEXÕES RMS
             </h1>
           </div>
 
           {/* Navigation tabs */}
           <div className="flex items-center gap-1 ml-4">
-            <Button variant="secondary" size="sm" className="text-xs">
-              Zabbix
-            </Button>
-            <Link to="/settings/rms-connections">
+            <Link to="/settings/connections">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground">
-                RMS
+                Zabbix
               </Button>
             </Link>
+            <Button variant="secondary" size="sm" className="text-xs">
+              RMS
+            </Button>
           </div>
+
           <div className="ml-auto">
             <Button onClick={openCreate} className="font-semibold">
               <Plus className="w-4 h-4 mr-2" /> Nova Conexão
@@ -148,10 +114,10 @@ export default function ZabbixConnections() {
         ) : connections.length === 0 ? (
           <Card className="glass-card-elevated border-dashed">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-              <Server className="w-12 h-12 text-muted-foreground/40 mb-4" />
-              <p className="text-muted-foreground mb-2">Nenhuma conexão configurada</p>
+              <Fuel className="w-12 h-12 text-muted-foreground/40 mb-4" />
+              <p className="text-muted-foreground mb-2">Nenhuma conexão RMS configurada</p>
               <p className="text-sm text-muted-foreground/60 mb-6">
-                Adicione uma conexão com seu servidor Zabbix para começar.
+                Adicione uma conexão com a API de abastecimento RMS para começar.
               </p>
               <Button onClick={openCreate}>
                 <Plus className="w-4 h-4 mr-2" /> Adicionar Conexão
@@ -175,7 +141,6 @@ export default function ZabbixConnections() {
                       )}
                     </div>
                     <p className="text-xs font-mono text-muted-foreground truncate">{conn.url}</p>
-                    <p className="text-xs text-muted-foreground/60">Usuário: {conn.username}</p>
                   </div>
 
                   <div className="flex items-center gap-2 flex-shrink-0">
@@ -185,13 +150,7 @@ export default function ZabbixConnections() {
                       disabled={isUpdating}
                     />
 
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => testConnection({ id: conn.id })}
-                      disabled={testing}
-                      title="Testar conexão"
-                    >
+                    <Button variant="ghost" size="icon" onClick={() => testConnection({ id: conn.id })} disabled={testing} title="Testar conexão">
                       {testing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Zap className="w-4 h-4" />}
                     </Button>
 
@@ -209,7 +168,7 @@ export default function ZabbixConnections() {
                         <AlertDialogHeader>
                           <AlertDialogTitle>Remover conexão?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            A conexão "{conn.name}" será removida permanentemente. Dashboards que a utilizam perderão acesso aos dados.
+                            A conexão "{conn.name}" será removida permanentemente.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -237,7 +196,7 @@ export default function ZabbixConnections() {
           <DialogContent className="glass-card-elevated border-border sm:max-w-md">
             <DialogHeader>
               <DialogTitle className="font-display tracking-wide">
-                {editing ? "Editar Conexão" : "Nova Conexão"}
+                {editing ? "Editar Conexão RMS" : "Nova Conexão RMS"}
               </DialogTitle>
             </DialogHeader>
 
@@ -245,7 +204,7 @@ export default function ZabbixConnections() {
               <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">Nome</Label>
                 <Input
-                  placeholder="Produção Zabbix"
+                  placeholder="Frota Principal"
                   value={form.name}
                   onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                   required
@@ -255,9 +214,9 @@ export default function ZabbixConnections() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm text-muted-foreground">URL do Zabbix</Label>
+                <Label className="text-sm text-muted-foreground">URL da API</Label>
                 <Input
-                  placeholder="https://zabbix.exemplo.com"
+                  placeholder="https://supabase.rmsgroup.app/functions/v1/fueling-entries-api"
                   value={form.url}
                   onChange={(e) => setForm((f) => ({ ...f, url: e.target.value }))}
                   required
@@ -267,28 +226,16 @@ export default function ZabbixConnections() {
               </div>
 
               <div className="space-y-2">
-                <Label className="text-sm text-muted-foreground">Usuário</Label>
-                <Input
-                  placeholder="Admin"
-                  value={form.username}
-                  onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
-                  required
-                  maxLength={100}
-                  className="bg-muted/50 border-border"
-                />
-              </div>
-
-              <div className="space-y-2">
                 <Label className="text-sm text-muted-foreground">
-                  Senha {editing && <span className="text-xs text-muted-foreground/60">(deixe em branco para manter)</span>}
+                  Token de Acesso {editing && <span className="text-xs text-muted-foreground/60">(deixe em branco para manter)</span>}
                 </Label>
                 <Input
                   type="password"
-                  placeholder={editing ? "••••••••" : "Senha do Zabbix"}
-                  value={form.password}
-                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder={editing ? "••••••••" : "c6b63f7c-0f68-..."}
+                  value={form.api_token}
+                  onChange={(e) => setForm((f) => ({ ...f, api_token: e.target.value }))}
                   required={!editing}
-                  className="bg-muted/50 border-border"
+                  className="bg-muted/50 border-border font-mono text-sm"
                 />
               </div>
 
@@ -298,7 +245,7 @@ export default function ZabbixConnections() {
                   {testResult.ok ? (
                     <>
                       <CheckCircle2 className="w-4 h-4 flex-shrink-0" />
-                      <span>Conectado! Zabbix v{testResult.version}</span>
+                      <span>Conexão válida! API respondendo.</span>
                     </>
                   ) : (
                     <>
@@ -314,18 +261,14 @@ export default function ZabbixConnections() {
                   type="button"
                   variant="outline"
                   onClick={handleTest}
-                  disabled={testing || (!form.url || !form.username || (!form.password && !editing))}
+                  disabled={testing || (!form.url || (!form.api_token && !editing))}
                   className="flex-1"
                 >
                   {testing ? <Loader2 className="w-4 h-4 animate-spin mr-2" /> : <Zap className="w-4 h-4 mr-2" />}
                   Testar
                 </Button>
 
-                <Button
-                  type="submit"
-                  disabled={isCreating || isUpdating}
-                  className="flex-1 font-semibold"
-                >
+                <Button type="submit" disabled={isCreating || isUpdating} className="flex-1 font-semibold">
                   {(isCreating || isUpdating) && <Loader2 className="w-4 h-4 animate-spin mr-2" />}
                   {editing ? "Salvar" : "Criar"}
                 </Button>

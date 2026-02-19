@@ -20,3 +20,6 @@ verify_jwt = false
 
 [functions.rms-fueling]
 verify_jwt = false
+
+[functions.rms-connections]
+verify_jwt = false

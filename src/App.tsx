@@ -11,6 +11,7 @@ import Signup from "./pages/Signup";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import ZabbixConnections from "./pages/ZabbixConnections";
+import RMSConnections from "./pages/RMSConnections";
 import DashboardView from "./pages/DashboardView";
 import DashboardBuilder from "./pages/DashboardBuilder";
 import DashboardList from "./pages/DashboardList";
@@ -67,6 +68,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <ZabbixConnections />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/settings/rms-connections"
+              element={
+                <ProtectedRoute>
+                  <RMSConnections />
                 </ProtectedRoute>
               }
             />
