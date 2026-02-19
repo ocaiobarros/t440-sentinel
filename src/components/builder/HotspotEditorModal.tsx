@@ -34,10 +34,16 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
   const [crosshairPos, setCrosshairPos] = useState<{ x: number; y: number } | null>(null);
   const panStart = useRef({ x: 0, y: 0, panX: 0, panY: 0 });
 
+  const [imgAspect, setImgAspect] = useState<string | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const imgElRef = useRef<HTMLImageElement>(null);
 
   const selected = hotspots.find((h) => h.id === selectedId) ?? null;
+
+  const handleImgLoad = useCallback(() => {
+    const img = imgElRef.current;
+    if (img) setImgAspect(`${img.naturalWidth} / ${img.naturalHeight}`);
+  }, []);
 
   const zoomIn = () => setZoom((z) => Math.min(4, z + 0.25));
   const zoomOut = () => setZoom((z) => Math.max(0.5, z - 0.25));
@@ -227,8 +233,8 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
               width: "80%",
             }}
           >
-            <div className="relative" onClick={handleImageClick}>
-              <img ref={imgElRef} src={imageUrl} alt="Device" className="w-full h-auto select-none block" draggable={false} />
+            <div className="relative" onClick={handleImageClick} style={{ aspectRatio: imgAspect || "auto" }}>
+              <img ref={imgElRef} src={imageUrl} alt="Device" className="w-full h-full object-contain select-none block" draggable={false} onLoad={handleImgLoad} />
 
               {/* Red crosshair dot in placing mode */}
               {isPlacing && crosshairPos && (

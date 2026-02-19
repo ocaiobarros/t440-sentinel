@@ -36,73 +36,75 @@ export default function HardwareMapWidget({ imageUrl, hotspots, cache, title }: 
       <div className="px-3 pt-2 pb-1">
         <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground">{title}</span>
       </div>
-      <div className="flex-1 relative overflow-hidden">
-        <img
-          src={imageUrl}
-          alt={title}
-          className="w-full h-full object-contain"
-          draggable={false}
-        />
-        {hotspotStates.map((h) => {
-          const size = h.size || 12;
-          const glowMul = h.glowRadius || 1;
-          const shouldBlink = h.blinkOnCritical !== false && h.isCritical;
-          const height = h.shape === "bar-h" ? size / 3 : h.shape === "bar-v" ? size * 2 : size;
-          const radius = h.shape === "circle" ? "50%" : h.shape === "square" ? "2px" : "1px";
+      <div className="flex-1 relative overflow-hidden flex items-center justify-center">
+        <div className="relative w-full h-full">
+          <img
+            src={imageUrl}
+            alt={title}
+            className="w-full h-full object-contain"
+            draggable={false}
+          />
+          {hotspotStates.map((h) => {
+            const size = h.size || 12;
+            const glowMul = h.glowRadius || 1;
+            const shouldBlink = h.blinkOnCritical !== false && h.isCritical;
+            const height = h.shape === "bar-h" ? size / 3 : h.shape === "bar-v" ? size * 2 : size;
+            const radius = h.shape === "circle" ? "50%" : h.shape === "square" ? "2px" : "1px";
 
-          return (
-            <div
-              key={h.id}
-              className="absolute transform -translate-x-1/2 -translate-y-1/2"
-              style={{
-                left: `${h.x}%`,
-                top: `${h.y}%`,
-              }}
-            >
-              {/* Glow layer */}
+            return (
               <div
-                className="absolute inset-0 transition-all duration-500"
+                key={h.id}
+                className="absolute -translate-x-1/2 -translate-y-1/2"
                 style={{
-                  width: size,
-                  height,
-                  borderRadius: radius,
-                  backgroundColor: "transparent",
-                  boxShadow: `0 0 ${size * glowMul}px ${h.color}, 0 0 ${size * glowMul * 2}px ${h.color}50, 0 0 ${size * glowMul * 3}px ${h.color}20`,
-                  animation: shouldBlink ? "hwBlink 1s ease-in-out infinite" : undefined,
+                  left: `${h.x}%`,
+                  top: `${h.y}%`,
                 }}
-              />
-              {/* LED core */}
-              <div
-                className="transition-colors duration-500"
-                style={{
-                  width: size,
-                  height,
-                  borderRadius: radius,
-                  backgroundColor: h.color,
-                  boxShadow: `inset 0 0 ${size / 3}px rgba(255,255,255,0.3)`,
-                  animation: shouldBlink ? "hwBlink 1s ease-in-out infinite" : undefined,
-                }}
-                title={`${h.label}: ${h.rawValue ?? "sem dados"}`}
-              />
-              {/* Value overlay */}
-              {h.showValue && h.rawValue !== null && (
+              >
+                {/* Glow layer */}
                 <div
-                  className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none"
+                  className="absolute inset-0 transition-all duration-500"
                   style={{
-                    top: height + 2,
-                    fontSize: Math.max(8, Math.min(size * 0.7, 12)),
-                    fontFamily: "'JetBrains Mono', monospace",
-                    color: h.color,
-                    textShadow: `0 0 4px ${h.color}`,
-                    lineHeight: 1,
+                    width: size,
+                    height,
+                    borderRadius: radius,
+                    backgroundColor: "transparent",
+                    boxShadow: `0 0 ${size * glowMul}px ${h.color}, 0 0 ${size * glowMul * 2}px ${h.color}50, 0 0 ${size * glowMul * 3}px ${h.color}20`,
+                    animation: shouldBlink ? "hwBlink 1s ease-in-out infinite" : undefined,
                   }}
-                >
-                  {h.label !== h.rawValue ? h.label : h.rawValue}
-                </div>
-              )}
-            </div>
-          );
-        })}
+                />
+                {/* LED core */}
+                <div
+                  className="transition-colors duration-500"
+                  style={{
+                    width: size,
+                    height,
+                    borderRadius: radius,
+                    backgroundColor: h.color,
+                    boxShadow: `inset 0 0 ${size / 3}px rgba(255,255,255,0.3)`,
+                    animation: shouldBlink ? "hwBlink 1s ease-in-out infinite" : undefined,
+                  }}
+                  title={`${h.label}: ${h.rawValue ?? "sem dados"}`}
+                />
+                {/* Value overlay */}
+                {h.showValue && h.rawValue !== null && (
+                  <div
+                    className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none"
+                    style={{
+                      top: height + 2,
+                      fontSize: Math.max(8, Math.min(size * 0.7, 12)),
+                      fontFamily: "'JetBrains Mono', monospace",
+                      color: h.color,
+                      textShadow: `0 0 4px ${h.color}`,
+                      lineHeight: 1,
+                    }}
+                  >
+                    {h.label !== h.rawValue ? h.label : h.rawValue}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
