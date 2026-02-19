@@ -30,6 +30,8 @@ interface Dashboard {
 export function useDashboardData(dashboardId: string | null, pollIntervalOverride?: number) {
   const [telemetryCache, setTelemetryCache] = useState<Map<string, TelemetryCacheEntry>>(new Map());
   const [isPollingActive, setIsPollingActive] = useState(false);
+  const [isEmergencyMode, setIsEmergencyMode] = useState(false);
+  const [lastPollLatencyMs, setLastPollLatencyMs] = useState<number | null>(null);
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inflightRef = useRef(false); // congestion control
   const dashboardRef = useRef<Dashboard | null>(null);
@@ -82,6 +84,22 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     }
     return keys;
   }, [dashboard?.widgets]);
+
+  // ── Emergency mode detection: scan cache for ac_status = 0 ──
+  useEffect(() => {
+    let acOff = false;
+    for (const [key, entry] of telemetryCache) {
+      if (key.includes("ac_status")) {
+        const raw = entry.data;
+        const val = typeof raw === "object" && raw !== null && "value" in (raw as any) ? (raw as any).value : raw;
+        if (val === 0 || val === "0" || val === "OFF" || val === "off") {
+          acOff = true;
+          break;
+        }
+      }
+    }
+    setIsEmergencyMode(acOff);
+  }, [telemetryCache]);
 
   // Realtime subscription
   const { seedCache, clearCache } = useDashboardRealtime({
@@ -169,6 +187,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
 
     inflightRef.current = true;
     setIsPollingActive(true);
+    const pollStart = performance.now();
     try {
       await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zabbix-poller`,
@@ -185,21 +204,24 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
           }),
         },
       );
+      setLastPollLatencyMs(Math.round(performance.now() - pollStart));
     } catch (err) {
       console.error("[FlowPulse] Poll failed:", err);
-      // Error does NOT stop the timer — next cycle will retry
+      setLastPollLatencyMs(Math.round(performance.now() - pollStart));
     } finally {
       inflightRef.current = false;
       setIsPollingActive(false);
     }
   }, []); // stable — reads from ref
 
-  // Start/stop polling — reacts to interval changes
+  // Start/stop polling — reacts to interval changes AND emergency mode
+  const effectiveInterval = isEmergencyMode ? 1 : (pollIntervalOverride ?? 60);
+
   useEffect(() => {
     if (!dashboard?.zabbix_connection_id || !dashboard.widgets.length) return;
 
-    const intervalMs = (pollIntervalOverride ?? 60) * 1000;
-    console.log("🔄 Polling iniciado em:", `${pollIntervalOverride ?? 60}s (${intervalMs}ms)`);
+    const intervalMs = effectiveInterval * 1000;
+    console.log(`🔄 Polling: ${effectiveInterval}s (${intervalMs}ms)${isEmergencyMode ? " ⚡ EMERGENCY MODE" : ""}`);
 
     // Immediate first poll
     pollNow();
@@ -212,12 +234,12 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
         pollIntervalRef.current = null;
       }
     };
-  }, [dashboard?.id, dashboard?.zabbix_connection_id, dashboard?.widgets?.length, pollIntervalOverride, pollNow]);
+  }, [dashboard?.id, dashboard?.zabbix_connection_id, dashboard?.widgets?.length, effectiveInterval, pollNow]);
 
   // Clear cache on dashboard switch
   useEffect(() => {
     return () => clearCache();
   }, [dashboardId]);
 
-  return { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive };
+  return { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs };
 }

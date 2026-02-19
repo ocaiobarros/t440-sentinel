@@ -793,3 +793,16 @@
     box-shadow: 0 0 16px hsla(30, 100%, 50%, 0.4), inset 0 0 12px hsla(30, 100%, 50%, 0.1);
   }
 }
+
+/* ── Sync pulse: high-latency warning variant (yellow) ── */
+.widget-sync-pulse--warn {
+  background-color: #FFD700;
+  box-shadow: 0 0 6px #FFD700, 0 0 12px #FFD70080;
+  animation: sync-pulse-warn-fade 1.2s ease-out forwards;
+}
+
+@keyframes sync-pulse-warn-fade {
+  0% { opacity: 1; transform: scale(1); }
+  40% { opacity: 1; transform: scale(2); }
+  100% { opacity: 0; transform: scale(1); }
+}

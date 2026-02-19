@@ -162,19 +162,23 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
 
   return (
     <div ref={containerRef} className={`${wrapperClass} relative`} style={containStyle}>
-      {/* Sync pulse dot with latency tooltip */}
-      {showPulse && entry && (
-        <TooltipProvider delayDuration={0}>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span className="widget-sync-pulse" />
-            </TooltipTrigger>
-            <TooltipContent side="left" className="text-[10px] font-mono px-2 py-1">
-              Updated {Math.max(0, Date.now() - entry.receivedAt)}ms ago
-            </TooltipContent>
-          </Tooltip>
-        </TooltipProvider>
-      )}
+      {/* Sync pulse dot with latency tooltip — yellow if >3s latency */}
+      {showPulse && entry && (() => {
+        const latencyMs = Math.max(0, Date.now() - entry.receivedAt);
+        const isHighLatency = latencyMs > 3000;
+        return (
+          <TooltipProvider delayDuration={0}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span className={isHighLatency ? "widget-sync-pulse widget-sync-pulse--warn" : "widget-sync-pulse"} />
+              </TooltipTrigger>
+              <TooltipContent side="left" className="text-[10px] font-mono px-2 py-1">
+                Updated {latencyMs}ms ago{isHighLatency ? " ⚠️ HIGH LATENCY" : ""}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      })()}
       {hasCustomStyle ? (
         <div
           className={`h-full w-full rounded-lg border border-border/50 overflow-hidden ${glassClass}`}

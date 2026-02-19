@@ -80,7 +80,7 @@ export default function DashboardView() {
     }
   }, [activeDashId]);
 
-  const { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive } = useDashboardData(activeDashId, pollInterval);
+  const { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs } = useDashboardData(activeDashId, pollInterval);
 
   // ── Window focus refetch: re-poll immediately when tab regains focus ──
   useEffect(() => {
@@ -205,6 +205,20 @@ export default function DashboardView() {
           </div>
 
           <div className="flex items-center gap-2">
+            {/* Emergency mode badge */}
+            {isEmergencyMode && (
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/20 border border-destructive/40 text-[9px] font-mono text-destructive animate-pulse">
+                ⚡ 1s POLL
+              </span>
+            )}
+
+            {/* Latency indicator */}
+            {lastPollLatencyMs !== null && (
+              <span className={`text-[9px] font-mono ${lastPollLatencyMs > 3000 ? "text-yellow-400" : "text-muted-foreground/60"}`}>
+                {lastPollLatencyMs}ms
+              </span>
+            )}
+
             {/* Realtime status */}
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
               {hasData ? (
