@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useRMSFueling } from "@/hooks/useRMSFueling";
+import { useRMSConnections } from "@/hooks/useRMSConnections";
 import { processFleetData, formatNumber, formatDecimal, formatCurrency, DriverStats, FleetSummary } from "@/lib/fleet-intelligence-utils";
 import DriverDetailDrawer from "@/components/fleet/DriverDetailDrawer";
 import { Input } from "@/components/ui/input";
@@ -42,6 +43,7 @@ import {
   ShieldAlert,
   ChevronLeft,
   DollarSign,
+  Cable,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -113,6 +115,9 @@ export default function FleetIntelligence() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modelFilter, setModelFilter] = useState<string>("all");
   const [selectedDriver, setSelectedDriver] = useState<DriverStats | null>(null);
+
+  const { connections: rmsConnections, isLoading: rmsConnLoading } = useRMSConnections();
+  const hasActiveConnection = rmsConnections.some((c) => c.is_active);
 
   const { data, isLoading, error } = useRMSFueling(startDate, endDate);
 
@@ -250,15 +255,36 @@ export default function FleetIntelligence() {
           </div>
         )}
 
+        {/* ── Pending Connection ── */}
+        {!rmsConnLoading && !hasActiveConnection && !isLoading && (
+          <div className="glass-card rounded-xl p-8 text-center border" style={{ borderColor: "hsl(43 100% 50% / 0.3)" }}>
+            <div className="w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center"
+              style={{ background: "hsl(43 100% 50% / 0.1)", border: "1px solid hsl(43 100% 50% / 0.3)" }}>
+              <AlertTriangle className="w-7 h-7" style={{ color: "hsl(43 100% 50%)" }} />
+            </div>
+            <h3 className="font-['Orbitron'] text-lg font-bold text-foreground mb-2">Conexão Pendente</h3>
+            <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+              Configure as credenciais do RMS no Admin Hub para alimentar os dados de abastecimento e eficiência.
+            </p>
+            <button
+              onClick={() => navigate("/admin")}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors"
+              style={{ background: "hsl(43 100% 50% / 0.15)", color: "hsl(43 100% 50%)", border: "1px solid hsl(43 100% 50% / 0.3)" }}
+            >
+              <Cable className="w-4 h-4" /> Abrir Admin Hub
+            </button>
+          </div>
+        )}
+
         {/* ── Error ── */}
-        {error && (
+        {error && hasActiveConnection && (
           <div className="glass-card rounded-xl p-6 border-destructive/30">
             <p className="text-destructive text-sm">{(error as Error).message}</p>
           </div>
         )}
 
         {/* ── Empty ── */}
-        {!isLoading && !error && !summary && <EmptyState />}
+        {!isLoading && !error && !summary && hasActiveConnection && <EmptyState />}
 
         {/* ── Data ── */}
         {summary && (
