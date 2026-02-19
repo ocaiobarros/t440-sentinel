@@ -23,3 +23,6 @@ verify_jwt = false
 
 [functions.rms-connections]
 verify_jwt = false
+
+[functions.invite-user]
+verify_jwt = false

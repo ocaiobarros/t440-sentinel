@@ -93,7 +93,13 @@ export default function AdminHub() {
   // Team editing
   const [editingTeam, setEditingTeam] = useState(false);
   const [teamName, setTeamName] = useState("");
+  const [teamSlug, setTeamSlug] = useState("");
   const [savingTeam, setSavingTeam] = useState(false);
+
+  // Invite user
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteForm, setInviteForm] = useState({ email: "", display_name: "", role: "viewer" });
+  const [inviting, setInviting] = useState(false);
 
   // Role change
   const [changingRole, setChangingRole] = useState<string | null>(null);
@@ -135,7 +141,7 @@ export default function AdminHub() {
         supabase.from("profiles").select("*").order("created_at", { ascending: true }),
         supabase.from("user_roles").select("*"),
       ]);
-      if (tenantRes.data) { setTenant(tenantRes.data); setTeamName(tenantRes.data.name); }
+      if (tenantRes.data) { setTenant(tenantRes.data); setTeamName(tenantRes.data.name); setTeamSlug(tenantRes.data.slug); }
       if (profilesRes.data) setProfiles(profilesRes.data);
       if (rolesRes.data) setRoles(rolesRes.data as UserRole[]);
     } catch {
@@ -193,15 +199,41 @@ export default function AdminHub() {
     if (!tenant || !teamName.trim()) return;
     setSavingTeam(true);
     try {
-      const { error } = await supabase.from("tenants").update({ name: teamName.trim() }).eq("id", tenant.id);
+      const slugValue = teamSlug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+      if (!slugValue) {
+        toast({ variant: "destructive", title: "Erro", description: "Slug inválido." });
+        setSavingTeam(false);
+        return;
+      }
+      const { error } = await supabase.from("tenants").update({ name: teamName.trim(), slug: slugValue }).eq("id", tenant.id);
       if (error) throw error;
-      toast({ title: "Time atualizado", description: "Nome da organização salvo." });
+      toast({ title: "Organização atualizada", description: "Nome e slug salvos." });
       setEditingTeam(false);
       await fetchData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao salvar." });
     } finally {
       setSavingTeam(false);
+    }
+  };
+
+  const handleInviteUser = async () => {
+    if (!inviteForm.email.trim()) return;
+    setInviting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("invite-user", {
+        body: { email: inviteForm.email.trim(), display_name: inviteForm.display_name.trim(), role: inviteForm.role },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Usuário adicionado", description: `${inviteForm.email} foi adicionado ao time.` });
+      setInviteOpen(false);
+      setInviteForm({ email: "", display_name: "", role: "viewer" });
+      await fetchData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao convidar." });
+    } finally {
+      setInviting(false);
     }
   };
 
@@ -339,6 +371,9 @@ export default function AdminHub() {
                     <h2 className="text-base font-bold font-[Orbitron] tracking-wide text-foreground">
                       USUÁRIOS ({filteredProfiles.length})
                     </h2>
+                    <Button size="sm" onClick={() => setInviteOpen(true)}>
+                      <Plus className="w-4 h-4 mr-1" /> Novo Usuário
+                    </Button>
                   </div>
                   <div className="flex items-center gap-2">
                     <Select value={roleFilter} onValueChange={setRoleFilter}>
@@ -445,16 +480,28 @@ export default function AdminHub() {
                   )}
                 </div>
                 {editingTeam ? (
-                  <div className="flex items-center gap-3">
-                    <Input value={teamName} onChange={(e) => setTeamName(e.target.value)}
-                      placeholder="Nome da organização" className="max-w-sm bg-muted/50 border-border" />
-                    <Button onClick={handleSaveTeam} disabled={savingTeam} size="sm">
-                      {savingTeam ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
-                      Salvar
-                    </Button>
-                    <Button variant="ghost" size="sm" onClick={() => { setEditingTeam(false); setTeamName(tenant?.name ?? ""); }}>
-                      Cancelar
-                    </Button>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Nome</Label>
+                        <Input value={teamName} onChange={(e) => setTeamName(e.target.value)}
+                          placeholder="Nome da organização" className="bg-muted/50 border-border" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-xs text-muted-foreground">Slug</Label>
+                        <Input value={teamSlug} onChange={(e) => setTeamSlug(e.target.value)}
+                          placeholder="minha-org" className="bg-muted/50 border-border font-mono text-xs" />
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Button onClick={handleSaveTeam} disabled={savingTeam} size="sm">
+                        {savingTeam ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+                        Salvar
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { setEditingTeam(false); setTeamName(tenant?.name ?? ""); setTeamSlug(tenant?.slug ?? ""); }}>
+                        Cancelar
+                      </Button>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -730,6 +777,52 @@ export default function AdminHub() {
             <Button onClick={handleZabbixSave} disabled={zabbix.isCreating || zabbix.isUpdating || !zabbixForm.name}>
               {(zabbix.isCreating || zabbix.isUpdating) ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
               Salvar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── INVITE USER DIALOG ─── */}
+      <Dialog open={inviteOpen} onOpenChange={(o) => !inviting && setInviteOpen(o)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Adicionar Novo Usuário</DialogTitle>
+            <DialogDescription>
+              O usuário será criado e adicionado à sua organização com a role selecionada.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">E-mail *</Label>
+              <Input type="email" value={inviteForm.email}
+                onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="usuario@empresa.com" className="bg-muted/50 border-border" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Nome de exibição</Label>
+              <Input value={inviteForm.display_name}
+                onChange={(e) => setInviteForm((f) => ({ ...f, display_name: e.target.value }))}
+                placeholder="João Silva" className="bg-muted/50 border-border" />
+            </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Role *</Label>
+              <Select value={inviteForm.role} onValueChange={(v) => setInviteForm((f) => ({ ...f, role: v }))}>
+                <SelectTrigger className="bg-muted/50 border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setInviteOpen(false)} disabled={inviting}>Cancelar</Button>
+            <Button onClick={handleInviteUser} disabled={inviting || !inviteForm.email.trim()}>
+              {inviting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
+              Adicionar
             </Button>
           </DialogFooter>
         </DialogContent>
