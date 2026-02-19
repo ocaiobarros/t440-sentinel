@@ -233,8 +233,22 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
               width: "80%",
             }}
           >
-            <div className="relative" onClick={handleImageClick} style={{ aspectRatio: imgAspect || "auto" }}>
-              <img ref={imgElRef} src={imageUrl} alt="Device" className="w-full h-full object-contain select-none block" draggable={false} onLoad={handleImgLoad} />
+            {/* The relative wrapper locks to the image's intrinsic aspect ratio.
+                The img fills it exactly – no padding/margin – so % coords map 1:1. */}
+            <div
+              className="relative"
+              onClick={handleImageClick}
+              style={{ aspectRatio: imgAspect || "auto", width: "100%" }}
+            >
+              <img
+                ref={imgElRef}
+                src={imageUrl}
+                alt="Device"
+                className="absolute inset-0 w-full h-full object-fill select-none block"
+                style={{ margin: 0, padding: 0, border: "none" }}
+                draggable={false}
+                onLoad={handleImgLoad}
+              />
 
               {/* Red crosshair dot in placing mode */}
               {isPlacing && crosshairPos && (
@@ -256,7 +270,7 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
                 </div>
               )}
 
-              {/* Hotspots */}
+              {/* Hotspots – center-anchored with translate(-50%,-50%) */}
               {hotspots.map((h) => {
                 const size = h.size || 12;
                 const glowMul = h.glowRadius || 1;
@@ -269,14 +283,23 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
                     data-hotspot
                     onMouseDown={(e) => handleDragStart(e, h.id)}
                     onClick={(e) => { e.stopPropagation(); if (!isPlacing) setSelectedId(h.id); }}
-                    className={`absolute -translate-x-1/2 -translate-y-1/2 transition-all ${
+                    className={`absolute transition-all ${
                       draggingId === h.id ? "cursor-grabbing z-20 scale-125" : "cursor-grab"
                     } ${selectedId === h.id ? "ring-2 ring-primary z-10" : "hover:scale-110"}`}
-                    style={{ left: `${h.x}%`, top: `${h.y}%` }}
+                    style={{
+                      left: `${h.x}%`,
+                      top: `${h.y}%`,
+                      transform: "translate(-50%, -50%)",
+                    }}
                   >
+                    {/* White crosshair verification lines – stays locked to pixel */}
+                    <div className="absolute pointer-events-none" style={{ left: size / 2, top: -8, width: 1, height: height + 16, backgroundColor: "rgba(255,255,255,0.25)" }} />
+                    <div className="absolute pointer-events-none" style={{ top: height / 2, left: -8, height: 1, width: size + 16, backgroundColor: "rgba(255,255,255,0.25)" }} />
+                    {/* Glow layer */}
                     {livePreview && (
-                      <div className="absolute inset-0" style={{ width: size, height, borderRadius: radius, boxShadow: `0 0 ${size * glowMul}px ${color}, 0 0 ${size * glowMul * 2}px ${color}50` }} />
+                      <div className="absolute" style={{ left: 0, top: 0, width: size, height, borderRadius: radius, boxShadow: `0 0 ${size * glowMul}px ${color}, 0 0 ${size * glowMul * 2}px ${color}50` }} />
                     )}
+                    {/* LED core */}
                     <div style={{ width: size, height, borderRadius: radius, backgroundColor: color, boxShadow: livePreview ? `inset 0 0 ${size / 3}px rgba(255,255,255,0.3)` : undefined, border: !livePreview ? "1px solid hsl(var(--primary))" : undefined }} />
                     <div className="absolute left-1/2 -translate-x-1/2 whitespace-nowrap pointer-events-none text-[8px] font-mono text-muted-foreground" style={{ top: height + 3 }}>{h.label}</div>
                   </div>
