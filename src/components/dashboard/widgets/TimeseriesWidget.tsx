@@ -1,7 +1,8 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, useRef } from "react";
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
-import type { TelemetryTimeseriesData } from "@/types/telemetry";
+import type { TelemetryTimeseriesData, TelemetryStatData } from "@/types/telemetry";
+import { extractRawValue } from "@/lib/telemetry-utils";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, Legend } from "recharts";
 
 /** Auto-detect best unit based on max value */
@@ -18,6 +19,12 @@ interface SeriesConfig {
   key_: string;
   color: string;
   alias?: string;
+}
+
+interface ChartPoint {
+  time: string;
+  value?: number;
+  [key: string]: unknown;
 }
 
 interface Props {
@@ -37,6 +44,8 @@ const TIME_RANGE_LABELS: Record<string, string> = {
   "30d": "Last 30d",
 };
 
+const MAX_BUFFER_POINTS = 20;
+
 /** Round timestamp to nearest minute for alignment across series */
 function roundToMinute(ts: number): number {
   return Math.round(ts / 60000) * 60000;
@@ -48,8 +57,20 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
   const timeRange = (extra?.time_range as string) || (config?.time_range as string) || "";
   const isMultiSeries = series.length > 1;
 
+  // ── Fixed Y-axis domain from config ──
+  const minY = (extra?.min_y as number) ?? (config?.min_y as number) ?? undefined;
+  const maxY = (extra?.max_y as number) ?? (config?.max_y as number) ?? undefined;
+  const fixedDomain: [number | "auto", number | "auto"] = [minY ?? "auto", maxY ?? "auto"];
+
+  // ── Custom chart color from config ──
+  const chartColor = (extra?.chartColor as string) || (config?.chartColor as string) || "";
+
   const { data } = useWidgetData({ telemetryKey, cache });
   const ts = data as TelemetryTimeseriesData | null;
+
+  // ── Data retention buffer: accumulate scalar readings into a rolling history ──
+  const bufferRef = useRef<ChartPoint[]>([]);
+  const lastBufferTsRef = useRef<number>(0);
 
   // Build display key mapping: itemid → alias or name
   const seriesDisplayMap = useMemo(() => {
@@ -91,14 +112,44 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
       }));
   }, [isMultiSeries, series, cache, seriesDisplayMap]);
 
-  const singleChartData = useMemo(
-    () =>
-      (ts?.points || []).map((p) => ({
+  // Single-series: prefer timeseries points, fall back to scalar accumulation
+  const singleChartData = useMemo(() => {
+    if (ts?.points && ts.points.length > 0) {
+      // Full timeseries from backend — use it and sync buffer
+      const pts = ts.points.map((p) => ({
         time: new Date(p.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         value: p.value,
-      })),
-    [ts?.points],
-  );
+      }));
+      bufferRef.current = pts.slice(-MAX_BUFFER_POINTS);
+      lastBufferTsRef.current = ts.points[ts.points.length - 1]?.ts || 0;
+      return pts;
+    }
+
+    // No timeseries points — try to accumulate from scalar stat data
+    if (data) {
+      const raw = extractRawValue(data);
+      if (raw !== null) {
+        const num = parseFloat(raw);
+        if (!isNaN(num)) {
+          const now = Date.now();
+          // Only add if enough time has passed (>5s) to avoid duplicates
+          if (now - lastBufferTsRef.current > 5000) {
+            lastBufferTsRef.current = now;
+            bufferRef.current.push({
+              time: new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              value: num,
+            });
+            if (bufferRef.current.length > MAX_BUFFER_POINTS) {
+              bufferRef.current = bufferRef.current.slice(-MAX_BUFFER_POINTS);
+            }
+          }
+        }
+      }
+    }
+
+    // Return buffer (persisted data — never empty once populated)
+    return bufferRef.current;
+  }, [ts?.points, data]);
 
   const chartData = isMultiSeries ? (multiData || []) : singleChartData;
   const hasData = chartData.length > 0;
@@ -108,7 +159,6 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
     const extra2 = config?.extra as Record<string, unknown> | undefined;
     const unit = (extra2?.unit as string) || "";
     if (unit) return unit.toLowerCase().includes("bps") || unit.toLowerCase().includes("bit");
-    // Heuristic: if max value > 10000, likely bps
     let max = 0;
     for (const row of chartData) {
       for (const [k, v] of Object.entries(row)) {
@@ -133,6 +183,10 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
     if (unitInfo.divisor === 1) return String(val);
     return (val / unitInfo.divisor).toFixed(2);
   };
+
+  // Resolve stroke & fill colors
+  const strokeColor = chartColor || "hsl(var(--primary))";
+  const gradientId = `grad-${telemetryKey}`;
 
   return (
     <div className="glass-card rounded-lg p-4 h-full flex flex-col border border-border/50">
@@ -159,24 +213,27 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
             <AreaChart data={chartData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
               <defs>
                 {isMultiSeries ? (
-                  series.map((s) => {
-                    const dn = seriesDisplayMap.get(s.itemid)?.displayName || s.name;
-                    return (
-                      <linearGradient key={s.itemid} id={`grad-${s.itemid}`} x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
-                        <stop offset="95%" stopColor={s.color} stopOpacity={0} />
-                      </linearGradient>
-                    );
-                  })
+                  series.map((s) => (
+                    <linearGradient key={s.itemid} id={`grad-${s.itemid}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor={s.color} stopOpacity={0.3} />
+                      <stop offset="95%" stopColor={s.color} stopOpacity={0} />
+                    </linearGradient>
+                  ))
                 ) : (
-                  <linearGradient id={`grad-${telemetryKey}`} x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="hsl(var(--primary))" stopOpacity={0.3} />
-                    <stop offset="95%" stopColor="hsl(var(--primary))" stopOpacity={0} />
+                  <linearGradient id={gradientId} x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="5%" stopColor={strokeColor} stopOpacity={0.4} />
+                    <stop offset="95%" stopColor={strokeColor} stopOpacity={0.05} />
                   </linearGradient>
                 )}
               </defs>
               <XAxis dataKey="time" tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} />
-              <YAxis domain={["auto", "auto"]} tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }} axisLine={false} tickLine={false} tickFormatter={(v: number) => unitInfo.divisor > 1 ? `${(v / unitInfo.divisor).toFixed(1)}` : String(v)} />
+              <YAxis
+                domain={fixedDomain}
+                tick={{ fill: "hsl(var(--muted-foreground))", fontSize: 9 }}
+                axisLine={false}
+                tickLine={false}
+                tickFormatter={(v: number) => unitInfo.divisor > 1 ? `${(v / unitInfo.divisor).toFixed(1)}` : String(v)}
+              />
               <Tooltip
                 contentStyle={{
                   background: "hsl(var(--card))",
@@ -219,9 +276,9 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
                 <Area
                   type="monotone"
                   dataKey="value"
-                  stroke="hsl(var(--primary))"
+                  stroke={strokeColor}
                   strokeWidth={2}
-                  fill={`url(#grad-${telemetryKey})`}
+                  fill={`url(#${gradientId})`}
                   isAnimationActive={false}
                   connectNulls={true}
                 />
