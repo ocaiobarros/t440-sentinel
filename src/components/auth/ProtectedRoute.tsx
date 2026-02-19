@@ -1,8 +1,9 @@
+import { forwardRef } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { Loader2 } from "lucide-react";
 
-export default function ProtectedRoute({ children }: { children: React.ReactNode }) {
+const ProtectedRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>(function ProtectedRoute({ children }, _ref) {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -18,4 +19,6 @@ export default function ProtectedRoute({ children }: { children: React.ReactNode
   }
 
   return <>{children}</>;
-}
+});
+
+export default ProtectedRoute;
