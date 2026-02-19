@@ -117,6 +117,16 @@ export default function AdminHub() {
   });
   const [removing, setRemoving] = useState(false);
 
+  // Move user to another tenant
+  const [moveDialog, setMoveDialog] = useState<{ open: boolean; userId: string; name: string }>({
+    open: false, userId: "", name: "",
+  });
+  const [moveTargetTenant, setMoveTargetTenant] = useState<string>("");
+  const [moving, setMoving] = useState(false);
+
+  // Delete tenant
+  const [deletingTenantId, setDeletingTenantId] = useState<string | null>(null);
+
   // RMS connections
   const rms = useRMSConnections();
   const [rmsDialogOpen, setRmsDialogOpen] = useState(false);
@@ -226,7 +236,61 @@ export default function AdminHub() {
     }
   };
 
-  const handleSaveTeam = async () => {
+  const handleMoveUser = async () => {
+    if (!moveTargetTenant || !moveDialog.userId) return;
+    setMoving(true);
+    try {
+      const { error: profileErr } = await supabase.from("profiles")
+        .update({ tenant_id: moveTargetTenant })
+        .eq("id", moveDialog.userId);
+      if (profileErr) throw profileErr;
+
+      const oldRole = roles.find((r) => r.user_id === moveDialog.userId && r.tenant_id === selectedTenantId);
+      const roleValue = oldRole?.role ?? "viewer";
+      if (oldRole) {
+        await supabase.from("user_roles").delete().eq("id", oldRole.id);
+      }
+      const { error: roleErr } = await supabase.from("user_roles").insert({
+        user_id: moveDialog.userId,
+        tenant_id: moveTargetTenant,
+        role: roleValue,
+      });
+      if (roleErr) throw roleErr;
+
+      toast({ title: "Usuário movido", description: `${moveDialog.name} foi transferido para outro time.` });
+      setMoveDialog({ open: false, userId: "", name: "" });
+      setMoveTargetTenant("");
+      await fetchData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao mover usuário." });
+    } finally {
+      setMoving(false);
+    }
+  };
+
+  const handleDeleteTenant = async (tenantId: string) => {
+    setDeletingTenantId(tenantId);
+    try {
+      const membersCount = profiles.filter((p) => p.tenant_id === tenantId).length;
+      if (membersCount > 0) {
+        toast({ variant: "destructive", title: "Erro", description: "Não é possível excluir um time com membros." });
+        return;
+      }
+      const { error } = await supabase.from("tenants").delete().eq("id", tenantId);
+      if (error) throw error;
+      toast({ title: "Time excluído", description: "Organização removida com sucesso." });
+      if (selectedTenantId === tenantId) {
+        setSelectedTenantId(tenants.find((t) => t.id !== tenantId)?.id ?? null);
+      }
+      await fetchData();
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao excluir." });
+    } finally {
+      setDeletingTenantId(null);
+    }
+  };
+
+
     if (!tenant || !teamName.trim()) return;
     setSavingTeam(true);
     try {
@@ -516,11 +580,20 @@ export default function AdminHub() {
                             </td>
                             <td className="px-4 py-3 text-center">
                               {!isSelf && (
-                                <Button variant="ghost" size="icon"
-                                  className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
-                                  <Trash2 className="w-4 h-4" />
-                                </Button>
+                                <div className="flex items-center justify-center gap-1">
+                                  {isSuperAdmin && tenants.length > 1 && (
+                                    <Button variant="ghost" size="icon" title="Trocar Time"
+                                      onClick={() => { setMoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" }); setMoveTargetTenant(""); }}>
+                                      <Building2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
+                                  <Button variant="ghost" size="icon"
+                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                    title="Remover do time"
+                                    onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
+                                    <Trash2 className="w-4 h-4" />
+                                  </Button>
+                                </div>
                               )}
                             </td>
                           </tr>
@@ -550,17 +623,30 @@ export default function AdminHub() {
                     </Button>
                   </div>
                   <div className="flex flex-wrap gap-2 mt-3">
-                    {tenants.map((t) => (
-                      <Button key={t.id} size="sm"
-                        variant={t.id === selectedTenantId ? "default" : "outline"}
-                        onClick={() => setSelectedTenantId(t.id)}
-                        className="text-xs">
-                        {t.name}
-                        <Badge variant="secondary" className="ml-2 text-[10px]">
-                          {profiles.filter((p) => p.tenant_id === t.id).length}
-                        </Badge>
-                      </Button>
-                    ))}
+                    {tenants.map((t) => {
+                      const memberCount = profiles.filter((p) => p.tenant_id === t.id).length;
+                      return (
+                        <div key={t.id} className="flex items-center gap-1">
+                          <Button size="sm"
+                            variant={t.id === selectedTenantId ? "default" : "outline"}
+                            onClick={() => setSelectedTenantId(t.id)}
+                            className="text-xs">
+                            {t.name}
+                            <Badge variant="secondary" className="ml-2 text-[10px]">
+                              {memberCount}
+                            </Badge>
+                          </Button>
+                          {memberCount === 0 && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive hover:bg-destructive/10"
+                              title="Excluir time vazio"
+                              disabled={deletingTenantId === t.id}
+                              onClick={() => handleDeleteTenant(t.id)}>
+                              {deletingTenantId === t.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                            </Button>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </section>
               )}
@@ -967,6 +1053,40 @@ export default function AdminHub() {
             <Button onClick={handleCreateOrg} disabled={creatingOrg || !newOrgForm.name.trim()}>
               {creatingOrg ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Plus className="w-4 h-4 mr-1" />}
               Criar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── MOVE USER DIALOG ─── */}
+      <Dialog open={moveDialog.open} onOpenChange={(o) => !moving && setMoveDialog((s) => ({ ...s, open: o }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Trocar Time</DialogTitle>
+            <DialogDescription>
+              Mover <strong>{moveDialog.name}</strong> para outra organização.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Organização destino</Label>
+              <Select value={moveTargetTenant} onValueChange={setMoveTargetTenant}>
+                <SelectTrigger className="bg-muted/50 border-border">
+                  <SelectValue placeholder="Selecione o time..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {tenants.filter((t) => t.id !== selectedTenantId).map((t) => (
+                    <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setMoveDialog({ open: false, userId: "", name: "" })} disabled={moving}>Cancelar</Button>
+            <Button onClick={handleMoveUser} disabled={moving || !moveTargetTenant}>
+              {moving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Building2 className="w-4 h-4 mr-1" />}
+              Mover
             </Button>
           </DialogFooter>
         </DialogContent>
