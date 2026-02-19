@@ -55,11 +55,14 @@ interface NormalizedEntry {
   driver_name: string | null;
   fleet_number: string | null;
   equipment_name: string | null;
+  price_per_liter: number | null;
+  hourmeter: number | null;
 }
 
 function normalize(raw: RMSEntry): NormalizedEntry {
   const hasOdometer = raw.odometer_reading != null && raw.odometer_reading > 0;
   const hasHourmeter = raw.hourmeter_reading != null && raw.hourmeter_reading > 0;
+  const price = (raw as Record<string, unknown>).price_per_liter ?? (raw as Record<string, unknown>).unit_price ?? (raw as Record<string, unknown>).preco_litro ?? null;
   return {
     id: raw.id,
     date: raw.date,
@@ -69,6 +72,8 @@ function normalize(raw: RMSEntry): NormalizedEntry {
     driver_name: raw.driver?.name ?? null,
     fleet_number: raw.equipment?.fleet_number ?? null,
     equipment_name: raw.equipment?.name ?? null,
+    price_per_liter: typeof price === "number" && price > 0 ? price : null,
+    hourmeter: hasHourmeter ? raw.hourmeter_reading! : null,
   };
 }
 
@@ -127,8 +132,8 @@ Deno.serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    const { data: claims, error: claimsErr } = await supabase.auth.getClaims(authHeader.replace("Bearer ", ""));
-    if (claimsErr || !claims?.claims) {
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
+    if (userErr || !user) {
       return new Response(JSON.stringify({ error: "Unauthorized" }), { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 

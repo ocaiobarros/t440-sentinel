@@ -12,6 +12,9 @@ export interface DriverStats {
   insufficient_data: boolean;
   daily_entries: { date: string; km: number; liters: number; avg: number }[];
   badge: "green" | "red" | "neutral";
+  total_cost: number;
+  avg_price_per_liter: number;
+  hourmeter: number | null;
 }
 
 export interface ModelCluster {
@@ -26,7 +29,8 @@ export interface FleetSummary {
   fleet_avg_km_l: number;
   total_liters: number;
   total_km: number;
-  efficiency_index: number; // % of records above model average
+  total_cost: number;
+  efficiency_index: number;
   ranked_drivers: DriverStats[];
   insufficient_drivers: DriverStats[];
   model_clusters: ModelCluster[];
@@ -67,6 +71,8 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
     km: number;
     liters: number;
     date: string;
+    cost: number;
+    hourmeter: number | null;
   }
 
   const segments: Segment[] = [];
@@ -81,7 +87,7 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
       const curr = sorted[i];
       const km = curr.reading! - prev.reading!;
       if (km > 0 && km < 10000) {
-        // sanity check
+        const cost = curr.liters * (curr.price_per_liter || 0);
         segments.push({
           driver_name: curr.driver_name || "Sem Motorista",
           fleet_number: curr.fleet_number,
@@ -89,6 +95,8 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
           km,
           liters: curr.liters,
           date: curr.date,
+          cost,
+          hourmeter: curr.hourmeter,
         });
       }
     }
@@ -108,6 +116,10 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
     equipment_name: string | null;
     total_km: number;
     total_liters: number;
+    total_cost: number;
+    total_price_entries: number;
+    total_price_sum: number;
+    hourmeter: number | null;
     daily: { date: string; km: number; liters: number }[];
   }>();
 
@@ -119,14 +131,24 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
         equipment_name: seg.equipment_name,
         total_km: 0,
         total_liters: 0,
+        total_cost: 0,
+        total_price_entries: 0,
+        total_price_sum: 0,
+        hourmeter: seg.hourmeter,
         daily: [],
       });
     }
     const d = byDriver.get(key)!;
     d.total_km += seg.km;
     d.total_liters += seg.liters;
+    d.total_cost += seg.cost;
+    if (seg.cost > 0) {
+      d.total_price_entries++;
+      d.total_price_sum += seg.cost / seg.liters;
+    }
     d.fleet_number = seg.fleet_number;
     d.equipment_name = seg.equipment_name;
+    if (seg.hourmeter) d.hourmeter = seg.hourmeter;
     d.daily.push({ date: seg.date, km: seg.km, liters: seg.liters });
   }
 
@@ -188,6 +210,9 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
       insufficient_data: insufficient,
       daily_entries: dailyEntries,
       badge,
+      total_cost: Math.round(data.total_cost * 100) / 100,
+      avg_price_per_liter: data.total_price_entries > 0 ? data.total_price_sum / data.total_price_entries : 0,
+      hourmeter: data.hourmeter,
     });
   }
 
@@ -201,6 +226,7 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
   // Global totals
   const globalKm = segments.reduce((s, seg) => s + seg.km, 0);
   const globalLiters = entries.reduce((s, e) => s + (e.liters || 0), 0);
+  const globalCost = entries.reduce((s, e) => s + (e.liters || 0) * (e.price_per_liter || 0), 0);
   const fleetAvg = globalLiters > 0 ? globalKm / globalLiters : 0;
   const efficiencyIndex = totalRecords > 0 ? (totalAboveModelAvg / totalRecords) * 100 : 0;
 
@@ -208,6 +234,7 @@ export function processFleetData(entries: FuelingEntry[]): FleetSummary {
     fleet_avg_km_l: Number(fleetAvg.toFixed(2)),
     total_liters: Math.round(globalLiters),
     total_km: Math.round(globalKm),
+    total_cost: Math.round(globalCost * 100) / 100,
     efficiency_index: Number(efficiencyIndex.toFixed(1)),
     ranked_drivers: ranked,
     insufficient_drivers: insufficient,
@@ -221,4 +248,8 @@ export function formatNumber(n: number): string {
 
 export function formatDecimal(n: number, digits = 2): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+
+export function formatCurrency(n: number): string {
+  return n.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }

@@ -10,6 +10,8 @@ export interface FuelingEntry {
   driver_name: string | null;
   fleet_number: string | null;
   equipment_name: string | null;
+  price_per_liter: number | null;
+  hourmeter: number | null;
 }
 
 interface FuelingResponse {
