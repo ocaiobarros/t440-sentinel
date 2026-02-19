@@ -255,7 +255,7 @@ Deno.serve(async (req) => {
           .from("zabbix_connections")
           .select("id")
           .eq("id", id)
-          .single();
+          .maybeSingle();
         if (!connCheck) return json({ error: "Connection not found" }, 404);
 
         // Fetch full record with service role
@@ -263,7 +263,7 @@ Deno.serve(async (req) => {
           .from("zabbix_connections")
           .select("url, username, password_ciphertext, password_iv, password_tag")
           .eq("id", id)
-          .single();
+          .maybeSingle();
         if (!conn) return json({ error: "Connection not found" }, 404);
 
         testUrl = conn.url;
