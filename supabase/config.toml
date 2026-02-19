@@ -17,3 +17,6 @@ verify_jwt = false
 
 [functions.zabbix-poller]
 verify_jwt = false
+
+[functions.rms-fueling]
+verify_jwt = false
