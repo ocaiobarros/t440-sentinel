@@ -197,11 +197,12 @@ export function extractVMwareData(d: IdracData): VirtData {
 /* ─── Proxmox Extraction ──────────────── */
 
 export function extractProxmoxData(d: IdracData): VirtData {
-  // Debug: dump all items containing "cpu" or "freq" or "model"
+  // Debug: dump ALL item names to discover available metrics
+  let debugCount = 0;
   for (const [name, item] of d.items) {
-    const lower = name.toLowerCase();
-    if (lower.includes("cpu") || lower.includes("freq") || lower.includes("model") || lower.includes("processor")) {
-      console.log(`[PVE-ITEM] "${name}" = "${item.lastvalue}" (units: "${item.units}", key: "${item.key_}")`);
+    if (debugCount < 80) {
+      console.log(`[PVE-ALL] "${name}" = "${item.lastvalue}" (units: "${item.units}")`);
+      debugCount++;
     }
   }
 
@@ -267,11 +268,15 @@ export function extractProxmoxData(d: IdracData): VirtData {
       }
     }
 
+    // Get vCPU count for Proxmox VMs
+    const vmCpus = vmGet("CPUs") || vmGet("CPU count") || vmGet("Processors") || "";
+
     vms.push({
       name: vmName,
       status: vmGet("Status"),
       cpuUsage: parsePercent(vmGet("CPU usage")),
       cpuUsageHz: vmCpuHz,
+      vCpus: vmCpus,
       memTotal: memTotalStr,
       memUsed: memUsedStr,
       memPercent: Math.min(memPct, 100),
