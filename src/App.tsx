@@ -80,7 +80,7 @@ const App = () => (
               }
             />
             <Route
-              path="/legacy"
+              path="/templates/server-monitor"
               element={
                 <ProtectedRoute>
                   <Index />
