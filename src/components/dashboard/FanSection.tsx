@@ -33,7 +33,7 @@ const FanSection = ({ fans }: Props) => {
         </h2>
       </div>
 
-      <div className="space-y-4">
+      <div className="grid grid-cols-1 gap-2 max-h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
         {fans.map((fan, i) => {
           const { level } = parseStatus(fan.status || "OK (3)");
           const pct = (fan.speedNum / maxRpm) * 100;
@@ -43,23 +43,23 @@ const FanSection = ({ fans }: Props) => {
               key={fan.name}
               initial={{ opacity: 0, x: 30 }}
               animate={{ opacity: 1, x: 0 }}
-              transition={{ duration: 0.4, delay: 0.5 + i * 0.1 }}
-              className="glass-card rounded-lg p-4"
+              transition={{ duration: 0.4, delay: 0.5 + i * 0.05 }}
+              className="glass-card rounded-lg px-3 py-2"
             >
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-1.5">
                   <StatusIndicator status={level} />
-                  <span className="text-sm font-display font-bold text-foreground">{fan.name}</span>
+                  <span className="text-xs font-display font-bold text-foreground">{fan.name}</span>
                 </div>
-                <span className="text-sm font-mono text-neon-green font-bold">{fan.speed}</span>
+                <span className="text-xs font-mono text-neon-green font-bold">{fan.speed}</span>
               </div>
 
               {/* RPM Bar */}
-              <div className="relative h-6 bg-secondary/50 rounded-md overflow-hidden">
+              <div className="relative h-4 bg-secondary/50 rounded-md overflow-hidden">
                 <motion.div
                   initial={{ width: 0 }}
                   animate={{ width: `${pct}%` }}
-                  transition={{ duration: 1, delay: 0.6 + i * 0.1 }}
+                  transition={{ duration: 1, delay: 0.6 + i * 0.05 }}
                   className="absolute inset-y-0 left-0 rounded-md"
                   style={{
                     background: `linear-gradient(90deg, hsl(110 100% 54% / 0.3), hsl(110 100% 54% / 0.7))`,
@@ -67,7 +67,7 @@ const FanSection = ({ fans }: Props) => {
                   }}
                 />
                 <div className="absolute inset-0 flex items-center justify-end pr-2">
-                  <span className="text-[10px] font-mono text-muted-foreground">{Math.round(pct)}%</span>
+                  <span className="text-[9px] font-mono text-muted-foreground">{Math.round(pct)}%</span>
                 </div>
               </div>
             </motion.div>
