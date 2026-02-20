@@ -67,10 +67,11 @@ const Index = () => {
   const linuxMem = data ? extractLinuxMemory(data) : null;
   const filesystems = data ? extractFilesystems(data) : null;
 
-  const hasTemps = temps && (temps.cpu1.value || temps.cpu2.value || temps.inlet.value);
-  const hasFans = fans && fans.length > 0;
-  const hasPower = power && power.supplies.length > 0;
-  const hasDisks = disks && disks.length > 0;
+  // Only show sections with real data (non-zero values)
+  const hasTemps = temps && (temps.cpu1.numValue > 0 || temps.cpu2.numValue > 0 || temps.inlet.numValue > 0);
+  const hasFans = fans && fans.length > 0 && fans.some(f => f.speedNum > 0);
+  const hasPower = power && power.supplies.length > 0 && power.supplies.some(p => p.status);
+  const hasDisks = disks && disks.length > 0 && disks.some(d => d.size || d.status);
   const hasRaid = raid && (raid.controller.name || raid.volumes.length > 0);
   const hasNics = nics && nics.length > 0;
   const hasCpu = cpu && cpu.utilization;

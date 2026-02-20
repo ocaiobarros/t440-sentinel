@@ -69,10 +69,11 @@ const StorageSection = ({ disks, raidController, volumes }: Props) => {
             {disks.map((d) => {
               const mediaLabel = d.mediaType
                 ? (d.mediaType.toLowerCase().includes("ssd") || d.mediaType.includes("3") ? "SSD" : "HDD")
-                : (d.name?.toLowerCase().includes("solid state") ? "SSD" : "SSD");
+                : (d.name?.toLowerCase().includes("solid state") ? "SSD" : "HDD");
+              const displayName = d.name?.replace(/^(Physical Disk|Solid State Disk)\s+/, '') || `Disco ${d.id}`;
               return (
                 <div key={d.id} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
-                  <span className="text-muted-foreground truncate max-w-[120px]" title={d.name}>{d.name || `Disco ${d.id}`}</span>
+                  <span className="text-muted-foreground" title={d.name}>{displayName}</span>
                   <span className={`font-bold ${mediaLabel === 'SSD' ? 'text-neon-cyan' : 'text-neon-amber'}`}>{mediaLabel}</span>
                 </div>
               );
@@ -90,9 +91,10 @@ const StorageSection = ({ disks, raidController, volumes }: Props) => {
             {disks.map((d) => {
               const statusText = d.status || d.smartStatus || "OK (3)";
               const { level } = parseStatus(statusText);
+              const displayName = d.name?.replace(/^(Physical Disk|Solid State Disk)\s+/, '') || `Disco ${d.id}`;
               return (
                 <div key={d.id} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
-                  <span className="text-muted-foreground truncate max-w-[80px]">{d.name || `Disco ${d.id}`}</span>
+                  <span className="text-muted-foreground">{displayName}</span>
                   <div className="flex items-center gap-1.5">
                     <StatusIndicator status={level} size="sm" />
                     <span className={level === 'ok' ? 'text-neon-green' : 'text-neon-red'}>{parseStatus(statusText).text}</span>
@@ -113,12 +115,15 @@ const StorageSection = ({ disks, raidController, volumes }: Props) => {
             <HardDrive className="w-3.5 h-3.5" /> Tamanho
           </h3>
           <div className="space-y-1.5">
-            {disks.map((d) => (
-              <div key={d.id} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
-                <span className="text-muted-foreground truncate max-w-[100px]">{d.model || d.name || `Disco ${d.id}`}</span>
-                <span className="text-foreground font-bold">{d.size || "—"}</span>
-              </div>
-            ))}
+            {disks.map((d) => {
+              const displayName = d.name?.replace(/^(Physical Disk|Solid State Disk)\s+/, '') || `Disco ${d.id}`;
+              return (
+                <div key={d.id} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
+                  <span className="text-muted-foreground">{displayName}</span>
+                  <span className="text-foreground font-bold">{d.size || "—"}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 

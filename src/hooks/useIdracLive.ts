@@ -362,18 +362,28 @@ export function extractRaid(d: IdracData) {
     });
   }
 
-  // Pattern 2: R720 — virtual disks by name
+  // Pattern 2: R720/R740 — virtual disks by name
   if (volumes.length === 0) {
     const prefix = d.prefix;
     const vdNames = new Set<string>();
     const vdFields = ["Size", "Status", "Layout type", "Read policy", "Write policy", "Current state"];
+    // Patterns to exclude (not virtual disks)
+    const excludePatterns = [
+      /Temp/i, /Fan/i, /^PS\d/, /Power Supply/i, /System Board/i,
+      /Inlet/i, /Exhaust/i, /CPU\d/i, /SNMP/i, /ICMP/i, /Firmware/i,
+      /Hardware/i, /Battery/i, /Physical Disk/i, /Solid State Disk/i,
+      /^NIC/i, /Processor/i, /BIOS/i, /CMOS/i, /Voltage/i, /LCD/i,
+      /^Overall/i, /^RAID Controller/i, /^Integrated RAID/i,
+      /Operating system/i, /Uptime/i, /System name/i, /System location/i,
+      /System contact/i, /System description/i, /System object/i,
+    ];
     for (const [name] of d.items) {
       let cleanName = name;
       if (prefix && cleanName.startsWith(prefix)) cleanName = cleanName.slice(prefix.length);
       for (const field of vdFields) {
         if (cleanName.endsWith(` ${field}`)) {
           const vdName = cleanName.slice(0, -(field.length + 1));
-          if (vdName && !vdName.includes("Disk") && !vdName.includes("Controller")) {
+          if (vdName && !excludePatterns.some(p => p.test(vdName))) {
             vdNames.add(vdName);
           }
         }
