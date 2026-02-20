@@ -67,17 +67,21 @@ const Index = () => {
   const linuxMem = data ? extractLinuxMemory(data) : null;
   const filesystems = data ? extractFilesystems(data) : null;
 
-  // Only show sections with real data (non-zero values)
+  // Only show sections with real data (non-zero / non-empty values)
   const hasTemps = temps && (temps.cpu1.numValue > 0 || temps.cpu2.numValue > 0 || temps.inlet.numValue > 0);
   const hasFans = fans && fans.length > 0 && fans.some(f => f.speedNum > 0);
-  const hasPower = power && power.supplies.length > 0 && power.supplies.some(p => p.status);
-  const hasDisks = disks && disks.length > 0 && disks.some(d => d.size || d.status);
+  const hasPower = power && power.supplies.length > 0 && power.supplies.some(p => p.status && p.status !== "0");
+  const hasDisks = disks && disks.length > 0 && disks.some(d => d.size && d.size !== "0" && d.size !== "");
   const hasRaid = raid && (raid.controller.name || raid.volumes.length > 0);
-  const hasNics = nics && nics.length > 0;
+  const hasNics = nics && nics.length > 0 && nics.some(n => n.connectionStatus || n.status || n.speed);
   const hasCpu = cpu && cpu.utilization;
   const hasLinuxMem = linuxMem && linuxMem.total;
   const hasFilesystems = filesystems && filesystems.length > 0;
   const isLinux = data?.hostType === "linux";
+
+  // Filter out disks/nics with no real data
+  const validDisks = disks?.filter(d => d.size && d.size !== "0" && d.size !== "") ?? [];
+  const validNics = nics?.filter(n => n.connectionStatus || n.status || n.name) ?? [];
 
   return (
     <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
@@ -124,12 +128,12 @@ const Index = () => {
           <>
             {/* Status Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-              <StatusCard title="Status Geral" rawValue={status.overallStatus} icon={<Server className="w-4 h-4 text-muted-foreground" />} delay={0.1} />
-              {!isLinux && <StatusCard title="Rollup" rawValue={status.rollupStatus} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
-              {!isLinux && <StatusCard title="Storage" rawValue={status.storageStatus} icon={<Database className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
-              {!isLinux && <StatusCard title="Energia" rawValue={status.powerState} icon={<Power className="w-4 h-4 text-muted-foreground" />} delay={0.25} />}
-              {isLinux && <StatusCard title="ICMP" rawValue={status.icmpPing} icon={<Wifi className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
-              {isLinux && <StatusCard title="SNMP" rawValue={status.snmpAvailability} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
+              {status.overallStatus && <StatusCard title="Status Geral" rawValue={status.overallStatus} icon={<Server className="w-4 h-4 text-muted-foreground" />} delay={0.1} />}
+              {!isLinux && status.rollupStatus && <StatusCard title="Rollup" rawValue={status.rollupStatus} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
+              {!isLinux && status.storageStatus && <StatusCard title="Storage" rawValue={status.storageStatus} icon={<Database className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
+              {!isLinux && status.powerState && <StatusCard title="Energia" rawValue={status.powerState} icon={<Power className="w-4 h-4 text-muted-foreground" />} delay={0.25} />}
+              {isLinux && status.icmpPing && <StatusCard title="ICMP" rawValue={status.icmpPing} icon={<Wifi className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
+              {isLinux && status.snmpAvailability && <StatusCard title="SNMP" rawValue={status.snmpAvailability} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
               {isLinux && hasCpu && <StatusCard title="CPU" rawValue={cpu!.utilization ? `${(parseFloat(cpu!.utilization) * 100).toFixed(1)}%` : ""} icon={<CpuIcon className="w-4 h-4 text-muted-foreground" />} delay={0.25} />}
             </div>
 
@@ -163,9 +167,9 @@ const Index = () => {
             )}
 
             {/* Storage (iDRAC hosts) */}
-            {hasDisks && hasRaid && disks && raid && (
+            {hasDisks && hasRaid && validDisks.length > 0 && raid && (
               <div className="mb-6">
-                <StorageSection disks={disks} raidController={raid.controller} volumes={raid.volumes} />
+                <StorageSection disks={validDisks} raidController={raid.controller} volumes={raid.volumes} />
               </div>
             )}
 
