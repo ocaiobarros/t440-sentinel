@@ -59,7 +59,24 @@ export interface VirtVM {
   netIn: string;
   netOut: string;
   uptime: string;
-  type?: string; // qemu, lxc
+  type?: string; // qemu, lxc, vmware-guest
+  // VMware Guest extras
+  vCpus?: string;
+  cpuLatency?: string;
+  cpuReadiness?: string;
+  ballooned?: string;
+  swapped?: string;
+  compressed?: string;
+  snapshotCount?: string;
+  snapshotDate?: string;
+  toolsStatus?: string;
+  toolsVersion?: string;
+  hypervisorName?: string;
+  clusterName?: string;
+  datacenter?: string;
+  powerState?: string;
+  committedStorage?: string;
+  uncommittedStorage?: string;
 }
 
 export interface VirtNetwork {
@@ -297,10 +314,146 @@ export function extractProxmoxData(d: IdracData): VirtData {
   };
 }
 
+/* ─── VMware Guest Extraction ─────────── */
+
+export function extractVMwareGuestData(d: IdracData): VirtData {
+  const get = (name: string) => d.get(name);
+
+  const cpuPct = parsePercent(get("CPU usage in percent"));
+  const memTotal = get("Memory size");
+  const memUsedHost = get("Host memory usage in percent");
+  const memPct = parsePercent(memUsedHost);
+
+  // Determine VM status from "VM state" (index: 0=notRunning,1=resetting,2=running,3=shuttingDown,4=standby,5=unknown)
+  const vmStateRaw = get("VM state");
+  let vmStatus = "unknown";
+  if (vmStateRaw === "2" || vmStateRaw?.toLowerCase() === "running") vmStatus = "running";
+  else if (vmStateRaw === "0" || vmStateRaw?.toLowerCase()?.includes("not")) vmStatus = "stopped";
+  else if (vmStateRaw === "3") vmStatus = "shutting down";
+  else if (vmStateRaw === "4") vmStatus = "standby";
+  else if (vmStateRaw === "1") vmStatus = "resetting";
+
+  // Discover network interfaces
+  let totalNetIn = 0, totalNetOut = 0;
+  for (const [name, item] of d.items) {
+    const mIn = name.match(/^Number of bytes received on interface/);
+    if (mIn && item.units?.toLowerCase()?.includes("bps")) totalNetIn += parseFloat(item.lastvalue || "0");
+    const mOut = name.match(/^Number of bytes transmitted on interface/);
+    if (mOut && item.units?.toLowerCase()?.includes("bps")) totalNetOut += parseFloat(item.lastvalue || "0");
+  }
+
+  // Discover disk devices
+  let totalDiskRead = 0, totalDiskWrite = 0;
+  for (const [name, item] of d.items) {
+    if (name.match(/^Average number of bytes read from the disk/)) totalDiskRead += parseFloat(item.lastvalue || "0");
+    if (name.match(/^Average number of bytes written to the disk/)) totalDiskWrite += parseFloat(item.lastvalue || "0");
+  }
+
+  // Discover filesystems as "datastores"
+  const fsNames = new Set<string>();
+  for (const [name] of d.items) {
+    const m = name.match(/^(?:Free|Total|Used) disk space on \[(.+?)\]/);
+    if (m) fsNames.add(m[1]);
+  }
+  const datastores: VirtDatastore[] = [];
+  for (const fs of fsNames) {
+    const totalStr = get(`Total disk space on [${fs}]`);
+    const freeStr = get(`Free disk space on [${fs}] (percentage)`);
+    datastores.push({
+      name: fs,
+      totalSize: totalStr,
+      freePercent: parsePercent(freeStr),
+    });
+  }
+
+  // Build the host name from the Zabbix host or a combination
+  const hvName = get("Hypervisor name") || "";
+  const clusterName = get("Cluster name") || "";
+  const dcName = get("Datacenter name") || "";
+
+  // Use the Zabbix host name — we don't have a direct "VM name" item, 
+  // so we derive it from the host's visible name
+  const vmName = d.items.values().next()?.value?.name?.split(":")?.[0]?.trim() || "VM";
+  // Actually use cluster/hv info for context; the VM name is the host itself
+  // We'll use a generic approach — the host name from config is the VM name
+
+  const vm: VirtVM = {
+    name: "This VM", // Will be overridden by the page using config.hostName
+    status: vmStatus,
+    cpuUsage: cpuPct,
+    memTotal,
+    memUsed: get("Guest memory usage") || get("Host memory usage"),
+    memPercent: Math.min(memPct, 100),
+    diskRead: totalDiskRead > 0 ? String(totalDiskRead) : "",
+    diskWrite: totalDiskWrite > 0 ? String(totalDiskWrite) : "",
+    netIn: totalNetIn > 0 ? String(totalNetIn) : "",
+    netOut: totalNetOut > 0 ? String(totalNetOut) : "",
+    uptime: get("Uptime") || get("Uptime of guest OS"),
+    type: "vmware-guest",
+    vCpus: get("Number of virtual CPUs"),
+    cpuLatency: get("CPU latency in percent"),
+    cpuReadiness: get("CPU readiness latency in percent"),
+    ballooned: get("Ballooned memory"),
+    swapped: get("Swapped memory"),
+    compressed: get("Compressed memory"),
+    snapshotCount: get("Snapshot count"),
+    snapshotDate: get("Snapshot latest date"),
+    toolsStatus: get("VMware Tools status"),
+    toolsVersion: get("VMware Tools version"),
+    hypervisorName: hvName,
+    clusterName,
+    datacenter: dcName,
+    powerState: get("Power state"),
+    committedStorage: get("Committed storage space"),
+    uncommittedStorage: get("Uncommitted storage space"),
+  };
+
+  return {
+    type: "vmware",
+    host: {
+      fullName: hvName || "VMware Guest",
+      model: "",
+      vendor: "VMware",
+      version: get("VMware Tools version") || "",
+      uptime: vm.uptime,
+      overallStatus: vmStatus,
+      ping: "",
+      datacenter: dcName,
+      cluster: clusterName,
+      nodeName: "",
+      pveVersion: "",
+      kernelVersion: "",
+      timezone: "",
+    },
+    cpu: {
+      cores: "",
+      threads: "",
+      frequency: "",
+      model: "",
+      usagePercent: cpuPct,
+    },
+    memory: {
+      total: memTotal,
+      used: vm.memUsed,
+      usedPercent: vm.memPercent,
+      ballooned: get("Ballooned memory"),
+    },
+    network: {
+      bytesIn: vm.netIn,
+      bytesOut: vm.netOut,
+    },
+    datastores,
+    vms: [vm],
+    vmCount: 1,
+    runningCount: vmStatus === "running" ? 1 : 0,
+  };
+}
+
 /* ─── Unified extractor ───────────────── */
 
 export function extractVirtData(d: IdracData): VirtData | null {
   if (d.hostType === "vmware") return extractVMwareData(d);
+  if (d.hostType === "vmware-guest") return extractVMwareGuestData(d);
   if (d.hostType === "proxmox") return extractProxmoxData(d);
   return null;
 }
