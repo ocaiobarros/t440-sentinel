@@ -482,6 +482,7 @@ export default function VirtualMachinesMonitor() {
 
   // Parse host CPU frequency to Hz for estimating VM MHz
   const hostCpuFreqHz = useMemo(() => {
+    console.log("[VMs] virt.cpu:", JSON.stringify(virt?.cpu));
     if (!virt?.cpu?.frequency) return 0;
     const raw = virt.cpu.frequency;
     const m = raw.match(/([\d.]+)\s*(Hz|KHz|MHz|GHz)/i);
@@ -492,7 +493,12 @@ export default function VirtualMachinesMonitor() {
       return num * (mult[unit] || 1);
     }
     const num = parseFloat(raw);
-    return isNaN(num) ? 0 : num;
+    if (!isNaN(num)) {
+      // If raw is a large number, assume Hz; if small (< 100), assume GHz
+      if (num > 1000) return num;
+      if (num > 0 && num < 100) return num * 1e9;
+    }
+    return 0;
   }, [virt?.cpu?.frequency]);
 
   if (showSetup) {

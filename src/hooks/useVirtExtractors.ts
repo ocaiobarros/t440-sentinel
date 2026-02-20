@@ -197,6 +197,14 @@ export function extractVMwareData(d: IdracData): VirtData {
 /* ─── Proxmox Extraction ──────────────── */
 
 export function extractProxmoxData(d: IdracData): VirtData {
+  // Debug: dump all items containing "cpu" or "freq" or "model"
+  for (const [name, item] of d.items) {
+    const lower = name.toLowerCase();
+    if (lower.includes("cpu") || lower.includes("freq") || lower.includes("model") || lower.includes("processor")) {
+      console.log(`[PVE-ITEM] "${name}" = "${item.lastvalue}" (units: "${item.units}", key: "${item.key_}")`);
+    }
+  }
+
   // Detect node name
   let nodeName = "";
   for (const [name] of d.items) {
@@ -287,11 +295,38 @@ export function extractProxmoxData(d: IdracData): VirtData {
 
   const runningCount = vms.filter(vm => vm.status === "running").length;
 
+  // Try to discover CPU frequency from node items
+  let cpuFrequency = nodeGet("CPU, frequency") || nodeGet("CPU frequency") || "";
+  let cpuModel = nodeGet("CPU, model") || nodeGet("CPU model") || "";
+  let cpuCores = nodeGet("CPU, cores") || nodeGet("Cores") || "";
+  let cpuThreads = nodeGet("CPU, threads") || nodeGet("Threads") || "";
+  
+  // Scan all node items for frequency/model if not found
+  if (!cpuFrequency || !cpuModel) {
+    for (const [name, item] of d.items) {
+      const nameLower = name.toLowerCase();
+      if (!cpuFrequency && nameLower.includes("cpu") && (nameLower.includes("freq") || nameLower.includes("mhz") || nameLower.includes("ghz"))) {
+        cpuFrequency = item.lastvalue || "";
+      }
+      if (!cpuModel && nameLower.includes("cpu") && nameLower.includes("model")) {
+        cpuModel = item.lastvalue || "";
+      }
+      // Try to extract frequency from CPU model string (e.g., "Intel Xeon E5-2680 v4 @ 2.40GHz")
+      if (!cpuFrequency && cpuModel) {
+        const freqMatch = cpuModel.match(/@?\s*([\d.]+)\s*(GHz|MHz)/i);
+        if (freqMatch) {
+          const mult = freqMatch[2].toLowerCase() === "ghz" ? 1e9 : 1e6;
+          cpuFrequency = String(parseFloat(freqMatch[1]) * mult);
+        }
+      }
+    }
+  }
+
   return {
     type: "proxmox",
     host: {
       fullName: `Proxmox VE — ${nodeName}`,
-      model: "",
+      model: cpuModel,
       vendor: "Proxmox",
       version: nodeGet("PVE version"),
       uptime: nodeGet("Uptime"),
@@ -305,10 +340,10 @@ export function extractProxmoxData(d: IdracData): VirtData {
       timezone: nodeGet("Time zone"),
     },
     cpu: {
-      cores: "",
-      threads: "",
-      frequency: "",
-      model: "",
+      cores: cpuCores,
+      threads: cpuThreads,
+      frequency: cpuFrequency,
+      model: cpuModel,
       usagePercent: cpuPct,
       iowait: parsePercent(nodeGet("CPU, iowait")),
     },
