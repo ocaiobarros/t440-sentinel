@@ -39,13 +39,13 @@ function ResourceRing({
 }) {
   const pct = Math.min(100, Math.max(0, (value / max) * 100));
   const R = 38;
-  const STROKE = 5;
+  const STROKE = 6;
   const C = Math.PI * 2 * R;
   const offset = C - (pct / 100) * C;
 
   return (
-    <div className="flex flex-col items-center gap-2">
-      <div className="relative w-24 h-24">
+    <div className="flex flex-col items-center gap-3">
+      <div className="relative w-36 h-36 md:w-44 md:h-44">
         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
           <circle cx="50" cy="50" r={R} fill="none" stroke="hsl(var(--muted) / 0.25)" strokeWidth={STROKE} />
           <motion.circle
@@ -55,22 +55,22 @@ function ResourceRing({
             initial={{ strokeDashoffset: C }}
             animate={{ strokeDashoffset: offset }}
             transition={{ duration: 1.2, ease: "easeOut" }}
-            style={{ filter: `drop-shadow(0 0 6px ${glowColor})` }}
+            style={{ filter: `drop-shadow(0 0 8px ${glowColor})` }}
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-lg font-bold font-mono-data" style={{ color, textShadow: `0 0 10px ${glowColor}` }}>
+          <span className="text-3xl md:text-4xl font-black font-mono-data" style={{ color, textShadow: `0 0 15px ${glowColor}` }}>
             {pct.toFixed(1)}
           </span>
-          <span className="text-[8px] font-mono text-muted-foreground">{unit}</span>
+          <span className="text-xs font-mono text-muted-foreground">{unit}</span>
         </div>
       </div>
       <div className="text-center">
-        <div className="flex items-center gap-1 justify-center">
-          <Icon className="w-3 h-3" style={{ color }} />
-          <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground">{label}</span>
+        <div className="flex items-center gap-1.5 justify-center">
+          <Icon className="w-4 h-4" style={{ color }} />
+          <span className="text-sm font-display font-bold uppercase tracking-wider text-muted-foreground">{label}</span>
         </div>
-        {subtitle && <span className="text-[8px] font-mono text-muted-foreground/60">{subtitle}</span>}
+        {subtitle && <span className="text-xs font-mono text-muted-foreground/60">{subtitle}</span>}
       </div>
     </div>
   );
@@ -176,19 +176,19 @@ function StorageBar({ ds, index }: { ds: VirtDatastore; index: number }) {
       </div>
 
       {/* Thick progress bar */}
-      <div className="h-4 rounded-full overflow-hidden relative" style={{ background: "hsl(220 30% 10% / 0.8)" }}>
+      <div className="h-4 rounded-full overflow-hidden relative" style={{ background: "hsl(220 30% 10% / 0.8)", minHeight: "16px" }}>
         <motion.div
-          className="h-full rounded-full relative"
-          initial={{ width: 0 }}
-          animate={{ width: `${usedPct}%` }}
-          transition={{ duration: 1, ease: "easeOut", delay: index * 0.08 }}
+          className="h-full rounded-full"
+          initial={{ width: "0%" }}
+          animate={{ width: `${Math.max(usedPct, 0.5)}%` }}
+          transition={{ duration: 1, ease: "easeOut", delay: 0.3 + index * 0.08 }}
           style={{
             background: `linear-gradient(90deg, ${barColor}90, ${barColor})`,
             boxShadow: `0 0 12px ${barColor}60, inset 0 1px 0 hsl(0 0% 100% / 0.2)`,
           }}
         />
         {/* Glow overlay on bar */}
-        <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(180deg, hsl(0 0% 100% / 0.08), transparent)` }} />
+        <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: `linear-gradient(180deg, hsl(0 0% 100% / 0.08), transparent)` }} />
       </div>
     </motion.div>
   );
@@ -240,22 +240,29 @@ function formatToMbps(raw: string): string {
   return `${bps.toFixed(0)} bps`;
 }
 
-/* ─── Info Badge ──────────────────────── */
+/* ─── Info Badge (TV-friendly) ──────────────────────── */
 
 function InfoBadge({ label, value, icon: Icon, color }: {
   label: string; value: string; icon: React.ElementType; color?: string;
 }) {
   if (!value) return null;
+  const badgeColor = color || "hsl(186, 100%, 50%)";
   return (
-    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-border/20"
-      style={{ background: "hsl(220 40% 7% / 0.7)" }}
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="rounded-xl border border-border/30 p-4 relative overflow-hidden"
+      style={{
+        background: `linear-gradient(145deg, hsl(220 35% 8% / 0.95), hsl(225 30% 5% / 0.9))`,
+        boxShadow: `0 0 15px ${badgeColor}10, inset 0 1px 0 hsl(0 0% 100% / 0.03)`,
+      }}
     >
-      <Icon className="w-3.5 h-3.5 flex-shrink-0" style={{ color: color || "hsl(var(--muted-foreground))" }} />
-      <div className="min-w-0">
-        <div className="text-[8px] font-mono text-muted-foreground/60 uppercase">{label}</div>
-        <div className="text-[10px] font-mono text-foreground truncate">{value}</div>
+      <div className="flex items-center gap-2 mb-2">
+        <Icon className="w-4 h-4 flex-shrink-0" style={{ color: badgeColor }} />
+        <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider">{label}</span>
       </div>
-    </div>
+      <div className="text-base md:text-lg font-display font-bold text-foreground truncate" title={value}>{value}</div>
+    </motion.div>
   );
 }
 
@@ -496,26 +503,26 @@ export default function VirtualizationMonitor() {
                     subtitle={`${virt.memory.used} / ${virt.memory.total}`}
                   />
                   {/* Network */}
-                  <div className="flex flex-col items-center gap-2">
-                    <div className="w-24 h-24 flex flex-col items-center justify-center rounded-full border border-border/20"
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-36 h-36 md:w-44 md:h-44 flex flex-col items-center justify-center rounded-full border border-border/20"
                       style={{ background: "hsl(220 40% 7% / 0.5)" }}
                     >
-                      <Network className="w-5 h-5 mb-1" style={{ color: "hsl(142, 100%, 50%)" }} />
-                      <div className="text-center">
-                        <div className="flex items-center gap-0.5">
-                          <ArrowDownToLine className="w-2 h-2 text-neon-green/70" />
-                          <span className="text-[8px] font-mono-data text-neon-green">{formatToMbps(virt.network.bytesIn)}</span>
+                      <Network className="w-6 h-6 mb-2" style={{ color: "hsl(142, 100%, 50%)" }} />
+                      <div className="text-center space-y-1">
+                        <div className="flex items-center gap-1">
+                          <ArrowDownToLine className="w-3 h-3 text-neon-green/70" />
+                          <span className="text-sm font-mono-data font-bold text-neon-green">{formatToMbps(virt.network.bytesIn)}</span>
                         </div>
-                        <div className="flex items-center gap-0.5">
-                          <ArrowUpFromLine className="w-2 h-2 text-neon-blue/70" />
-                          <span className="text-[8px] font-mono-data text-neon-blue">{formatToMbps(virt.network.bytesOut)}</span>
+                        <div className="flex items-center gap-1">
+                          <ArrowUpFromLine className="w-3 h-3 text-neon-blue/70" />
+                          <span className="text-sm font-mono-data font-bold text-neon-blue">{formatToMbps(virt.network.bytesOut)}</span>
                         </div>
                       </div>
                     </div>
                     <div className="text-center">
-                      <div className="flex items-center gap-1 justify-center">
-                        <Network className="w-3 h-3 text-muted-foreground" />
-                        <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground">Rede</span>
+                      <div className="flex items-center gap-1.5 justify-center">
+                        <Network className="w-4 h-4 text-muted-foreground" />
+                        <span className="text-sm font-display font-bold uppercase tracking-wider text-muted-foreground">Rede</span>
                       </div>
                     </div>
                   </div>
@@ -565,7 +572,7 @@ export default function VirtualizationMonitor() {
                 </motion.div>
               )}
 
-              {/* ── Network Adapters ── */}
+              {/* ── Network Adapters (TV-friendly) ── */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
@@ -579,56 +586,65 @@ export default function VirtualizationMonitor() {
                   </span>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Download */}
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border/20"
-                    style={{ background: "hsl(220 40% 7% / 0.7)" }}
+                  {/* Download (RX) */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-xl border border-border/30 p-5 relative overflow-hidden"
+                    style={{
+                      background: `linear-gradient(145deg, hsl(220 35% 8% / 0.95), hsl(225 30% 5% / 0.9))`,
+                      boxShadow: `0 0 20px hsl(142 100% 50% / 0.1), inset 0 1px 0 hsl(0 0% 100% / 0.03)`,
+                    }}
                   >
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                      style={{ background: "hsl(142 100% 50% / 0.1)", border: "1px solid hsl(142 100% 50% / 0.2)" }}
-                    >
-                      <ArrowDownToLine className="w-5 h-5" style={{ color: "hsl(142, 100%, 50%)" }} />
-                    </div>
-                    <div>
-                      <div className="text-[8px] font-mono text-muted-foreground/60 uppercase tracking-wider">Incoming (RX)</div>
-                      <div className="text-lg font-mono-data font-bold" style={{ color: "hsl(142, 100%, 50%)", textShadow: "0 0 10px hsl(142 100% 50% / 0.3)" }}>
-                        {formatToMbps(virt.network.bytesIn)}
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <ArrowDownToLine className="w-5 h-5" style={{ color: "hsl(142, 100%, 50%)" }} />
+                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">INCOMING (RX)</span>
                       </div>
                     </div>
-                  </div>
-                  {/* Upload */}
-                  <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border/20"
-                    style={{ background: "hsl(220 40% 7% / 0.7)" }}
-                  >
-                    <div className="w-10 h-10 rounded-full flex items-center justify-center"
-                      style={{ background: "hsl(210 100% 56% / 0.1)", border: "1px solid hsl(210 100% 56% / 0.2)" }}
-                    >
-                      <ArrowUpFromLine className="w-5 h-5" style={{ color: "hsl(210, 100%, 56%)" }} />
+                    <div className="text-4xl font-mono-data font-black leading-none" style={{ color: "hsl(142, 100%, 50%)", textShadow: "0 0 20px hsl(142 100% 50% / 0.3)" }}>
+                      {formatToMbps(virt.network.bytesIn)}
                     </div>
-                    <div>
-                      <div className="text-[8px] font-mono text-muted-foreground/60 uppercase tracking-wider">Outgoing (TX)</div>
-                      <div className="text-lg font-mono-data font-bold" style={{ color: "hsl(210, 100%, 56%)", textShadow: "0 0 10px hsl(210 100% 56% / 0.3)" }}>
-                        {formatToMbps(virt.network.bytesOut)}
+                  </motion.div>
+                  {/* Upload (TX) */}
+                  <motion.div
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.05 }}
+                    className="rounded-xl border border-border/30 p-5 relative overflow-hidden"
+                    style={{
+                      background: `linear-gradient(145deg, hsl(220 35% 8% / 0.95), hsl(225 30% 5% / 0.9))`,
+                      boxShadow: `0 0 20px hsl(210 100% 56% / 0.1), inset 0 1px 0 hsl(0 0% 100% / 0.03)`,
+                    }}
+                  >
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <ArrowUpFromLine className="w-5 h-5" style={{ color: "hsl(210, 100%, 56%)" }} />
+                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">OUTGOING (TX)</span>
                       </div>
                     </div>
-                  </div>
+                    <div className="text-4xl font-mono-data font-black leading-none" style={{ color: "hsl(210, 100%, 56%)", textShadow: "0 0 20px hsl(210 100% 56% / 0.3)" }}>
+                      {formatToMbps(virt.network.bytesOut)}
+                    </div>
+                  </motion.div>
                 </div>
               </motion.div>
 
 
-              {/* ── Host Info Footer ── */}
+              {/* ── Host Info Footer (TV-friendly) ── */}
               <motion.div
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.5 }}
                 className="glass-card rounded-xl p-5 border border-border/30"
               >
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-4">
                   <Server className="w-4 h-4" style={{ color: accentColor }} />
                   <span className="text-xs font-display font-bold uppercase tracking-wider text-foreground">
                     Informações do Host
                   </span>
                 </div>
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
                   <InfoBadge label="Versão" value={virt.host.fullName || virt.host.version} icon={Box} color={accentColor} />
                   {virt.host.model && <InfoBadge label="Modelo" value={virt.host.model} icon={Server} />}
                   {virt.host.vendor && <InfoBadge label="Fabricante" value={virt.host.vendor} icon={Server} />}
