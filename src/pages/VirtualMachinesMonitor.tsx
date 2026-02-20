@@ -47,6 +47,50 @@ function formatUptime(raw: string): string {
   return raw.length > 16 ? raw.slice(0, 16) : raw;
 }
 
+function formatBytes(raw: string): string {
+  if (!raw) return "—";
+  // Already formatted (e.g. "4.00 GB")
+  const fmtMatch = raw.match(/([\d.]+)\s*(KB|MB|GB|TB|KiB|MiB|GiB|TiB)/i);
+  if (fmtMatch) {
+    const num = parseFloat(fmtMatch[1]);
+    const unit = fmtMatch[2].toUpperCase().replace("I", "");
+    const toBytes: Record<string, number> = { KB: 1e3, KIB: 1024, MB: 1e6, MIB: 1024 ** 2, GB: 1e9, GIB: 1024 ** 3, TB: 1e12, TIB: 1024 ** 4, B: 1 };
+    const bytes = num * (toBytes[unit] || 1);
+    if (bytes >= 1024 ** 4) return `${(bytes / 1024 ** 4).toFixed(2)} TB`;
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+    if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  }
+  // Raw number (assume bytes)
+  const num = parseFloat(raw);
+  if (isNaN(num)) return raw;
+  if (num >= 1024 ** 4) return `${(num / 1024 ** 4).toFixed(2)} TB`;
+  if (num >= 1024 ** 3) return `${(num / 1024 ** 3).toFixed(2)} GB`;
+  if (num >= 1024 ** 2) return `${(num / 1024 ** 2).toFixed(1)} MB`;
+  if (num >= 1024) return `${(num / 1024).toFixed(0)} KB`;
+  return `${num.toFixed(0)} B`;
+}
+
+function formatHz(raw: string): string {
+  if (!raw) return "—";
+  const fmtMatch = raw.match(/([\d.]+)\s*(Hz|KHz|MHz|GHz)/i);
+  if (fmtMatch) {
+    const num = parseFloat(fmtMatch[1]);
+    const unit = fmtMatch[2].toLowerCase();
+    const toHz: Record<string, number> = { hz: 1, khz: 1e3, mhz: 1e6, ghz: 1e9 };
+    const hz = num * (toHz[unit] || 1);
+    if (hz >= 1e9) return `${(hz / 1e9).toFixed(2)} GHz`;
+    if (hz >= 1e6) return `${(hz / 1e6).toFixed(0)} MHz`;
+    return `${(hz / 1e3).toFixed(0)} KHz`;
+  }
+  const num = parseFloat(raw);
+  if (isNaN(num)) return raw;
+  if (num >= 1e9) return `${(num / 1e9).toFixed(2)} GHz`;
+  if (num >= 1e6) return `${(num / 1e6).toFixed(0)} MHz`;
+  if (num >= 1e3) return `${(num / 1e3).toFixed(0)} KHz`;
+  return `${num.toFixed(0)} Hz`;
+}
+
 function formatRate(raw: string): string {
   if (!raw) return "—";
   const fmtMatch = raw.match(/([\d.]+)\s*(bps|Kbps|Mbps|Gbps|KBps|MBps|GBps|Bps|B\/s|KB\/s|MB\/s)/i);
@@ -176,7 +220,7 @@ function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
 
         {/* Memory detail */}
         <div className="text-[10px] font-mono text-muted-foreground/60 text-center">
-          {vm.memUsed || "—"} / {vm.memTotal || "—"}
+          {formatBytes(vm.memUsed)} / {formatBytes(vm.memTotal)}
         </div>
 
         {/* Bottom row: Network + Disk + Uptime */}
@@ -246,19 +290,19 @@ function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
                 {vm.ballooned && (
                   <div>
                     <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Ballooned</div>
-                    <div className="text-[10px] font-mono text-foreground/70">{vm.ballooned}</div>
+                    <div className="text-[10px] font-mono text-foreground/70">{formatBytes(vm.ballooned)}</div>
                   </div>
                 )}
                 {vm.swapped && (
                   <div>
                     <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Swapped</div>
-                    <div className="text-[10px] font-mono text-foreground/70">{vm.swapped}</div>
+                    <div className="text-[10px] font-mono text-foreground/70">{formatBytes(vm.swapped)}</div>
                   </div>
                 )}
                 {vm.compressed && (
                   <div>
                     <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Compressed</div>
-                    <div className="text-[10px] font-mono text-foreground/70">{vm.compressed}</div>
+                    <div className="text-[10px] font-mono text-foreground/70">{formatBytes(vm.compressed)}</div>
                   </div>
                 )}
               </div>
@@ -269,7 +313,7 @@ function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
               {vm.committedStorage && (
                 <div>
                   <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Committed</div>
-                  <div className="text-[10px] font-mono text-foreground/70">{vm.committedStorage}</div>
+                  <div className="text-[10px] font-mono text-foreground/70">{formatBytes(vm.committedStorage)}</div>
                 </div>
               )}
               {vm.snapshotCount && (

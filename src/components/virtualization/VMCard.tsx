@@ -26,10 +26,8 @@ function MiniBar({ value, color, bg }: { value: number; color: string; bg: strin
 
 function formatUptime(raw: string): string {
   if (!raw) return "—";
-  // Already formatted like "275 dias, 20:56:35"
   const m = raw.match(/(\d+)\s*(?:dias?|days?)/i);
   if (m) return `${m[1]}d`;
-  // Try parsing seconds
   const secs = parseInt(raw);
   if (!isNaN(secs)) {
     const days = Math.floor(secs / 86400);
@@ -37,6 +35,28 @@ function formatUptime(raw: string): string {
     return days > 0 ? `${days}d ${hours}h` : `${hours}h`;
   }
   return raw.length > 12 ? raw.slice(0, 12) : raw;
+}
+
+function formatBytes(raw: string): string {
+  if (!raw) return "—";
+  const fmtMatch = raw.match(/([\d.]+)\s*(KB|MB|GB|TB|KiB|MiB|GiB|TiB|B)/i);
+  if (fmtMatch) {
+    const num = parseFloat(fmtMatch[1]);
+    const unit = fmtMatch[2].toUpperCase().replace("I", "");
+    const toBytes: Record<string, number> = { KB: 1e3, KIB: 1024, MB: 1e6, MIB: 1024 ** 2, GB: 1e9, GIB: 1024 ** 3, TB: 1e12, TIB: 1024 ** 4, B: 1 };
+    const bytes = num * (toBytes[unit] || 1);
+    if (bytes >= 1024 ** 4) return `${(bytes / 1024 ** 4).toFixed(2)} TB`;
+    if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+    if (bytes >= 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
+    return `${(bytes / 1024).toFixed(0)} KB`;
+  }
+  const num = parseFloat(raw);
+  if (isNaN(num)) return raw;
+  if (num >= 1024 ** 4) return `${(num / 1024 ** 4).toFixed(2)} TB`;
+  if (num >= 1024 ** 3) return `${(num / 1024 ** 3).toFixed(2)} GB`;
+  if (num >= 1024 ** 2) return `${(num / 1024 ** 2).toFixed(1)} MB`;
+  if (num >= 1024) return `${(num / 1024).toFixed(0)} KB`;
+  return `${num.toFixed(0)} B`;
 }
 
 export default function VMCard({ vm, index }: Props) {
@@ -133,7 +153,7 @@ export default function VMCard({ vm, index }: Props) {
               <span className="text-[8px] font-mono text-muted-foreground uppercase">MEM</span>
             </div>
             <span className="text-[9px] font-mono-data font-bold" style={{ color: memColor }}>
-              {vm.memUsed || "—"}<span className="text-muted-foreground/50 font-normal">/{vm.memTotal || "—"}</span>
+              {formatBytes(vm.memUsed)}<span className="text-muted-foreground/50 font-normal">/{formatBytes(vm.memTotal)}</span>
             </span>
           </div>
           <MiniBar value={vm.memPercent} color={memColor} bg="bg-muted/30" />
