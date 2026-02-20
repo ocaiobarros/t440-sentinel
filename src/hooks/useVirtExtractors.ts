@@ -247,10 +247,23 @@ export function extractProxmoxData(d: IdracData): VirtData {
       ? (parseBytes(memUsedStr) / parseBytes(memTotalStr)) * 100
       : 0;
 
+    // Try to find CPU usage in Hz for this VM
+    let vmCpuHz = "";
+    for (const [itemName, item] of d.items) {
+      if (itemName.startsWith(`Proxmox: VM [${fullKey}]:`) && itemName.toLowerCase().includes("cpu")) {
+        const unit = (item.units || "").toLowerCase();
+        if (unit === "hz" || unit === "mhz" || unit === "ghz") {
+          vmCpuHz = item.lastvalue || "";
+          break;
+        }
+      }
+    }
+
     vms.push({
       name: vmName,
       status: vmGet("Status"),
       cpuUsage: parsePercent(vmGet("CPU usage")),
+      cpuUsageHz: vmCpuHz,
       memTotal: memTotalStr,
       memUsed: memUsedStr,
       memPercent: Math.min(memPct, 100),
@@ -334,6 +347,19 @@ export function extractVMwareGuestData(d: IdracData): VirtData {
   else if (vmStateRaw === "4") vmStatus = "standby";
   else if (vmStateRaw === "1") vmStatus = "resetting";
 
+  // Discover CPU usage in Hz (scan all items for Hz-unit CPU items)
+  let cpuUsageHzValue = "";
+  for (const [name, item] of d.items) {
+    const nameLower = name.toLowerCase();
+    if (nameLower.includes("cpu") && nameLower.includes("usage") && !nameLower.includes("percent") && !nameLower.includes("latency") && !nameLower.includes("readiness")) {
+      const unit = (item.units || "").toLowerCase();
+      if (unit === "hz" || unit === "mhz" || unit === "ghz" || (!unit && parseFloat(item.lastvalue) > 1000)) {
+        cpuUsageHzValue = item.lastvalue || "";
+        break;
+      }
+    }
+  }
+
   // Discover network interfaces
   let totalNetIn = 0, totalNetOut = 0;
   for (const [name, item] of d.items) {
@@ -382,7 +408,7 @@ export function extractVMwareGuestData(d: IdracData): VirtData {
     name: "This VM", // Will be overridden by the page using config.hostName
     status: vmStatus,
     cpuUsage: cpuPct,
-    cpuUsageHz: get("CPU usage") || "",
+    cpuUsageHz: cpuUsageHzValue || get("CPU usage") || "",
     memTotal,
     memUsed: get("Guest memory usage") || get("Host memory usage"),
     memPercent: Math.min(memPct, 100),
