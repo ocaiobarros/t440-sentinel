@@ -18,6 +18,7 @@ import NotFound from "./pages/NotFound";
 import FleetIntelligence from "./pages/FleetIntelligence";
 import AdminHub from "./pages/AdminHub";
 import VirtualizationMonitor from "./pages/VirtualizationMonitor";
+import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
 
 const queryClient = new QueryClient();
 
@@ -101,6 +102,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <VirtualizationMonitor />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/templates/virtualmachines-monitor"
+              element={
+                <ProtectedRoute>
+                  <VirtualMachinesMonitor />
                 </ProtectedRoute>
               }
             />
