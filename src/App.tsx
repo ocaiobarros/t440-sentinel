@@ -19,6 +19,7 @@ import FleetIntelligence from "./pages/FleetIntelligence";
 import AdminHub from "./pages/AdminHub";
 import VirtualizationMonitor from "./pages/VirtualizationMonitor";
 import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
+import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 
 const queryClient = new QueryClient();
 
@@ -110,6 +111,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <VirtualMachinesMonitor />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/Flow/bgp-asn-flow-monitor"
+              element={
+                <ProtectedRoute>
+                  <BgpFlowMonitor />
                 </ProtectedRoute>
               }
             />
