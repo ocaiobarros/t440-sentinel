@@ -167,10 +167,10 @@ export default function IdracSetupWizard({ onComplete, existingConfig }: Props) 
             <h1 className="font-display text-2xl font-bold tracking-wider">
               <span className="text-neon-green text-glow-green">FLOWPULSE</span>
               <span className="text-muted-foreground mx-2">|</span>
-              <span className="text-foreground">iDRAC T440</span>
+              <span className="text-foreground">Server Monitor</span>
             </h1>
           </div>
-          <p className="text-xs text-muted-foreground font-mono">Configure a fonte de dados para ativar o template</p>
+          <p className="text-xs text-muted-foreground font-mono">Dell iDRAC (T440, R440, R720, R740) • Linux/SNMP (Huawei 2288H)</p>
         </div>
 
         {/* Step indicators */}
