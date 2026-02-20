@@ -10,6 +10,12 @@ interface InventoryData {
   dracFirmware: string;
   dracUrl: string;
   dracVersion: string;
+  systemName?: string;
+  uptime?: string;
+  systemDescription?: string;
+  systemLocation?: string;
+  systemContact?: string;
+  os?: string;
 }
 
 interface Props {
@@ -20,10 +26,14 @@ const InventorySection = ({ inventory }: Props) => {
   const items = [
     { label: 'Modelo', value: inventory.model },
     { label: 'Asset Tag', value: inventory.assetTag },
-    { label: 'Service Code', value: inventory.serviceCode },
+    { label: 'Service Code / Serial', value: inventory.serviceCode },
     { label: 'BIOS', value: `${inventory.biosVersion}${inventory.biosDate ? ` (${inventory.biosDate})` : ''}` },
-    { label: 'iDRAC FW', value: inventory.dracFirmware },
-  ].filter(i => i.value);
+    { label: 'Firmware', value: inventory.dracFirmware },
+    { label: 'Nome', value: inventory.systemName },
+    { label: 'Uptime', value: inventory.uptime },
+    { label: 'SO', value: inventory.os },
+    { label: 'Local', value: inventory.systemLocation },
+  ].filter(i => i.value && i.value.trim());
 
   return (
     <motion.div

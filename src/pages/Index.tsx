@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { Activity, Server, Database, Power, Loader2, Settings2 } from 'lucide-react';
+import { Activity, Server, Database, Power, Loader2, Settings2, Wifi, Cpu as CpuIcon } from 'lucide-react';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import StatusCard from '@/components/dashboard/StatusCard';
 import TemperatureSection from '@/components/dashboard/TemperatureSection';
@@ -8,6 +8,8 @@ import PowerSection from '@/components/dashboard/PowerSection';
 import StorageSection from '@/components/dashboard/StorageSection';
 import NetworkSection from '@/components/dashboard/NetworkSection';
 import InventorySection from '@/components/dashboard/InventorySection';
+import CpuMemorySection from '@/components/dashboard/CpuMemorySection';
+import FilesystemSection from '@/components/dashboard/FilesystemSection';
 import IdracSetupWizard, { loadIdracConfig, clearIdracConfig, type IdracConfig } from '@/components/dashboard/IdracSetupWizard';
 import {
   useIdracLive,
@@ -19,6 +21,9 @@ import {
   extractRaid,
   extractNics,
   extractInventory,
+  extractCpu,
+  extractLinuxMemory,
+  extractFilesystems,
 } from '@/hooks/useIdracLive';
 
 const Index = () => {
@@ -38,7 +43,6 @@ const Index = () => {
     setShowSetup(true);
   };
 
-  // Show wizard if not configured
   if (showSetup) {
     return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} />;
   }
@@ -52,23 +56,34 @@ const Index = () => {
   const raid = data ? extractRaid(data) : null;
   const nics = data ? extractNics(data) : null;
   const inventory = data ? extractInventory(data) : null;
+  const cpu = data ? extractCpu(data) : null;
+  const linuxMem = data ? extractLinuxMemory(data) : null;
+  const filesystems = data ? extractFilesystems(data) : null;
+
+  const hasTemps = temps && (temps.cpu1.value || temps.cpu2.value || temps.inlet.value);
+  const hasFans = fans && fans.length > 0;
+  const hasPower = power && power.supplies.length > 0;
+  const hasDisks = disks && disks.length > 0;
+  const hasRaid = raid && (raid.controller.name || raid.volumes.length > 0);
+  const hasNics = nics && nics.length > 0;
+  const hasCpu = cpu && cpu.utilization;
+  const hasLinuxMem = linuxMem && linuxMem.total;
+  const hasFilesystems = filesystems && filesystems.length > 0;
+  const isLinux = data?.hostType === "linux";
 
   return (
     <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
-      {/* Ambient glow effect */}
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-green/5 rounded-full blur-[120px] pointer-events-none" />
       <div className="fixed bottom-0 right-0 w-[400px] h-[400px] bg-neon-blue/3 rounded-full blur-[100px] pointer-events-none" />
 
       <div className="max-w-[1600px] mx-auto relative z-10">
-        {/* Header */}
         <DashboardHeader
-          hostName={config?.hostName ?? "T440-MDP"}
+          hostName={config?.hostName ?? "Server"}
           lastRefresh={lastRefresh}
           onRefresh={data ? refresh : undefined}
           isLoading={dataLoading}
         />
 
-        {/* Reconfigure button - subtle top-right */}
         <div className="flex justify-end mb-2 -mt-4">
           <button
             onClick={handleReconfigure}
@@ -79,7 +94,6 @@ const Index = () => {
           </button>
         </div>
 
-        {/* Loading state */}
         {dataLoading && !data && (
           <div className="glass-card rounded-xl p-16 text-center">
             <Loader2 className="w-8 h-8 text-neon-green animate-spin mx-auto mb-4" />
@@ -98,45 +112,63 @@ const Index = () => {
           </div>
         )}
 
-        {/* Dashboard content */}
         {data && status && (
           <>
-            {/* TOPO — Status Rápido */}
+            {/* Status Cards */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
               <StatusCard title="Status Geral" rawValue={status.overallStatus} icon={<Server className="w-4 h-4 text-muted-foreground" />} delay={0.1} />
-              <StatusCard title="Rollup" rawValue={status.rollupStatus} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.15} />
-              <StatusCard title="Storage" rawValue={status.storageStatus} icon={<Database className="w-4 h-4 text-muted-foreground" />} delay={0.2} />
-              <StatusCard title="Energia" rawValue={status.powerState} icon={<Power className="w-4 h-4 text-muted-foreground" />} delay={0.25} />
+              {!isLinux && <StatusCard title="Rollup" rawValue={status.rollupStatus} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
+              {!isLinux && <StatusCard title="Storage" rawValue={status.storageStatus} icon={<Database className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
+              {!isLinux && <StatusCard title="Energia" rawValue={status.powerState} icon={<Power className="w-4 h-4 text-muted-foreground" />} delay={0.25} />}
+              {isLinux && <StatusCard title="ICMP" rawValue={status.icmpPing} icon={<Wifi className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
+              {isLinux && <StatusCard title="SNMP" rawValue={status.snmpAvailability} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
+              {isLinux && hasCpu && <StatusCard title="CPU" rawValue={cpu!.utilization ? `${(parseFloat(cpu!.utilization) * 100).toFixed(1)}%` : ""} icon={<CpuIcon className="w-4 h-4 text-muted-foreground" />} delay={0.25} />}
             </div>
 
-            {/* MEIO — Temperatura + Ventilação + Energia */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
-              <div className="lg:col-span-1">
-                {temps && <TemperatureSection temperatures={temps} />}
+            {/* CPU + Memory (Linux hosts) */}
+            {(hasCpu || hasLinuxMem) && (
+              <div className="mb-6">
+                <CpuMemorySection cpu={hasCpu ? cpu : null} memory={hasLinuxMem ? linuxMem : null} />
               </div>
-              <div className="lg:col-span-1">
-                {fans && <FanSection fans={fans} />}
-              </div>
-              <div className="lg:col-span-1">
-                {power && <PowerSection powerSupplies={power.supplies} minIdlePower={power.minIdlePower} />}
-              </div>
-            </div>
+            )}
 
-            {/* BASE — Armazenamento */}
-            {disks && raid && (
+            {/* Temperature + Fans + Power (iDRAC hosts) */}
+            {(hasTemps || hasFans || hasPower) && (
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+                <div className="lg:col-span-1">
+                  {hasTemps && temps && <TemperatureSection temperatures={temps} />}
+                </div>
+                <div className="lg:col-span-1">
+                  {hasFans && fans && <FanSection fans={fans} />}
+                </div>
+                <div className="lg:col-span-1">
+                  {hasPower && power && <PowerSection powerSupplies={power.supplies} minIdlePower={power.minIdlePower} />}
+                </div>
+              </div>
+            )}
+
+            {/* Filesystems (Linux hosts) */}
+            {hasFilesystems && filesystems && (
+              <div className="mb-6">
+                <FilesystemSection filesystems={filesystems} />
+              </div>
+            )}
+
+            {/* Storage (iDRAC hosts) */}
+            {hasDisks && hasRaid && disks && raid && (
               <div className="mb-6">
                 <StorageSection disks={disks} raidController={raid.controller} volumes={raid.volumes} />
               </div>
             )}
 
-            {/* Rede */}
-            {nics && (
+            {/* Network */}
+            {hasNics && nics && (
               <div className="mb-6">
                 <NetworkSection nics={nics} />
               </div>
             )}
 
-            {/* Inventário */}
+            {/* Inventory */}
             {inventory && (
               <div className="mb-6">
                 <InventorySection inventory={inventory} />
@@ -145,10 +177,9 @@ const Index = () => {
           </>
         )}
 
-        {/* Footer */}
         <div className="text-center py-4">
           <p className="text-[10px] font-mono text-muted-foreground/50">
-            FLOWPULSE | iDRAC — {config?.hostName ?? "T440-MDP"} • Datasource: Zabbix • Refresh: 2min
+            FLOWPULSE | {config?.hostName ?? "Server"} • Datasource: Zabbix • Refresh: 2min
           </p>
         </div>
       </div>
