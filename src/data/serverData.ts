@@ -1,31 +1,52 @@
 export type StatusLevel = 'ok' | 'warning' | 'critical' | 'info';
 
+/**
+ * IDRAC-MIB-SMIv2::ObjectStatusEnum mapping:
+ *   1=Other, 2=Unknown, 3=OK, 4=Non-critical, 5=Critical, 6=Non-recoverable
+ *
+ * StatusProbeEnum (fans, temps):
+ *   3=ok, 4=nonCriticalUpper, 5=criticalUpper, 6=nonRecoverableUpper,
+ *   7=nonCriticalLower, 8=criticalLower, 9=nonRecoverableLower, 10=failed
+ */
+
+const IDRAC_STATUS_LABELS: Record<number, { label: string; level: StatusLevel }> = {
+  1:  { label: 'Other',            level: 'info' },
+  2:  { label: 'Unknown',          level: 'info' },
+  3:  { label: 'OK',               level: 'ok' },
+  4:  { label: 'Non-critical',     level: 'warning' },
+  5:  { label: 'Critical',         level: 'critical' },
+  6:  { label: 'Non-recoverable',  level: 'critical' },
+  7:  { label: 'Non-critical Low', level: 'warning' },
+  8:  { label: 'Critical Low',     level: 'critical' },
+  9:  { label: 'Non-recoverable Low', level: 'critical' },
+  10: { label: 'Failed',           level: 'critical' },
+};
+
 export function parseStatus(raw: string): { text: string; level: StatusLevel } {
   const cleaned = raw.replace(/\s*\(\d+\)\s*$/, '').trim();
   const lower = cleaned.toLowerCase();
 
-  // Match known OK keywords
-  if (lower.includes('ok') || lower.includes('online') || lower.includes('up') || lower.includes('presence detected') || lower.includes('online and ok') || lower === 'on') {
-    return { text: cleaned, level: 'ok' };
-  }
-  if (lower.includes('warning') || lower.includes('attention')) {
-    return { text: cleaned, level: 'warning' };
-  }
-  if (lower.includes('critical') || lower.includes('fail') || lower.includes('down') || lower.includes('error') || lower === 'off') {
-    return { text: cleaned, level: 'critical' };
-  }
-
-  // Zabbix numeric codes: 3 = OK, 4 = On/Present, 1 = Up/Present, 2 = Warning-ish
-  const num = parseInt(cleaned, 10);
-  if (!isNaN(num)) {
-    if (num === 3 || num === 4 || num === 1) return { text: cleaned, level: 'ok' };
-    if (num === 2) return { text: cleaned, level: 'warning' };
-    if (num === 0 || num === 5) return { text: cleaned, level: 'critical' };
-  }
-
   // Dash/empty = info
   if (cleaned === '—' || cleaned === '' || cleaned === '-') {
     return { text: cleaned, level: 'info' };
+  }
+
+  // Match known OK keywords
+  if (lower.includes('ok') || lower.includes('online') || lower.includes('up') || lower.includes('presence detected') || lower === 'on') {
+    return { text: cleaned, level: 'ok' };
+  }
+  if (lower.includes('non-critical') || lower.includes('noncritical') || lower.includes('warning') || lower.includes('attention')) {
+    return { text: cleaned, level: 'warning' };
+  }
+  if (lower.includes('critical') || lower.includes('non-recoverable') || lower.includes('nonrecoverable') || lower.includes('fail') || lower.includes('down') || lower.includes('error') || lower === 'off') {
+    return { text: cleaned, level: 'critical' };
+  }
+
+  // Zabbix/iDRAC numeric codes (ObjectStatusEnum / StatusProbeEnum)
+  const num = parseInt(cleaned, 10);
+  if (!isNaN(num)) {
+    const mapped = IDRAC_STATUS_LABELS[num];
+    if (mapped) return { text: mapped.label, level: mapped.level };
   }
 
   return { text: cleaned, level: 'info' };
