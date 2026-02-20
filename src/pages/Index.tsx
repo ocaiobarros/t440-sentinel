@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { Activity, Server, Database, Power, Loader2, Settings2, Wifi, Cpu as CpuIcon } from 'lucide-react';
+import { parsePowerState, parseSnmpAvailability } from '@/data/serverData';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import StatusCard from '@/components/dashboard/StatusCard';
 import TemperatureSection from '@/components/dashboard/TemperatureSection';
@@ -131,9 +132,9 @@ const Index = () => {
               <StatusCard title="Status Geral" rawValue={status.overallStatus || "—"} icon={<Server className="w-4 h-4 text-muted-foreground" />} delay={0.1} />
               {!isLinux && <StatusCard title="Rollup" rawValue={status.rollupStatus || "—"} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
               {!isLinux && <StatusCard title="Storage" rawValue={status.storageStatus || "—"} icon={<Database className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
-              {!isLinux && <StatusCard title="Energia" rawValue={status.powerState || "—"} icon={<Power className="w-4 h-4 text-muted-foreground" />} delay={0.25} />}
+              {!isLinux && <StatusCard title="Energia" rawValue={status.powerState || "—"} icon={<Power className="w-4 h-4 text-muted-foreground" />} delay={0.25} parser={parsePowerState} />}
               {isLinux && <StatusCard title="ICMP" rawValue={status.icmpPing || "—"} icon={<Wifi className="w-4 h-4 text-muted-foreground" />} delay={0.15} />}
-              {isLinux && <StatusCard title="SNMP" rawValue={status.snmpAvailability || "—"} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.2} />}
+              {isLinux && <StatusCard title="SNMP" rawValue={status.snmpAvailability || "—"} icon={<Activity className="w-4 h-4 text-muted-foreground" />} delay={0.2} parser={parseSnmpAvailability} />}
               {isLinux && hasCpu && <StatusCard title="CPU" rawValue={cpu!.utilization ? `${(parseFloat(cpu!.utilization) * 100).toFixed(1)}%` : "—"} icon={<CpuIcon className="w-4 h-4 text-muted-foreground" />} delay={0.25} />}
             </div>
 

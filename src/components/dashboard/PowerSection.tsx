@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Plug, Zap } from 'lucide-react';
-import { parseStatus } from '@/data/serverData';
+import { parseStatus, parsePsuState } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
 interface PSU {
@@ -59,7 +59,7 @@ const PowerSection = ({ powerSupplies, minIdlePower }: Props) => {
                 </div>
                 <div className="col-span-2">
                   <div className="text-muted-foreground">Estado</div>
-                  <div className="text-neon-green text-[11px]">{parseStatus(psu.state || "OK").text}</div>
+                  <div className="text-neon-green text-[11px]">{parsePsuState(psu.state || "OK").text}</div>
                 </div>
               </div>
             </div>
