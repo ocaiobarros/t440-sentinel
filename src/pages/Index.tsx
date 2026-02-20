@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Activity, Server, Database, Power, Loader2, Settings2, Wifi, Cpu as CpuIcon } from 'lucide-react';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import StatusCard from '@/components/dashboard/StatusCard';
@@ -30,6 +30,13 @@ const Index = () => {
   const [config, setConfig] = useState<IdracConfig | null>(loadIdracConfig);
   const [showSetup, setShowSetup] = useState(!config);
   const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
+
+  // Auto-fetch on mount when config exists from localStorage
+  useEffect(() => {
+    if (config && !data && !dataLoading) {
+      fetchItems(config.connectionId, config.hostId);
+    }
+  }, [config, data, dataLoading, fetchItems]);
 
   const handleConfigComplete = useCallback((cfg: IdracConfig) => {
     setConfig(cfg);
