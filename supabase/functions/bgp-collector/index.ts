@@ -120,6 +120,19 @@ interface BgpPayload {
     target_asn: number;
     bw_mbps: number;
   }>;
+  network_summary?: {
+    subnets?: Array<{ name: string; in_bytes?: number; out_bytes?: number; total_bytes: number }>;
+    applications?: Array<{ name: string; total_bytes: number }>;
+    mapped_objects?: Array<{ name: string; in_bytes?: number; out_bytes?: number; total_bytes: number }>;
+    protocols?: Array<{ name: string; total_bytes: number }>;
+    tos?: Array<{ name: string; total_bytes: number }>;
+    autonomous_systems?: Array<{ name: string; in_bytes?: number; out_bytes?: number; total_bytes: number }>;
+    subnet_groups?: Array<{ name: string; in_bytes?: number; out_bytes?: number; total_bytes: number }>;
+    interface_groups?: Array<{ name: string; in_bytes?: number; out_bytes?: number; total_bytes: number }>;
+    as_groups?: Array<{ name: string; in_bytes?: number; out_bytes?: number; total_bytes: number }>;
+    tos_groups?: Array<{ name: string; total_bytes: number }>;
+    devices?: Array<{ name: string; total_bytes: number }>;
+  };
 }
 
 /* ─── Main ── */
@@ -233,6 +246,7 @@ Deno.serve(async (req) => {
       })),
       enriched,
       flow_data: classifiedFlows,
+      network_summary: body.network_summary || null,
     };
 
     // 5. Cache in Redis

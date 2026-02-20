@@ -5,10 +5,11 @@ import {
   Settings2, Network, Globe, ArrowDownToLine, ArrowUpFromLine,
   BarChart3, Filter, Activity, Eye, EyeOff, Lock, User,
   RefreshCw, Wifi, WifiOff, TrendingUp, TrendingDown, Minus,
-  Zap, ArrowRight,
+  Zap, ArrowRight, Layers,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { supabase } from "@/integrations/supabase/client";
+import NetworkSummaryPanel, { type NetworkSummaryData } from "@/components/bgp/NetworkSummaryPanel";
 
 /* ─── Config persistence ── */
 
@@ -571,6 +572,7 @@ interface BgpState {
     target_info?: { name: string; type: string } | null;
     traffic_type?: string;
   }>;
+  network_summary: NetworkSummaryData;
   timestamp: number | null;
   connected: boolean;
 }
@@ -614,9 +616,124 @@ const MOCK_STATS: BgpState["stats"] = {
   active_asns: new Set(MOCK_PEERS.map(p => p.asn)).size,
 };
 
+const MOCK_NETWORK_SUMMARY: NetworkSummaryData = {
+  subnets: [
+    { name: "IPv4", in_bytes: 32.51e12, out_bytes: 32.51e12, total_bytes: 65.01e12 },
+    { name: "IPv6", in_bytes: 13.61e12, out_bytes: 13.61e12, total_bytes: 27.21e12 },
+    { name: "Bloco - 2804:4afc::/32", in_bytes: 6.32e12, out_bytes: 8.93e12, total_bytes: 15.25e12 },
+    { name: "Bloco - 2804:4afc:8000::/33", in_bytes: 6.32e12, out_bytes: 8.76e12, total_bytes: 15.08e12 },
+    { name: "Bloco - 2804:4afc:8000::/34", in_bytes: 6.32e12, out_bytes: 6.90e12, total_bytes: 13.22e12 },
+    { name: "Bloco - 2804:4afc:8000::/35", in_bytes: 6.32e12, out_bytes: 6.90e12, total_bytes: 13.22e12 },
+    { name: "FNA", in_bytes: 8.36e12, out_bytes: 2.27e12, total_bytes: 10.63e12 },
+    { name: "GGC", in_bytes: 7.09e12, out_bytes: 3.33e12, total_bytes: 10.42e12 },
+    { name: "Bloco - 45.232.214.0/24", in_bytes: 5.86e12, out_bytes: 3.57e12, total_bytes: 9.43e12 },
+    { name: "Bloco - 45.232.213.0/24", in_bytes: 5.77e12, out_bytes: 646.23e9, total_bytes: 6.42e12 },
+  ],
+  applications: [
+    { name: "HTTPS", total_bytes: 19.62e12 },
+    { name: "QUIC", total_bytes: 18.83e12 },
+    { name: "HTTP", total_bytes: 2.87e12 },
+    { name: "DNS", total_bytes: 19.19e9 },
+    { name: "POP", total_bytes: 158.15e6 },
+    { name: "TRAFIP", total_bytes: 145.09e6 },
+    { name: "SMTP", total_bytes: 96.71e6 },
+  ],
+  protocols: [
+    { name: "TCP", total_bytes: 23.70e12 },
+    { name: "UDP", total_bytes: 22.40e12 },
+    { name: "GRE", total_bytes: 6.02e9 },
+    { name: "ICMP", total_bytes: 2.75e9 },
+    { name: "VRRP", total_bytes: 2.77e6 },
+    { name: "OSPF", total_bytes: 596e3 },
+    { name: "IPoIP", total_bytes: 60e3 },
+  ],
+  autonomous_systems: [
+    { name: "67 61614", in_bytes: 18.92e12, out_bytes: 15.00e12, total_bytes: 33.92e12 },
+    { name: "Cliente - M2 Bonito", in_bytes: 0, out_bytes: 8.34e12, total_bytes: 8.34e12 },
+    { name: "Google", in_bytes: 5.65e12, out_bytes: 290.37e9, total_bytes: 5.94e12 },
+    { name: "67 TELECOM RESERVA", in_bytes: 952.06e9, out_bytes: 4.13e12, total_bytes: 5.08e12 },
+    { name: "AS CGNAT", in_bytes: 176.50e9, out_bytes: 4.81e12, total_bytes: 4.99e12 },
+    { name: "Facebook", in_bytes: 4.27e12, out_bytes: 155.67e9, total_bytes: 4.43e12 },
+    { name: "67 26947", in_bytes: 83.33e6, out_bytes: 4.38e12, total_bytes: 4.38e12 },
+    { name: "Cliente - MDA Bela Vista", in_bytes: 169.71e6, out_bytes: 2.72e12, total_bytes: 2.72e12 },
+    { name: "Akamai", in_bytes: 1.99e12, out_bytes: 42.70e9, total_bytes: 2.03e12 },
+    { name: "Cliente - GMN", in_bytes: 0, out_bytes: 1.90e12, total_bytes: 1.90e12 },
+  ],
+  tos: [
+    { name: "CS0", total_bytes: 44.17e12 },
+    { name: "CS1 CISCO", total_bytes: 284.96e9 },
+    { name: "AF41 Vanguard", total_bytes: 130.78e9 },
+    { name: "CS1 Vanguard", total_bytes: 115.44e9 },
+    { name: "CS3 Vanguard", total_bytes: 112.68e9 },
+    { name: "AF41 CISCO", total_bytes: 80.94e9 },
+    { name: "AF32 CISCO", total_bytes: 70.67e9 },
+    { name: "AF11 CISCO", total_bytes: 60.14e9 },
+    { name: "CS4 CISCO", total_bytes: 37.16e9 },
+    { name: "AF43 CISCO", total_bytes: 31.45e9 },
+  ],
+  subnet_groups: [
+    { name: "67 TELECOM", in_bytes: 19.97e12, out_bytes: 24.37e12, total_bytes: 44.34e12 },
+    { name: "AS61614", in_bytes: 19.87e12, out_bytes: 19.13e12, total_bytes: 39.00e12 },
+    { name: "CDN", in_bytes: 17.44e12, out_bytes: 5.60e12, total_bytes: 23.04e12 },
+    { name: "Clientes - Subredes", in_bytes: 1.24e9, out_bytes: 5.05e12, total_bytes: 5.06e12 },
+    { name: "AS26947", in_bytes: 83.33e6, out_bytes: 4.38e12, total_bytes: 4.38e12 },
+    { name: "CGNAT", in_bytes: 148e3, out_bytes: 3.90e12, total_bytes: 3.90e12 },
+    { name: "AS64165", in_bytes: 95.18e9, out_bytes: 858.76e9, total_bytes: 953.94e9 },
+  ],
+  interface_groups: [
+    { name: "1 - Total Trânsito", in_bytes: 16.08e12, out_bytes: 3.31e12, total_bytes: 19.39e12 },
+    { name: "1 - Total CDNs", in_bytes: 18.74e12, out_bytes: 91.59e9, total_bytes: 18.83e12 },
+    { name: "C21 - Computize DDoS", in_bytes: 5.39e12, out_bytes: 3.18e12, total_bytes: 8.57e12 },
+    { name: "C83 - CDN MNA", in_bytes: 8.36e12, out_bytes: 0, total_bytes: 8.36e12 },
+    { name: "C82 - CDN GGC", in_bytes: 7.09e12, out_bytes: 66.69e9, total_bytes: 7.15e12 },
+    { name: "C01 - Vivo", in_bytes: 6.57e12, out_bytes: 133.08e9, total_bytes: 6.70e12 },
+    { name: "1 - Total PNI", in_bytes: 5.32e12, out_bytes: 840.28e9, total_bytes: 6.16e12 },
+    { name: "A10-OUTSIDE", in_bytes: 1.05e12, out_bytes: 4.62e12, total_bytes: 5.67e12 },
+    { name: "CLIENTES", in_bytes: 678.87e9, out_bytes: 3.86e12, total_bytes: 4.54e12 },
+    { name: "C03 - OpenX", in_bytes: 4.11e12, out_bytes: 64e3, total_bytes: 4.11e12 },
+  ],
+  as_groups: [
+    { name: "Clientes", in_bytes: 20.37e12, out_bytes: 38.97e12, total_bytes: 59.34e12 },
+    { name: "Conteúdos", in_bytes: 21.30e12, out_bytes: 783.09e9, total_bytes: 22.08e12 },
+    { name: "Games", in_bytes: 614.41e9, out_bytes: 42.14e9, total_bytes: 656.55e9 },
+  ],
+  tos_groups: [
+    { name: "Best Effort", total_bytes: 44.17e12 },
+    { name: "Bulk [EBT]", total_bytes: 498.19e9 },
+    { name: "Missão Crítica [EBT]", total_bytes: 196.08e9 },
+    { name: "Vídeo [EBT]", total_bytes: 80.94e9 },
+    { name: "Network Control [EBT]", total_bytes: 27.57e9 },
+    { name: "Voz", total_bytes: 25.84e9 },
+    { name: "DADOSBL [PRIMESYS]", total_bytes: 3.92e9 },
+    { name: "Interativa [EBT]", total_bytes: 1.43e9 },
+    { name: "SUP [PRIMESYS]", total_bytes: 570.94e6 },
+    { name: "DADOSBG [PRIMESYS]", total_bytes: 339.18e6 },
+  ],
+  mapped_objects: [
+    { name: "[Virtual-Ethernet0/1/701.970] VS-BGP-SP4", in_bytes: 3.02e12, out_bytes: 8.33e12, total_bytes: 11.35e12 },
+    { name: "[Virtual-Ethernet0/1/701.970] VS01-BGP-CGR", in_bytes: 8.21e12, out_bytes: 3.02e12, total_bytes: 11.22e12 },
+    { name: "[Virtual-Ethernet0/1/701.4000] VS01-BGP-CGR", in_bytes: 2.89e12, out_bytes: 7.67e12, total_bytes: 10.56e12 },
+    { name: "[100GE0/0/1] PE-PPR-02", in_bytes: 0, out_bytes: 9.05e12, total_bytes: 9.05e12 },
+    { name: "[100GE0/0/2] PE-PPR-02", in_bytes: 0, out_bytes: 9.02e12, total_bytes: 9.02e12 },
+    { name: "[Eth-Trunk149.3105] VS-BGP-SP4", in_bytes: 5.39e12, out_bytes: 3.18e12, total_bytes: 8.57e12 },
+    { name: "[Virtual-Ethernet0/1/701.4001] VS01-BGP-CGR", in_bytes: 1.16e12, out_bytes: 7.03e12, total_bytes: 8.19e12 },
+    { name: "[Eth-Trunk31.1310] VS01-BGP-CGR", in_bytes: 6.57e12, out_bytes: 133.08e9, total_bytes: 6.70e12 },
+    { name: "[Eth-Trunk31.48] VS01-BGP-CGR", in_bytes: 952.05e9, out_bytes: 4.09e12, total_bytes: 5.04e12 },
+    { name: "[Virtual-Ethernet0/1/701.980] VS01-BGP-DOS", in_bytes: 4.79e12, out_bytes: 3.01e9, total_bytes: 4.79e12 },
+  ],
+  devices: [
+    { name: "VS01-BGP-CGR", total_bytes: 30.26e12 },
+    { name: "PE-PPR-02", total_bytes: 18.35e12 },
+    { name: "VS-BGP-SP4", total_bytes: 12.86e12 },
+    { name: "VS-PNI-SP4", total_bytes: 6.16e12 },
+    { name: "VS01-BGP-DOS", total_bytes: 4.98e12 },
+    { name: "VS-IXs-SP4", total_bytes: 3.20e12 },
+  ],
+};
+
 function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
   const [state, setState] = useState<BgpState>({
-    stats: MOCK_STATS, peers: MOCK_PEERS, flow_data: MOCK_FLOWS, timestamp: Date.now(), connected: false,
+    stats: MOCK_STATS, peers: MOCK_PEERS, flow_data: MOCK_FLOWS, network_summary: MOCK_NETWORK_SUMMARY, timestamp: Date.now(), connected: false,
   });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
@@ -640,6 +757,7 @@ function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
             stats: data.stats || prev.stats,
             peers: data.peers || prev.peers,
             flow_data: data.flow_data || prev.flow_data,
+            network_summary: data.network_summary || prev.network_summary,
             timestamp: data.timestamp || Date.now(),
           }));
         }
@@ -661,6 +779,7 @@ function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
           stats: payload.stats || prev.stats,
           peers: payload.peers || prev.peers,
           flow_data: payload.flow_data || prev.flow_data,
+          network_summary: payload.network_summary || prev.network_summary,
           timestamp: payload.timestamp || Date.now(),
           connected: true,
         }));
@@ -681,8 +800,8 @@ function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
 function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfigure: () => void }) {
   const hw = HARDWARE_CATALOG.find(h => h.id === config.model);
   const configId = `${config.host}:${config.port}`;
-  const { stats, peers, flow_data, timestamp, connected, refresh } = useBgpRealtime(configId);
-  const [viewMode, setViewMode] = useState<"bgp" | "flow">("bgp");
+  const { stats, peers, flow_data, network_summary, timestamp, connected, refresh } = useBgpRealtime(configId);
+  const [viewMode, setViewMode] = useState<"bgp" | "flow" | "resumo">("bgp");
   const [asnFilter, setAsnFilter] = useState<"all" | "top10" | "latency" | "cost">("all");
   const [isRefreshing, setIsRefreshing] = useState(false);
 
@@ -719,7 +838,7 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
 
         <div className="flex items-center gap-3">
           <div className="flex rounded-lg border border-muted/20 overflow-hidden">
-            {(["bgp", "flow"] as const).map(mode => (
+            {(["bgp", "flow", "resumo"] as const).map(mode => (
               <button
                 key={mode}
                 onClick={() => setViewMode(mode)}
@@ -729,7 +848,7 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
                     : "text-muted-foreground/50 hover:text-muted-foreground/80"
                 }`}
               >
-                {mode === "bgp" ? "Visão BGP" : "Visão Flow"}
+                {mode === "bgp" ? "Visão BGP" : mode === "flow" ? "Visão Flow" : "Resumo Rede"}
               </button>
             ))}
           </div>
@@ -755,110 +874,116 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
       </div>
 
       {/* Main content */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2 rounded-xl border border-muted/20 p-6 min-h-[400px]"
-          style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}>
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="font-mono text-sm text-foreground flex items-center gap-2">
-              <Zap className="w-4 h-4 text-cyan-400" />
-              {viewMode === "flow" ? "Traffic Flow — Sankey" : "BGP Peers Overview"}
-            </h3>
-            <div className="flex gap-2">
-              {Object.entries(TRAFFIC_COLORS).filter(([k]) => k !== "unknown").map(([, tc]) => (
-                <div key={tc.label} className="flex items-center gap-1.5">
-                  <div className="w-3 h-1.5 rounded-full" style={{ background: tc.solid }} />
-                  <span className="text-[9px] font-mono text-muted-foreground/50">{tc.label}</span>
+      {viewMode === "resumo" ? (
+        <NetworkSummaryPanel data={network_summary} />
+      ) : (
+        <>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="lg:col-span-2 rounded-xl border border-muted/20 p-6 min-h-[400px]"
+              style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-mono text-sm text-foreground flex items-center gap-2">
+                  <Zap className="w-4 h-4 text-cyan-400" />
+                  {viewMode === "flow" ? "Traffic Flow — Sankey" : "BGP Peers Overview"}
+                </h3>
+                <div className="flex gap-2">
+                  {Object.entries(TRAFFIC_COLORS).filter(([k]) => k !== "unknown").map(([, tc]) => (
+                    <div key={tc.label} className="flex items-center gap-1.5">
+                      <div className="w-3 h-1.5 rounded-full" style={{ background: tc.solid }} />
+                      <span className="text-[9px] font-mono text-muted-foreground/50">{tc.label}</span>
+                    </div>
+                  ))}
                 </div>
+              </div>
+
+              {viewMode === "flow" ? (
+                <SankeyFlow flows={flow_data} />
+              ) : (
+                peers.length > 0 ? (
+                  <SankeyFlow
+                    flows={peers.filter(p => p.prefixes_received).map(p => ({
+                      source_asn: 0,
+                      target_asn: p.asn,
+                      bw_mbps: p.bw_in_mbps || (p.prefixes_received || 0) / 10,
+                      source_info: { name: config.host, type: "transit" },
+                      target_info: p.info ? { name: p.info.name, type: p.info.type } : null,
+                      traffic_type: p.info?.type || "unknown",
+                    }))}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground/40">
+                    <BarChart3 className="w-10 h-10" />
+                    <p className="text-[11px] font-mono">Aguardando dados de peers...</p>
+                    <p className="text-[9px] font-mono text-muted-foreground/25">
+                      POST para /functions/v1/bgp-collector com peers[]
+                    </p>
+                  </div>
+                )
+              )}
+            </div>
+
+            {/* Stats panel */}
+            <div className="space-y-4">
+              {[
+                { label: "BGP Sessions", value: stats ? `${stats.established_peers}/${stats.total_peers}` : "—", icon: Activity, color: "#00e5ff" },
+                { label: "Prefixes Received", value: stats ? stats.prefixes_received.toLocaleString() : "—", icon: ArrowDownToLine, color: "#448aff" },
+                { label: "Prefixes Sent", value: stats ? stats.prefixes_sent.toLocaleString() : "—", icon: ArrowUpFromLine, color: "#00e676" },
+                { label: "Active ASNs", value: stats ? String(stats.active_asns) : "—", icon: Globe, color: "#c050ff" },
+              ].map(({ label, value, icon: Ic, color }) => (
+                <motion.div
+                  key={label}
+                  initial={{ opacity: 0, x: 20 }}
+                  animate={{ opacity: 1, x: 0 }}
+                  className="rounded-xl border border-muted/20 p-4 flex items-center gap-3"
+                  style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}
+                >
+                  <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${color}15` }}>
+                    <Ic className="w-4.5 h-4.5" style={{ color }} />
+                  </div>
+                  <div>
+                    <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">{label}</div>
+                    <div className="text-lg font-mono font-bold text-foreground">{value}</div>
+                  </div>
+                </motion.div>
               ))}
             </div>
           </div>
 
-          {viewMode === "flow" ? (
-            <SankeyFlow flows={flow_data} />
-          ) : (
-            peers.length > 0 ? (
-              <SankeyFlow
-                flows={peers.filter(p => p.prefixes_received).map(p => ({
-                  source_asn: 0,
-                  target_asn: p.asn,
-                  bw_mbps: p.bw_in_mbps || (p.prefixes_received || 0) / 10,
-                  source_info: { name: config.host, type: "transit" },
-                  target_info: p.info ? { name: p.info.name, type: p.info.type } : null,
-                  traffic_type: p.info?.type || "unknown",
-                }))}
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground/40">
-                <BarChart3 className="w-10 h-10" />
-                <p className="text-[11px] font-mono">Aguardando dados de peers...</p>
-                <p className="text-[9px] font-mono text-muted-foreground/25">
-                  POST para /functions/v1/bgp-collector com peers[]
-                </p>
+          {/* ASN Table */}
+          <div className="mt-6 rounded-xl border border-muted/20 p-6"
+            style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-mono text-sm text-foreground flex items-center gap-2">
+                <Globe className="w-4 h-4 text-cyan-400" />
+                ASN Peers — Enriquecimento LACNIC/Registro.br
+              </h3>
+              <div className="flex gap-2">
+                {([
+                  { key: "all", label: "Todos" },
+                  { key: "top10", label: "Top 10 ASNs" },
+                  { key: "latency", label: "Maior Latência" },
+                  { key: "cost", label: "Custo por Mb" },
+                ] as const).map(f => (
+                  <button
+                    key={f.key}
+                    onClick={() => setAsnFilter(f.key)}
+                    className={`px-3 py-1.5 rounded-lg text-[10px] font-mono border transition-all ${
+                      asnFilter === f.key
+                        ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-400"
+                        : "border-muted/20 text-muted-foreground/50 hover:border-muted/40 hover:text-muted-foreground/80"
+                    }`}
+                  >
+                    <Filter className="w-3 h-3 inline mr-1" />
+                    {f.label}
+                  </button>
+                ))}
               </div>
-            )
-          )}
-        </div>
+            </div>
 
-        {/* Stats panel */}
-        <div className="space-y-4">
-          {[
-            { label: "BGP Sessions", value: stats ? `${stats.established_peers}/${stats.total_peers}` : "—", icon: Activity, color: "#00e5ff" },
-            { label: "Prefixes Received", value: stats ? stats.prefixes_received.toLocaleString() : "—", icon: ArrowDownToLine, color: "#448aff" },
-            { label: "Prefixes Sent", value: stats ? stats.prefixes_sent.toLocaleString() : "—", icon: ArrowUpFromLine, color: "#00e676" },
-            { label: "Active ASNs", value: stats ? String(stats.active_asns) : "—", icon: Globe, color: "#c050ff" },
-          ].map(({ label, value, icon: Ic, color }) => (
-            <motion.div
-              key={label}
-              initial={{ opacity: 0, x: 20 }}
-              animate={{ opacity: 1, x: 0 }}
-              className="rounded-xl border border-muted/20 p-4 flex items-center gap-3"
-              style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}
-            >
-              <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${color}15` }}>
-                <Ic className="w-4.5 h-4.5" style={{ color }} />
-              </div>
-              <div>
-                <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">{label}</div>
-                <div className="text-lg font-mono font-bold text-foreground">{value}</div>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
-
-      {/* ASN Table */}
-      <div className="mt-6 rounded-xl border border-muted/20 p-6"
-        style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}>
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-mono text-sm text-foreground flex items-center gap-2">
-            <Globe className="w-4 h-4 text-cyan-400" />
-            ASN Peers — Enriquecimento LACNIC/Registro.br
-          </h3>
-          <div className="flex gap-2">
-            {([
-              { key: "all", label: "Todos" },
-              { key: "top10", label: "Top 10 ASNs" },
-              { key: "latency", label: "Maior Latência" },
-              { key: "cost", label: "Custo por Mb" },
-            ] as const).map(f => (
-              <button
-                key={f.key}
-                onClick={() => setAsnFilter(f.key)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-mono border transition-all ${
-                  asnFilter === f.key
-                    ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-400"
-                    : "border-muted/20 text-muted-foreground/50 hover:border-muted/40 hover:text-muted-foreground/80"
-                }`}
-              >
-                <Filter className="w-3 h-3 inline mr-1" />
-                {f.label}
-              </button>
-            ))}
+            <AsnTable peers={peers} filter={asnFilter} />
           </div>
-        </div>
-
-        <AsnTable peers={peers} filter={asnFilter} />
-      </div>
+        </>
+      )}
 
       {/* Collector instructions (shown when no data) */}
       {!stats && (
