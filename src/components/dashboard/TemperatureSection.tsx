@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Thermometer } from 'lucide-react';
-import { parseStatus } from '@/data/serverData';
+import { parseProbeStatus } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useState, useEffect, useRef } from 'react';
@@ -24,7 +24,7 @@ interface Props {
 }
 
 const TempCard = ({ label, numValue, status }: { label: string; numValue: number; status: string }) => {
-  const { level } = parseStatus(status || "OK (3)");
+  const { level } = parseProbeStatus(status || "OK (3)");
 
   return (
     <div className="glass-card rounded-lg p-3 flex items-center justify-between gap-3">
@@ -37,7 +37,7 @@ const TempCard = ({ label, numValue, status }: { label: string; numValue: number
       <div className="flex flex-col items-center gap-1">
         <StatusIndicator status={level} size="lg" />
         <span className={`text-xs font-display font-bold ${level === 'ok' ? 'text-neon-green' : level === 'warning' ? 'text-neon-amber' : 'text-neon-red'}`}>
-          {parseStatus(status || "OK").text}
+          {parseProbeStatus(status || "OK").text}
         </span>
       </div>
     </div>

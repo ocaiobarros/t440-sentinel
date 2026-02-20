@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Network, ArrowDown, ArrowUp } from 'lucide-react';
-import { parseStatus } from '@/data/serverData';
+import { parseStatus, parseConnectionStatus } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
 interface NicData {
@@ -85,7 +85,7 @@ const NetworkSection = ({ nics }: Props) => {
           </thead>
           <tbody>
             {nics.map((nic) => {
-              const connStatus = parseStatus(nic.connectionStatus || "");
+              const connStatus = parseConnectionStatus(nic.connectionStatus || "");
               const healthStatus = parseStatus(nic.status || "OK (3)");
               const shortName = nic.name.split(' - ')[0];
 

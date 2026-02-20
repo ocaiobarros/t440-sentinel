@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { StatusLevel, parseStatus } from '@/data/serverData';
+import { StatusLevel, parseStatus, ParsedStatus } from '@/data/serverData';
 
 interface StatusIndicatorProps {
   status: StatusLevel;
@@ -30,10 +30,11 @@ interface StatusCardProps {
   rawValue: string;
   icon?: React.ReactNode;
   delay?: number;
+  parser?: (raw: string) => ParsedStatus;
 }
 
-const StatusCard = ({ title, rawValue, icon, delay = 0 }: StatusCardProps) => {
-  const { text, level } = parseStatus(rawValue);
+const StatusCard = ({ title, rawValue, icon, delay = 0, parser }: StatusCardProps) => {
+  const { text, level } = (parser || parseStatus)(rawValue);
 
   const borderColor = {
     ok: 'border-neon-green/30',

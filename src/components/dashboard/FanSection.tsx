@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { Fan } from 'lucide-react';
-import { parseStatus } from '@/data/serverData';
+import { parseProbeStatus } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
 interface FanData {
@@ -35,7 +35,7 @@ const FanSection = ({ fans }: Props) => {
 
       <div className="grid grid-cols-1 gap-2 max-h-[420px] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-800">
         {fans.map((fan, i) => {
-          const { level } = parseStatus(fan.status || "OK (3)");
+          const { level } = parseProbeStatus(fan.status || "OK (3)");
           const pct = (fan.speedNum / maxRpm) * 100;
 
           return (

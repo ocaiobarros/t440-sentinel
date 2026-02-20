@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { HardDrive, Database, Shield, Battery } from 'lucide-react';
-import { parseStatus } from '@/data/serverData';
+import { parseStatus, parseDiskState, parseRaidLevel, parseRaidVolumeState } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
 interface DiskData {
@@ -166,11 +166,11 @@ const StorageSection = ({ disks, raidController, volumes }: Props) => {
                     <span className="font-mono text-foreground font-bold truncate max-w-[100px]" title={v.name}>{v.name}</span>
                     <div className="flex items-center gap-1">
                       <StatusIndicator status={level} size="sm" />
-                      <span className="text-neon-green font-display text-[10px]">{parseStatus(v.vdState || v.status || "Online").text}</span>
+                      <span className="text-neon-green font-display text-[10px]">{parseRaidVolumeState(v.vdState || v.status || "Online").text}</span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
-                    <span>{v.layoutType ? parseStatus(v.layoutType).text : (v.state ? parseStatus(v.state).text : "")}</span>
+                    <span>{v.layoutType ? parseRaidLevel(v.layoutType).text : (v.state ? parseRaidLevel(v.state).text : "")}</span>
                     <span className="text-foreground">{v.size}</span>
                   </div>
                 </div>
