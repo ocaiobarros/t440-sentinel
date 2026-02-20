@@ -575,9 +575,48 @@ interface BgpState {
   connected: boolean;
 }
 
+/* ─── Mock data for demo ── */
+const MOCK_PEERS: BgpState["peers"] = [
+  { asn: 15169, ip: "187.16.214.1", state: "Established", prefixes_received: 1247, prefixes_sent: 523, bw_in_mbps: 4500, bw_out_mbps: 1200, uptime: "45d 12h", info: { name: "Google", country: "US", type: "cdn" } },
+  { asn: 2906, ip: "187.16.214.5", state: "Established", prefixes_received: 842, prefixes_sent: 210, bw_in_mbps: 3200, bw_out_mbps: 800, uptime: "32d 07h", info: { name: "Netflix", country: "US", type: "cdn" } },
+  { asn: 32934, ip: "187.16.214.9", state: "Established", prefixes_received: 654, prefixes_sent: 315, bw_in_mbps: 2800, bw_out_mbps: 650, uptime: "28d 19h", info: { name: "Meta/Facebook", country: "US", type: "cdn" } },
+  { asn: 20940, ip: "187.16.214.13", state: "Established", prefixes_received: 1890, prefixes_sent: 420, bw_in_mbps: 5100, bw_out_mbps: 1400, uptime: "60d 03h", info: { name: "Akamai", country: "US", type: "cdn" } },
+  { asn: 13335, ip: "187.16.214.17", state: "Established", prefixes_received: 980, prefixes_sent: 290, bw_in_mbps: 2100, bw_out_mbps: 550, uptime: "15d 22h", info: { name: "Cloudflare", country: "US", type: "cdn" } },
+  { asn: 16509, ip: "187.16.214.21", state: "Established", prefixes_received: 1120, prefixes_sent: 380, bw_in_mbps: 1800, bw_out_mbps: 420, uptime: "41d 11h", info: { name: "Amazon/AWS", country: "US", type: "cdn" } },
+  { asn: 8075, ip: "187.16.214.25", state: "Established", prefixes_received: 760, prefixes_sent: 195, bw_in_mbps: 1500, bw_out_mbps: 380, uptime: "52d 08h", info: { name: "Microsoft", country: "US", type: "cdn" } },
+  { asn: 26162, ip: "200.219.148.1", state: "Established", prefixes_received: 95000, prefixes_sent: 850, bw_in_mbps: 8500, bw_out_mbps: 7200, uptime: "90d 00h", info: { name: "IX.br/PTT-SP", country: "BR", type: "ix" } },
+  { asn: 4230, ip: "200.244.0.1", state: "Established", prefixes_received: 720000, prefixes_sent: 850, bw_in_mbps: 6200, bw_out_mbps: 3100, uptime: "120d 05h", info: { name: "Embratel", country: "BR", type: "transit" } },
+  { asn: 26599, ip: "200.192.0.1", state: "Established", prefixes_received: 680000, prefixes_sent: 820, bw_in_mbps: 5800, bw_out_mbps: 2900, uptime: "88d 14h", info: { name: "Vivo/Telefônica", country: "BR", type: "transit" } },
+  { asn: 28573, ip: "201.174.0.1", state: "Established", prefixes_received: 540000, prefixes_sent: 780, bw_in_mbps: 4100, bw_out_mbps: 2200, uptime: "67d 21h", info: { name: "Claro/NET", country: "BR", type: "transit" } },
+  { asn: 3356, ip: "4.69.184.1", state: "Established", prefixes_received: 890000, prefixes_sent: 850, bw_in_mbps: 3500, bw_out_mbps: 1800, uptime: "145d 09h", info: { name: "Lumen/Level3", country: "US", type: "transit" } },
+  { asn: 53013, ip: "177.124.0.1", state: "Idle", prefixes_received: 0, prefixes_sent: 0, bw_in_mbps: 0, bw_out_mbps: 0, uptime: "—", info: { name: "Brisanet", country: "BR", type: "transit" } },
+  { asn: 714, ip: "17.0.0.1", state: "Established", prefixes_received: 420, prefixes_sent: 150, bw_in_mbps: 980, bw_out_mbps: 210, uptime: "38d 16h", info: { name: "Apple", country: "US", type: "cdn" } },
+];
+
+const MOCK_FLOWS: BgpState["flow_data"] = [
+  { source_asn: 26599, target_asn: 15169, bw_mbps: 4500, source_info: { name: "Vivo/Telefônica", type: "transit" }, target_info: { name: "Google", type: "cdn" }, traffic_type: "cdn" },
+  { source_asn: 26162, target_asn: 20940, bw_mbps: 5100, source_info: { name: "IX.br/PTT-SP", type: "ix" }, target_info: { name: "Akamai", type: "cdn" }, traffic_type: "ix" },
+  { source_asn: 4230, target_asn: 2906, bw_mbps: 3200, source_info: { name: "Embratel", type: "transit" }, target_info: { name: "Netflix", type: "cdn" }, traffic_type: "transit" },
+  { source_asn: 28573, target_asn: 32934, bw_mbps: 2800, source_info: { name: "Claro/NET", type: "transit" }, target_info: { name: "Meta/Facebook", type: "cdn" }, traffic_type: "cdn" },
+  { source_asn: 26162, target_asn: 13335, bw_mbps: 2100, source_info: { name: "IX.br/PTT-SP", type: "ix" }, target_info: { name: "Cloudflare", type: "cdn" }, traffic_type: "ix" },
+  { source_asn: 3356, target_asn: 16509, bw_mbps: 1800, source_info: { name: "Lumen/Level3", type: "transit" }, target_info: { name: "Amazon/AWS", type: "cdn" }, traffic_type: "transit" },
+  { source_asn: 26599, target_asn: 8075, bw_mbps: 1500, source_info: { name: "Vivo/Telefônica", type: "transit" }, target_info: { name: "Microsoft", type: "cdn" }, traffic_type: "cdn" },
+  { source_asn: 26162, target_asn: 714, bw_mbps: 980, source_info: { name: "IX.br/PTT-SP", type: "ix" }, target_info: { name: "Apple", type: "cdn" }, traffic_type: "ix" },
+  { source_asn: 4230, target_asn: 26162, bw_mbps: 8500, source_info: { name: "Embratel", type: "transit" }, target_info: { name: "IX.br/PTT-SP", type: "ix" }, traffic_type: "ix" },
+  { source_asn: 28573, target_asn: 3356, bw_mbps: 3500, source_info: { name: "Claro/NET", type: "transit" }, target_info: { name: "Lumen/Level3", type: "transit" }, traffic_type: "transit" },
+];
+
+const MOCK_STATS: BgpState["stats"] = {
+  total_peers: MOCK_PEERS.length,
+  established_peers: MOCK_PEERS.filter(p => p.state === "Established").length,
+  prefixes_received: MOCK_PEERS.reduce((s, p) => s + (p.prefixes_received || 0), 0),
+  prefixes_sent: MOCK_PEERS.reduce((s, p) => s + (p.prefixes_sent || 0), 0),
+  active_asns: new Set(MOCK_PEERS.map(p => p.asn)).size,
+};
+
 function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
   const [state, setState] = useState<BgpState>({
-    stats: null, peers: [], flow_data: [], timestamp: null, connected: false,
+    stats: MOCK_STATS, peers: MOCK_PEERS, flow_data: MOCK_FLOWS, timestamp: Date.now(), connected: false,
   });
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
