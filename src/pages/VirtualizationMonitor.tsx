@@ -78,21 +78,46 @@ function ResourceRing({
 
 /* ─── Storage Bar ─────────────────────── */
 
+function formatBytesHuman(s: string): string {
+  if (!s) return "—";
+  // Try matching already-formatted values like "4.36 TB"
+  const fm = s.match(/([\d.]+)\s*(B|KB|KiB|MB|MiB|GB|GiB|TB|TiB)/i);
+  if (fm) return s; // already human-readable
+  // Raw number (bytes)
+  const num = parseFloat(s);
+  if (isNaN(num)) return s;
+  if (num >= 1e12) return `${(num / (1024 ** 4)).toFixed(2)} TB`;
+  if (num >= 1e9) return `${(num / (1024 ** 3)).toFixed(2)} GB`;
+  if (num >= 1e6) return `${(num / (1024 ** 2)).toFixed(2)} MB`;
+  if (num >= 1e3) return `${(num / 1024).toFixed(2)} KB`;
+  return `${num} B`;
+}
+
+function parseSizeToBytes(s: string): number {
+  if (!s) return 0;
+  const m = s.match(/([\d.]+)\s*(B|KB|KiB|MB|MiB|GB|GiB|TB|TiB)?/i);
+  if (!m) return 0;
+  const num = parseFloat(m[1]);
+  const unit = (m[2] || "B").toUpperCase();
+  const mul: Record<string, number> = {
+    B: 1, KB: 1024, KIB: 1024, MB: 1024 ** 2, MIB: 1024 ** 2,
+    GB: 1024 ** 3, GIB: 1024 ** 3, TB: 1024 ** 4, TIB: 1024 ** 4,
+  };
+  return num * (mul[unit] || 1);
+}
+
 function StorageBar({ ds, index }: { ds: VirtDatastore; index: number }) {
   let usedPct = 0;
   if (ds.freePercent !== undefined && ds.freePercent > 0) {
     usedPct = 100 - ds.freePercent;
   } else if (ds.usedSize && ds.totalSize) {
-    const parseSize = (s: string) => {
-      const m = s.match(/([\d.]+)\s*(B|KB|MB|GB|TB)/i);
-      if (!m) return 0;
-      const units: Record<string, number> = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
-      return parseFloat(m[1]) * (units[m[2].toUpperCase()] || 1);
-    };
-    const used = parseSize(ds.usedSize);
-    const total = parseSize(ds.totalSize);
+    const used = parseSizeToBytes(ds.usedSize);
+    const total = parseSizeToBytes(ds.totalSize);
     usedPct = total > 0 ? (used / total) * 100 : 0;
   }
+
+  const usedHuman = formatBytesHuman(ds.usedSize || "");
+  const totalHuman = formatBytesHuman(ds.totalSize || "");
 
   const barColor = usedPct > 85
     ? "hsl(0, 90%, 50%)"
@@ -117,9 +142,9 @@ function StorageBar({ ds, index }: { ds: VirtDatastore; index: number }) {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-[9px] font-mono text-muted-foreground">
-            {ds.usedSize || `${(100 - (ds.freePercent || 0)).toFixed(0)}% used`}
+            {ds.usedSize ? usedHuman : `${(100 - (ds.freePercent || 0)).toFixed(0)}% used`}
             <span className="text-muted-foreground/40"> / </span>
-            {ds.totalSize}
+            {totalHuman}
           </span>
           <span className="text-[9px] font-mono-data font-bold" style={{ color: barColor }}>
             {usedPct.toFixed(1)}%
@@ -143,6 +168,20 @@ function StorageBar({ ds, index }: { ds: VirtDatastore; index: number }) {
 }
 
 /* ─── Info Badge ──────────────────────── */
+
+function formatUptimeHuman(raw: string): string {
+  if (!raw) return "—";
+  // Already formatted like "311 dias, 20:24:11"
+  if (/\d+\s*(dias?|days?)/i.test(raw)) return raw;
+  // Raw seconds
+  const secs = parseInt(raw);
+  if (isNaN(secs)) return raw;
+  const days = Math.floor(secs / 86400);
+  const hours = Math.floor((secs % 86400) / 3600);
+  const mins = Math.floor((secs % 3600) / 60);
+  if (days > 0) return `${days} dias, ${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
+  return `${hours}h ${mins}m`;
+}
 
 function InfoBadge({ label, value, icon: Icon, color }: {
   label: string; value: string; icon: React.ElementType; color?: string;
@@ -354,7 +393,7 @@ export default function VirtualizationMonitor() {
                 ) : (
                   <StatusPill
                     label="Uptime"
-                    value={virt.host.uptime}
+                     value={formatUptimeHuman(virt.host.uptime)}
                     isOk={!!virt.host.uptime}
                   />
                 )}
@@ -457,33 +496,7 @@ export default function VirtualizationMonitor() {
                 </motion.div>
               )}
 
-              {/* ── VM Grid (Proxmox) ── */}
-              {virt.vms.length > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4 }}
-                  className="glass-card rounded-xl p-5 border border-border/30"
-                >
-                  <div className="flex items-center gap-2 mb-4">
-                    <MonitorCheck className="w-4 h-4" style={{ color: accentColor }} />
-                    <span className="text-xs font-display font-bold uppercase tracking-wider text-foreground">
-                      Máquinas Virtuais
-                    </span>
-                    <span className="text-[9px] font-mono text-muted-foreground/40 ml-auto">
-                      <span className="text-neon-green">{virt.runningCount}</span> running
-                      {virt.vmCount - virt.runningCount > 0 && (
-                        <span> • <span className="text-neon-red">{virt.vmCount - virt.runningCount}</span> stopped</span>
-                      )}
-                    </span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-                    {virt.vms.map((vm, i) => (
-                      <VMCard key={vm.name} vm={vm} index={i} />
-                    ))}
-                  </div>
-                </motion.div>
-              )}
+              {/* VM grid removed — host-only view */}
 
               {/* ── Host Info Footer ── */}
               <motion.div
@@ -502,7 +515,7 @@ export default function VirtualizationMonitor() {
                   <InfoBadge label="Versão" value={virt.host.fullName || virt.host.version} icon={Box} color={accentColor} />
                   {virt.host.model && <InfoBadge label="Modelo" value={virt.host.model} icon={Server} />}
                   {virt.host.vendor && <InfoBadge label="Fabricante" value={virt.host.vendor} icon={Server} />}
-                  <InfoBadge label="Uptime" value={virt.host.uptime} icon={Clock} color="hsl(142,100%,50%)" />
+                  <InfoBadge label="Uptime" value={formatUptimeHuman(virt.host.uptime)} icon={Clock} color="hsl(142,100%,50%)" />
                   {virt.host.datacenter && <InfoBadge label="Datacenter" value={virt.host.datacenter} icon={Box} />}
                   {virt.host.nodeName && <InfoBadge label="Node" value={virt.host.nodeName} icon={Server} color={accentColor} />}
                   {virt.host.pveVersion && <InfoBadge label="PVE Version" value={virt.host.pveVersion} icon={Box} />}
