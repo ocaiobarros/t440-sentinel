@@ -880,7 +880,217 @@ const PRESET_LINUX: DashboardPreset = {
   settings: { cols: 12, rowHeight: 60 },
 };
 
+/* ═══════════════════════════════════════════════
+   iDRAC T440 — Template Nativo Funcional
+   Mapeamento completo: PSU, Térmico, Fans,
+   Storage RAID, Rede e Inventário
+   ═══════════════════════════════════════════════ */
+const PRESET_IDRAC_T440: DashboardPreset = {
+  id: "servers-idrac-t440",
+  name: "iDRAC — Dell T440",
+  description: "Gêmeo digital completo: PSU, temperatura CPU/Inlet, ventilação, RAID, NICs e inventário BIOS/Service Tag.",
+  category: "servers",
+  icon: "Server",
+  accent: "#39FF14",
+  widgets: [
+    /* ── HEADER ── */
+    w("label", "⚡ BLOCO DE ENERGIA (PSU)", 0, 0, 6, 1, { style: { glow: "amber" } }),
+    w("label", "🌡️ GESTÃO TÉRMICA", 6, 0, 6, 1, { style: { glow: "red" } }),
+
+    /* ── PSU Section ── */
+    w("stat", "PSU1 — Tensão", 0, 1, 3, 1, {
+      style: { icon: "Zap", iconColor: "#FFBF00", glow: "amber" },
+      extra: { units: "V", zabbix_key: "ipmi.sensor[PSU1 Voltage]" },
+    }),
+    w("stat", "PSU1 — Potência", 3, 1, 3, 1, {
+      style: { icon: "Zap", iconColor: "#39FF14", glow: "green" },
+      extra: { units: "W", zabbix_key: "ipmi.sensor[PS1 Current 1]" },
+    }),
+    w("stat", "PSU2 — Tensão", 0, 2, 3, 1, {
+      style: { icon: "Zap", iconColor: "#FFBF00" },
+      extra: { units: "V", zabbix_key: "ipmi.sensor[PSU2 Voltage]" },
+    }),
+    w("stat", "PSU2 — Potência", 3, 2, 3, 1, {
+      style: { icon: "Zap", iconColor: "#39FF14" },
+      extra: { units: "W", zabbix_key: "ipmi.sensor[PS2 Current 1]" },
+    }),
+    w("status", "PSU1 — Status", 0, 3, 3, 1, {
+      style: { icon: "Power", glow: "green" },
+      extra: {
+        zabbix_key: "ipmi.discrete-sensor[PSU1 Status]",
+        color_map: { "0x01": { color: "#39FF14", label: "OK" }, "0x02": { color: "#FF4444", label: "FALHA" } },
+      },
+    }),
+    w("status", "PSU2 — Status", 3, 3, 3, 1, {
+      style: { icon: "Power", glow: "green" },
+      extra: {
+        zabbix_key: "ipmi.discrete-sensor[PSU2 Status]",
+        color_map: { "0x01": { color: "#39FF14", label: "OK" }, "0x02": { color: "#FF4444", label: "FALHA" } },
+      },
+    }),
+
+    /* ── THERMAL Section ── */
+    w("gauge", "CPU1 Temp", 6, 1, 2, 2, {
+      style: { glow: "amber" },
+      extra: { units: "°C", min: 0, max: 100, zabbix_key: "ipmi.sensor[Temp,CPU1 Temp]" },
+    }),
+    w("gauge", "CPU2 Temp", 8, 1, 2, 2, {
+      style: { glow: "amber" },
+      extra: { units: "°C", min: 0, max: 100, zabbix_key: "ipmi.sensor[Temp,CPU2 Temp]" },
+    }),
+    w("gauge", "Inlet Temp", 10, 1, 2, 2, {
+      style: { glow: "cyan" },
+      extra: { units: "°C", min: 0, max: 50, zabbix_key: "ipmi.sensor[Temp,Inlet Temp]" },
+    }),
+    w("timeseries", "Histórico Térmico", 6, 3, 6, 2, {
+      extra: {
+        units: "°C",
+        multi_keys: [
+          { key: "ipmi.sensor[Temp,CPU1 Temp]", alias: "CPU1" },
+          { key: "ipmi.sensor[Temp,CPU2 Temp]", alias: "CPU2" },
+          { key: "ipmi.sensor[Temp,Inlet Temp]", alias: "Inlet" },
+        ],
+        time_range: "1h",
+      },
+    }),
+
+    /* ── FANS Section ── */
+    w("label", "🌀 VENTILAÇÃO", 0, 4, 6, 1, { style: { glow: "cyan" } }),
+    w("progress", "Fan1 — RPM", 0, 5, 3, 1, {
+      extra: { units: "RPM", max_value: 18000, zabbix_key: "ipmi.sensor[Fan,Fan1 RPM]" },
+    }),
+    w("progress", "Fan2 — RPM", 3, 5, 3, 1, {
+      extra: { units: "RPM", max_value: 18000, zabbix_key: "ipmi.sensor[Fan,Fan2 RPM]" },
+    }),
+    w("progress", "Fan3 — RPM", 0, 6, 3, 1, {
+      extra: { units: "RPM", max_value: 18000, zabbix_key: "ipmi.sensor[Fan,Fan3 RPM]" },
+    }),
+    w("progress", "Fan4 — RPM", 3, 6, 3, 1, {
+      extra: { units: "RPM", max_value: 18000, zabbix_key: "ipmi.sensor[Fan,Fan4 RPM]" },
+    }),
+    w("progress", "Fan5 — RPM", 0, 7, 3, 1, {
+      extra: { units: "RPM", max_value: 18000, zabbix_key: "ipmi.sensor[Fan,Fan5 RPM]" },
+    }),
+    w("progress", "Fan6 — RPM", 3, 7, 3, 1, {
+      extra: { units: "RPM", max_value: 18000, zabbix_key: "ipmi.sensor[Fan,Fan6 RPM]" },
+    }),
+
+    /* ── STORAGE Section ── */
+    w("label", "💾 MATRIZ DE ARMAZENAMENTO", 6, 5, 6, 1, { style: { glow: "blue" } }),
+    w("table", "Integridade dos Discos", 6, 6, 6, 3, {
+      style: { icon: "HardDrive" },
+      extra: {
+        zabbix_discovery: "dell.server.disk.discovery",
+        columns: [
+          { header: "Disco", field: "{#DISK_NAME}" },
+          { header: "Status", field: "dell.server.disk.status[{#DISK_NAME}]" },
+          { header: "Tamanho", field: "dell.server.disk.size[{#DISK_NAME}]" },
+          { header: "Modelo", field: "dell.server.disk.model[{#DISK_NAME}]" },
+        ],
+        color_map: {
+          "OK": { color: "#39FF14", label: "OK" },
+          "Critical": { color: "#FF4444", label: "CRÍTICO" },
+          "Warning": { color: "#FFBF00", label: "ALERTA" },
+          "Non-Critical": { color: "#FFBF00", label: "ALERTA" },
+        },
+      },
+    }),
+
+    /* ── NETWORK Section ── */
+    w("label", "🌐 INTERFACES DE REDE", 0, 8, 12, 1, { style: { glow: "blue" } }),
+    w("status", "NIC1 — Broadcom", 0, 9, 3, 1, {
+      style: { icon: "Network", glow: "green" },
+      extra: {
+        zabbix_key: "dell.server.nic.status[NIC.Slot.1-1]",
+        color_map: {
+          "Up": { color: "#39FF14", label: "UP" },
+          "Down": { color: "#FF4444", label: "DOWN" },
+          "1": { color: "#39FF14", label: "UP" },
+          "0": { color: "#FF4444", label: "DOWN" },
+        },
+      },
+    }),
+    w("status", "NIC2 — Broadcom", 3, 9, 3, 1, {
+      style: { icon: "Network", glow: "green" },
+      extra: {
+        zabbix_key: "dell.server.nic.status[NIC.Slot.1-2]",
+        color_map: {
+          "Up": { color: "#39FF14", label: "UP" },
+          "Down": { color: "#FF4444", label: "DOWN" },
+          "1": { color: "#39FF14", label: "UP" },
+          "0": { color: "#FF4444", label: "DOWN" },
+        },
+      },
+    }),
+    w("status", "NIC3 — Intel X710", 6, 9, 3, 1, {
+      style: { icon: "Network", glow: "green" },
+      extra: {
+        zabbix_key: "dell.server.nic.status[NIC.Slot.2-1]",
+        color_map: {
+          "Up": { color: "#39FF14", label: "UP" },
+          "Down": { color: "#FF4444", label: "DOWN" },
+          "1": { color: "#39FF14", label: "UP" },
+          "0": { color: "#FF4444", label: "DOWN" },
+        },
+      },
+    }),
+    w("status", "NIC4 — Intel X710", 9, 9, 3, 1, {
+      style: { icon: "Network", glow: "green" },
+      extra: {
+        zabbix_key: "dell.server.nic.status[NIC.Slot.2-2]",
+        color_map: {
+          "Up": { color: "#39FF14", label: "UP" },
+          "Down": { color: "#FF4444", label: "DOWN" },
+          "1": { color: "#39FF14", label: "UP" },
+          "0": { color: "#FF4444", label: "DOWN" },
+        },
+      },
+    }),
+    w("timeseries", "Tráfego NIC — Broadcom", 0, 10, 6, 2, {
+      extra: {
+        units: "bps",
+        multi_keys: [
+          { key: "net.if.in[{#IFNAME}]", alias: "IN" },
+          { key: "net.if.out[{#IFNAME}]", alias: "OUT" },
+        ],
+        time_range: "1h",
+      },
+    }),
+    w("timeseries", "Tráfego NIC — Intel X710", 6, 10, 6, 2, {
+      extra: {
+        units: "bps",
+        multi_keys: [
+          { key: "net.if.in[{#IFNAME}]", alias: "IN" },
+          { key: "net.if.out[{#IFNAME}]", alias: "OUT" },
+        ],
+        time_range: "1h",
+      },
+    }),
+
+    /* ── INVENTORY / FOOTER ── */
+    w("label", "📋 INVENTÁRIO DO SERVIDOR", 0, 12, 12, 1),
+    w("stat", "Modelo", 0, 13, 3, 1, {
+      style: { icon: "Server", iconColor: "#A0A0A0" },
+      extra: { zabbix_key: "system.hw.model", static: true },
+    }),
+    w("stat", "Service Tag", 3, 13, 3, 1, {
+      style: { icon: "Tag", iconColor: "#A0A0A0" },
+      extra: { zabbix_key: "system.hw.serialnumber", static: true },
+    }),
+    w("stat", "BIOS Version", 6, 13, 3, 1, {
+      style: { icon: "Cpu", iconColor: "#A0A0A0" },
+      extra: { zabbix_key: "system.sw.os[bios]", static: true },
+    }),
+    w("stat", "iDRAC Firmware", 9, 13, 3, 1, {
+      style: { icon: "Monitor", iconColor: "#A0A0A0" },
+      extra: { zabbix_key: "dell.server.idrac.firmware", static: true },
+    }),
+  ],
+  settings: { cols: 12, rowHeight: 60, category: "servers" },
+};
+
 export const DASHBOARD_PRESETS: DashboardPreset[] = [
+  PRESET_IDRAC_T440,
   PRESET_NETWORK_CORE,
   PRESET_SERVERS,
   PRESET_LINUX,
