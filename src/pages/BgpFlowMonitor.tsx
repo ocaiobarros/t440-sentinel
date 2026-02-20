@@ -1,11 +1,14 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Server, Terminal, CheckCircle, ChevronRight, ChevronLeft,
   Settings2, Network, Globe, ArrowDownToLine, ArrowUpFromLine,
   BarChart3, Filter, Activity, Eye, EyeOff, Lock, User,
+  RefreshCw, Wifi, WifiOff, TrendingUp, TrendingDown, Minus,
+  Zap, ArrowRight,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ─── Config persistence ── */
 
@@ -390,10 +393,267 @@ function ConfirmStep({ config }: { config: Partial<BgpConfig> }) {
   );
 }
 
-/* ─── Mock Dashboard (placeholder for Phase 2) ── */
+/* ─── Country flag emoji ── */
+function countryFlag(code: string): string {
+  if (!code || code === "??" || code.length !== 2) return "🌐";
+  return String.fromCodePoint(...[...code.toUpperCase()].map(c => 0x1F1E6 + c.charCodeAt(0) - 65));
+}
+
+/* ─── Traffic type colors ── */
+const TRAFFIC_COLORS: Record<string, { gradient: string; solid: string; label: string }> = {
+  transit: { gradient: "from-cyan-400 to-blue-500", solid: "#00e5ff", label: "Trânsito IP" },
+  ix:      { gradient: "from-purple-400 to-fuchsia-500", solid: "#c050ff", label: "IX-BR / Peering" },
+  cdn:     { gradient: "from-emerald-400 to-green-500", solid: "#00e676", label: "CDNs" },
+  enterprise: { gradient: "from-amber-400 to-orange-500", solid: "#ffab40", label: "Enterprise" },
+  unknown: { gradient: "from-gray-400 to-gray-500", solid: "#9e9e9e", label: "Outros" },
+};
+
+/* ─── Sankey-style flow visualization ── */
+function SankeyFlow({ flows }: { flows: Array<{ source_asn: number; target_asn: number; bw_mbps: number; source_info?: { name: string; type: string } | null; target_info?: { name: string; type: string } | null; traffic_type?: string }> }) {
+  if (!flows || flows.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground/40">
+        <BarChart3 className="w-10 h-10" />
+        <p className="text-[11px] font-mono">Aguardando dados de fluxo via POST...</p>
+        <p className="text-[9px] font-mono text-muted-foreground/25">Envie flow_data[] para o endpoint bgp-collector</p>
+      </div>
+    );
+  }
+
+  const sorted = [...flows].sort((a, b) => b.bw_mbps - a.bw_mbps).slice(0, 15);
+  const maxBw = Math.max(...sorted.map(f => f.bw_mbps), 1);
+
+  return (
+    <div className="space-y-2">
+      {sorted.map((flow, i) => {
+        const tc = TRAFFIC_COLORS[flow.traffic_type || "unknown"] || TRAFFIC_COLORS.unknown;
+        const widthPct = Math.max(15, (flow.bw_mbps / maxBw) * 100);
+        const srcName = flow.source_info?.name || `AS${flow.source_asn}`;
+        const tgtName = flow.target_info?.name || `AS${flow.target_asn}`;
+
+        return (
+          <motion.div
+            key={`${flow.source_asn}-${flow.target_asn}-${i}`}
+            initial={{ opacity: 0, x: -10 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={{ delay: i * 0.03 }}
+            className="flex items-center gap-2 group"
+          >
+            <span className="text-[9px] font-mono text-muted-foreground/60 w-20 text-right truncate">{srcName}</span>
+            <ArrowRight className="w-3 h-3 text-muted-foreground/30 shrink-0" />
+            <div className="flex-1 relative h-6 rounded-md overflow-hidden bg-muted/5">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${widthPct}%` }}
+                transition={{ duration: 0.6, delay: i * 0.03 }}
+                className={`absolute inset-y-0 left-0 rounded-md bg-gradient-to-r ${tc.gradient} opacity-70`}
+              />
+              <div className="absolute inset-0 flex items-center px-2">
+                <span className="text-[9px] font-mono text-white/80 font-bold drop-shadow">
+                  {flow.bw_mbps >= 1000 ? `${(flow.bw_mbps / 1000).toFixed(1)} Gbps` : `${flow.bw_mbps.toFixed(0)} Mbps`}
+                </span>
+              </div>
+            </div>
+            <span className="text-[9px] font-mono text-muted-foreground/60 w-24 truncate">{tgtName}</span>
+          </motion.div>
+        );
+      })}
+    </div>
+  );
+}
+
+/* ─── ASN Table ── */
+function AsnTable({ peers, filter }: {
+  peers: Array<{
+    asn: number; ip: string; state: string;
+    prefixes_received?: number; prefixes_sent?: number;
+    uptime?: string; bw_in_mbps?: number; bw_out_mbps?: number;
+    info?: { name: string; country: string; type: string } | null;
+  }>;
+  filter: string;
+}) {
+  const filtered = useMemo(() => {
+    let list = [...peers];
+    if (filter === "top10") list = list.sort((a, b) => (b.prefixes_received || 0) - (a.prefixes_received || 0)).slice(0, 10);
+    if (filter === "latency") list = list.sort((a, b) => (b.bw_in_mbps || 0) - (a.bw_in_mbps || 0));
+    if (filter === "cost") list = list.sort((a, b) => (b.bw_out_mbps || 0) - (a.bw_out_mbps || 0));
+    return list;
+  }, [peers, filter]);
+
+  if (filtered.length === 0) {
+    return (
+      <div className="text-center py-8">
+        <Server className="w-10 h-10 text-muted-foreground/20 mx-auto mb-2" />
+        <p className="text-[11px] font-mono text-muted-foreground/40">
+          Aguardando dados de peers via POST no bgp-collector...
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-[11px] font-mono">
+        <thead>
+          <tr className="border-b border-muted/10 text-muted-foreground/50">
+            <th className="text-left py-2 px-2">ASN</th>
+            <th className="text-left py-2 px-2">Empresa</th>
+            <th className="text-left py-2 px-2">País</th>
+            <th className="text-left py-2 px-2">Tipo</th>
+            <th className="text-left py-2 px-2">IP</th>
+            <th className="text-center py-2 px-2">Estado</th>
+            <th className="text-right py-2 px-2">Prefixos Rx</th>
+            <th className="text-right py-2 px-2">Prefixos Tx</th>
+            <th className="text-right py-2 px-2">BW In</th>
+            <th className="text-left py-2 px-2">Uptime</th>
+          </tr>
+        </thead>
+        <tbody>
+          {filtered.map((peer, i) => {
+            const tc = TRAFFIC_COLORS[peer.info?.type || "unknown"] || TRAFFIC_COLORS.unknown;
+            const isEstablished = peer.state?.toLowerCase() === "established";
+            return (
+              <motion.tr
+                key={`${peer.asn}-${peer.ip}-${i}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ delay: i * 0.02 }}
+                className="border-b border-muted/5 hover:bg-muted/5 transition-colors"
+              >
+                <td className="py-2 px-2 font-bold" style={{ color: tc.solid }}>AS{peer.asn}</td>
+                <td className="py-2 px-2 text-foreground/80">{peer.info?.name || `AS${peer.asn}`}</td>
+                <td className="py-2 px-2">{countryFlag(peer.info?.country || "??")}</td>
+                <td className="py-2 px-2">
+                  <span className={`px-1.5 py-0.5 rounded text-[9px] bg-gradient-to-r ${tc.gradient} text-white`}>
+                    {tc.label}
+                  </span>
+                </td>
+                <td className="py-2 px-2 text-muted-foreground/60">{peer.ip}</td>
+                <td className="py-2 px-2 text-center">
+                  <span className={`inline-flex items-center gap-1 ${isEstablished ? "text-emerald-400" : "text-red-400"}`}>
+                    {isEstablished ? <Wifi className="w-3 h-3" /> : <WifiOff className="w-3 h-3" />}
+                    {peer.state}
+                  </span>
+                </td>
+                <td className="py-2 px-2 text-right text-cyan-400/80">{(peer.prefixes_received || 0).toLocaleString()}</td>
+                <td className="py-2 px-2 text-right text-purple-400/80">{(peer.prefixes_sent || 0).toLocaleString()}</td>
+                <td className="py-2 px-2 text-right text-emerald-400/80">
+                  {peer.bw_in_mbps ? `${peer.bw_in_mbps >= 1000 ? (peer.bw_in_mbps / 1000).toFixed(1) + " G" : peer.bw_in_mbps.toFixed(0) + " M"}` : "—"}
+                </td>
+                <td className="py-2 px-2 text-muted-foreground/50">{peer.uptime || "—"}</td>
+              </motion.tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ─── useBgpRealtime hook ── */
+interface BgpState {
+  stats: {
+    total_peers: number;
+    established_peers: number;
+    prefixes_received: number;
+    prefixes_sent: number;
+    active_asns: number;
+  } | null;
+  peers: Array<{
+    asn: number; ip: string; state: string;
+    prefixes_received?: number; prefixes_sent?: number;
+    uptime?: string; bw_in_mbps?: number; bw_out_mbps?: number;
+    info?: { name: string; country: string; type: string } | null;
+  }>;
+  flow_data: Array<{
+    source_asn: number; target_asn: number; bw_mbps: number;
+    source_info?: { name: string; type: string } | null;
+    target_info?: { name: string; type: string } | null;
+    traffic_type?: string;
+  }>;
+  timestamp: number | null;
+  connected: boolean;
+}
+
+function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
+  const [state, setState] = useState<BgpState>({
+    stats: null, peers: [], flow_data: [], timestamp: null, connected: false,
+  });
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
+
+  const refresh = useCallback(async () => {
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const resp = await fetch(
+        `https://${projectId}.supabase.co/functions/v1/bgp-collector?config_id=${encodeURIComponent(configId)}`,
+        {
+          headers: {
+            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
+            "Content-Type": "application/json",
+          },
+        }
+      );
+      if (resp.ok) {
+        const data = await resp.json();
+        if (data.stats || data.peers?.length > 0) {
+          setState(prev => ({
+            ...prev,
+            stats: data.stats || prev.stats,
+            peers: data.peers || prev.peers,
+            flow_data: data.flow_data || prev.flow_data,
+            timestamp: data.timestamp || Date.now(),
+          }));
+        }
+      }
+    } catch (e) {
+      console.error("[BGP] refresh error:", e);
+    }
+  }, [configId]);
+
+  useEffect(() => {
+    refresh();
+
+    const channelName = `bgp:${configId}`;
+    const channel = supabase.channel(channelName);
+    channel.on("broadcast", { event: "BGP_UPDATE" }, ({ payload }) => {
+      if (payload) {
+        setState(prev => ({
+          ...prev,
+          stats: payload.stats || prev.stats,
+          peers: payload.peers || prev.peers,
+          flow_data: payload.flow_data || prev.flow_data,
+          timestamp: payload.timestamp || Date.now(),
+          connected: true,
+        }));
+      }
+    }).subscribe((status) => {
+      setState(prev => ({ ...prev, connected: status === "SUBSCRIBED" }));
+    });
+
+    channelRef.current = channel;
+    return () => { supabase.removeChannel(channel); };
+  }, [configId, refresh]);
+
+  return { ...state, refresh };
+}
+
+/* ─── Dashboard (Phase 2) ── */
 
 function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfigure: () => void }) {
   const hw = HARDWARE_CATALOG.find(h => h.id === config.model);
+  const configId = `${config.host}:${config.port}`;
+  const { stats, peers, flow_data, timestamp, connected, refresh } = useBgpRealtime(configId);
+  const [viewMode, setViewMode] = useState<"bgp" | "flow">("bgp");
+  const [asnFilter, setAsnFilter] = useState<"all" | "top10" | "latency" | "cost">("all");
+  const [isRefreshing, setIsRefreshing] = useState(false);
+
+  const handleRefresh = useCallback(async () => {
+    setIsRefreshing(true);
+    await refresh();
+    setTimeout(() => setIsRefreshing(false), 800);
+  }, [refresh]);
+
+  const lastUpdate = timestamp ? new Date(timestamp).toLocaleTimeString() : "—";
 
   return (
     <div className="min-h-screen p-6" style={{ background: "linear-gradient(180deg, hsl(220 30% 4%) 0%, hsl(225 25% 6%) 50%, hsl(220 30% 4%) 100%)" }}>
@@ -412,56 +672,109 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
                 </span>
               </h1>
               <p className="text-[11px] font-mono text-muted-foreground/60">
-                {config.host}:{config.port} • Peering Analytics
+                {config.host}:{config.port} • Peering Analytics • Atualizado: {lastUpdate}
               </p>
             </div>
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/20">
-            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] font-mono text-emerald-400">ONLINE</span>
+        <div className="flex items-center gap-3">
+          <div className="flex rounded-lg border border-muted/20 overflow-hidden">
+            {(["bgp", "flow"] as const).map(mode => (
+              <button
+                key={mode}
+                onClick={() => setViewMode(mode)}
+                className={`px-3 py-1.5 text-[10px] font-mono uppercase transition-all ${
+                  viewMode === mode
+                    ? "bg-cyan-500/15 text-cyan-400 border-cyan-400/20"
+                    : "text-muted-foreground/50 hover:text-muted-foreground/80"
+                }`}
+              >
+                {mode === "bgp" ? "Visão BGP" : "Visão Flow"}
+              </button>
+            ))}
+          </div>
+
+          <button
+            onClick={handleRefresh}
+            className="p-2 rounded-lg border border-muted/20 text-muted-foreground/50 hover:text-cyan-400 hover:border-cyan-400/30 transition-all"
+          >
+            <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
+          </button>
+
+          <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border ${
+            connected
+              ? "bg-emerald-500/10 border-emerald-500/20"
+              : "bg-amber-500/10 border-amber-500/20"
+          }`}>
+            <div className={`w-2 h-2 rounded-full animate-pulse ${connected ? "bg-emerald-400" : "bg-amber-400"}`} />
+            <span className={`text-[10px] font-mono ${connected ? "text-emerald-400" : "text-amber-400"}`}>
+              {connected ? "ONLINE" : "AGUARDANDO"}
+            </span>
           </div>
         </div>
       </div>
 
-      {/* Placeholder content */}
+      {/* Main content */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Sankey placeholder */}
-        <div className="lg:col-span-2 rounded-xl border border-muted/20 p-6 min-h-[400px] flex flex-col items-center justify-center gap-4"
+        <div className="lg:col-span-2 rounded-xl border border-muted/20 p-6 min-h-[400px]"
           style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}>
-          <BarChart3 className="w-12 h-12 text-cyan-400/30" />
-          <div className="text-center">
-            <h3 className="font-mono text-sm text-muted-foreground/60">Sankey Flow Chart</h3>
-            <p className="text-[10px] text-muted-foreground/40 mt-1">
-              Fase 2 — Gráfico de fluxo de tráfego BGP com enriquecimento ASN
-            </p>
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="font-mono text-sm text-foreground flex items-center gap-2">
+              <Zap className="w-4 h-4 text-cyan-400" />
+              {viewMode === "flow" ? "Traffic Flow — Sankey" : "BGP Peers Overview"}
+            </h3>
+            <div className="flex gap-2">
+              {Object.entries(TRAFFIC_COLORS).filter(([k]) => k !== "unknown").map(([, tc]) => (
+                <div key={tc.label} className="flex items-center gap-1.5">
+                  <div className="w-3 h-1.5 rounded-full" style={{ background: tc.solid }} />
+                  <span className="text-[9px] font-mono text-muted-foreground/50">{tc.label}</span>
+                </div>
+              ))}
+            </div>
           </div>
-          <div className="flex gap-3 mt-2">
-            {[
-              { label: "Trânsito IP", color: "#00e5ff" },
-              { label: "IX-BR / Peering", color: "#c050ff" },
-              { label: "CDNs", color: "#00e676" },
-            ].map(({ label, color }) => (
-              <div key={label} className="flex items-center gap-1.5">
-                <div className="w-3 h-1.5 rounded-full" style={{ background: color }} />
-                <span className="text-[9px] font-mono text-muted-foreground/50">{label}</span>
+
+          {viewMode === "flow" ? (
+            <SankeyFlow flows={flow_data} />
+          ) : (
+            peers.length > 0 ? (
+              <SankeyFlow
+                flows={peers.filter(p => p.prefixes_received).map(p => ({
+                  source_asn: 0,
+                  target_asn: p.asn,
+                  bw_mbps: p.bw_in_mbps || (p.prefixes_received || 0) / 10,
+                  source_info: { name: config.host, type: "transit" },
+                  target_info: p.info ? { name: p.info.name, type: p.info.type } : null,
+                  traffic_type: p.info?.type || "unknown",
+                }))}
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground/40">
+                <BarChart3 className="w-10 h-10" />
+                <p className="text-[11px] font-mono">Aguardando dados de peers...</p>
+                <p className="text-[9px] font-mono text-muted-foreground/25">
+                  POST para /functions/v1/bgp-collector com peers[]
+                </p>
               </div>
-            ))}
-          </div>
+            )
+          )}
         </div>
 
         {/* Stats panel */}
         <div className="space-y-4">
           {[
-            { label: "BGP Sessions", value: "—", icon: Activity, color: "#00e5ff" },
-            { label: "Prefixes Received", value: "—", icon: ArrowDownToLine, color: "#448aff" },
-            { label: "Prefixes Sent", value: "—", icon: ArrowUpFromLine, color: "#00e676" },
-            { label: "Active ASNs", value: "—", icon: Globe, color: "#c050ff" },
+            { label: "BGP Sessions", value: stats ? `${stats.established_peers}/${stats.total_peers}` : "—", icon: Activity, color: "#00e5ff" },
+            { label: "Prefixes Received", value: stats ? stats.prefixes_received.toLocaleString() : "—", icon: ArrowDownToLine, color: "#448aff" },
+            { label: "Prefixes Sent", value: stats ? stats.prefixes_sent.toLocaleString() : "—", icon: ArrowUpFromLine, color: "#00e676" },
+            { label: "Active ASNs", value: stats ? String(stats.active_asns) : "—", icon: Globe, color: "#c050ff" },
           ].map(({ label, value, icon: Ic, color }) => (
-            <div key={label} className="rounded-xl border border-muted/20 p-4 flex items-center gap-3"
-              style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}>
+            <motion.div
+              key={label}
+              initial={{ opacity: 0, x: 20 }}
+              animate={{ opacity: 1, x: 0 }}
+              className="rounded-xl border border-muted/20 p-4 flex items-center gap-3"
+              style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}
+            >
               <div className="w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: `${color}15` }}>
                 <Ic className="w-4.5 h-4.5" style={{ color }} />
               </div>
@@ -469,12 +782,12 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
                 <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">{label}</div>
                 <div className="text-lg font-mono font-bold text-foreground">{value}</div>
               </div>
-            </div>
+            </motion.div>
           ))}
         </div>
       </div>
 
-      {/* ASN Table placeholder */}
+      {/* ASN Table */}
       <div className="mt-6 rounded-xl border border-muted/20 p-6"
         style={{ background: "linear-gradient(145deg, hsl(220 40% 8% / 0.95) 0%, hsl(225 35% 5% / 0.9) 100%)" }}>
         <div className="flex items-center justify-between mb-4">
@@ -483,22 +796,71 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
             ASN Peers — Enriquecimento LACNIC/Registro.br
           </h3>
           <div className="flex gap-2">
-            {["Top 10 ASNs", "Maior Latência", "Custo por Mb"].map(f => (
-              <button key={f} className="px-3 py-1.5 rounded-lg text-[10px] font-mono border border-muted/20 text-muted-foreground/50 hover:border-muted/40 hover:text-muted-foreground/80 transition-all">
+            {([
+              { key: "all", label: "Todos" },
+              { key: "top10", label: "Top 10 ASNs" },
+              { key: "latency", label: "Maior Latência" },
+              { key: "cost", label: "Custo por Mb" },
+            ] as const).map(f => (
+              <button
+                key={f.key}
+                onClick={() => setAsnFilter(f.key)}
+                className={`px-3 py-1.5 rounded-lg text-[10px] font-mono border transition-all ${
+                  asnFilter === f.key
+                    ? "border-cyan-400/40 bg-cyan-500/10 text-cyan-400"
+                    : "border-muted/20 text-muted-foreground/50 hover:border-muted/40 hover:text-muted-foreground/80"
+                }`}
+              >
                 <Filter className="w-3 h-3 inline mr-1" />
-                {f}
+                {f.label}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="text-center py-8">
-          <Server className="w-10 h-10 text-muted-foreground/20 mx-auto mb-2" />
-          <p className="text-[11px] font-mono text-muted-foreground/40">
-            Fase 2 — Tabela de ASNs com nome da empresa, país (bandeira) e fluxo em tempo real
-          </p>
-        </div>
+        <AsnTable peers={peers} filter={asnFilter} />
       </div>
+
+      {/* Collector instructions (shown when no data) */}
+      {!stats && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mt-6 rounded-xl border border-amber-500/20 p-6"
+          style={{ background: "linear-gradient(145deg, hsl(40 40% 8% / 0.5) 0%, hsl(35 35% 5% / 0.4) 100%)" }}
+        >
+          <h4 className="font-mono text-sm text-amber-400 mb-3 flex items-center gap-2">
+            <Terminal className="w-4 h-4" />
+            Como enviar dados para o dashboard
+          </h4>
+          <div className="text-[11px] font-mono text-muted-foreground/70 space-y-2">
+            <p>Execute no seu coletor local (servidor com acesso SSH aos roteadores):</p>
+            <div className="p-3 rounded-lg bg-black/40 border border-muted/10 overflow-x-auto">
+              <pre className="text-emerald-400/70 whitespace-pre">{`curl -X POST \\
+  https://${import.meta.env.VITE_SUPABASE_PROJECT_ID || "<PROJECT_ID>"}.supabase.co/functions/v1/bgp-collector \\
+  -H "apikey: <ANON_KEY>" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "config_id": "${configId}",
+    "host": "${config.host}",
+    "vendor": "${config.vendor}",
+    "model": "${config.model}",
+    "peers": [
+      { "asn": 15169, "ip": "10.0.0.1", "state": "Established", "prefixes_received": 1200, "bw_in_mbps": 450 },
+      { "asn": 2906, "ip": "10.0.0.2", "state": "Established", "prefixes_received": 800, "bw_in_mbps": 1200 }
+    ],
+    "flow_data": [
+      { "source_asn": 26599, "target_asn": 15169, "bw_mbps": 2500 },
+      { "source_asn": 26599, "target_asn": 2906, "bw_mbps": 1800 }
+    ]
+  }'`}</pre>
+            </div>
+            <p className="text-muted-foreground/40 mt-2">
+              💡 O {config.vendor === "huawei" ? '"display bgp peer"' : '"show bgp summary"'} pode ser parseado com um script Python/Bash e enviado como JSON.
+            </p>
+          </div>
+        </motion.div>
+      )}
 
       {/* Reconfigure button (floating) */}
       <motion.button
