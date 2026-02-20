@@ -45,7 +45,7 @@ function ResourceRing({
 
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="relative w-36 h-36 md:w-44 md:h-44">
+      <div className="relative w-44 h-44 md:w-52 md:h-52">
         <svg viewBox="0 0 100 100" className="w-full h-full -rotate-90">
           <circle cx="50" cy="50" r={R} fill="none" stroke="hsl(var(--muted) / 0.25)" strokeWidth={STROKE} />
           <motion.circle
@@ -59,7 +59,7 @@ function ResourceRing({
           />
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-3xl md:text-4xl font-black font-mono-data" style={{ color, textShadow: `0 0 15px ${glowColor}` }}>
+          <span className="text-4xl md:text-5xl font-black font-mono-data" style={{ color, textShadow: `0 0 15px ${glowColor}` }}>
             {pct.toFixed(1)}
           </span>
           <span className="text-xs font-mono text-muted-foreground">{unit}</span>
@@ -176,18 +176,17 @@ function StorageBar({ ds, index }: { ds: VirtDatastore; index: number }) {
       </div>
 
       {/* Thick progress bar */}
-      <div className="h-4 rounded-full overflow-hidden relative" style={{ background: "hsl(220 30% 10% / 0.8)", minHeight: "16px" }}>
+      <div className="h-4 rounded-full overflow-hidden relative" style={{ background: "hsl(220 30% 12% / 0.9)", minHeight: "16px" }}>
         <motion.div
-          className="h-full rounded-full"
-          initial={{ width: "0%" }}
+          className="h-full rounded-full absolute top-0 left-0"
+          initial={false}
           animate={{ width: `${Math.max(usedPct, 0.5)}%` }}
-          transition={{ duration: 1, ease: "easeOut", delay: 0.3 + index * 0.08 }}
+          transition={{ duration: 1.2, ease: "easeOut" }}
           style={{
             background: `linear-gradient(90deg, ${barColor}90, ${barColor})`,
             boxShadow: `0 0 12px ${barColor}60, inset 0 1px 0 hsl(0 0% 100% / 0.2)`,
           }}
         />
-        {/* Glow overlay on bar */}
         <div className="absolute inset-0 rounded-full pointer-events-none" style={{ background: `linear-gradient(180deg, hsl(0 0% 100% / 0.08), transparent)` }} />
       </div>
     </motion.div>
@@ -258,10 +257,10 @@ function InfoBadge({ label, value, icon: Icon, color }: {
       }}
     >
       <div className="flex items-center gap-2 mb-2">
-        <Icon className="w-4 h-4 flex-shrink-0" style={{ color: badgeColor }} />
+        <Icon className="w-5 h-5 flex-shrink-0" style={{ color: badgeColor }} />
         <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider">{label}</span>
       </div>
-      <div className="text-base md:text-lg font-display font-bold text-foreground truncate" title={value}>{value}</div>
+      <div className="text-lg md:text-2xl font-display font-black text-foreground truncate" title={value}>{value}</div>
     </motion.div>
   );
 }
@@ -271,28 +270,28 @@ function InfoBadge({ label, value, icon: Icon, color }: {
 function StatusPill({ label, value, isOk }: { label: string; value: string; isOk: boolean }) {
   const color = isOk ? "hsl(142, 100%, 50%)" : "hsl(0, 90%, 50%)";
   return (
-    <motion.div
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      className="flex items-center gap-2 px-4 py-3 rounded-lg border"
-      style={{
-        background: `linear-gradient(145deg, hsl(220 35% 8% / 0.9), hsl(225 30% 5% / 0.85))`,
-        borderColor: `${color}30`,
-        boxShadow: `0 0 12px ${color}10, inset 0 1px 0 ${color}08`,
-      }}
-    >
-      <motion.span
-        className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-        animate={isOk ? { scale: [1, 1.2, 1] } : {}}
-        transition={{ duration: 2, repeat: Infinity }}
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex items-center gap-3 px-5 py-4 rounded-xl border"
         style={{
-          background: color,
-          boxShadow: `0 0 8px ${color}, 0 0 16px ${color}60`,
+          background: `linear-gradient(145deg, hsl(220 35% 8% / 0.9), hsl(225 30% 5% / 0.85))`,
+          borderColor: `${color}30`,
+          boxShadow: `0 0 12px ${color}10, inset 0 1px 0 ${color}08`,
         }}
-      />
-      <div>
-        <div className="text-[8px] font-mono text-muted-foreground/60 uppercase tracking-wider">{label}</div>
-        <div className="text-xs font-display font-bold" style={{ color }}>{value || "—"}</div>
+      >
+        <motion.span
+          className="w-3 h-3 rounded-full flex-shrink-0"
+          animate={isOk ? { scale: [1, 1.2, 1] } : {}}
+          transition={{ duration: 2, repeat: Infinity }}
+          style={{
+            background: color,
+            boxShadow: `0 0 8px ${color}, 0 0 16px ${color}60`,
+          }}
+        />
+        <div>
+          <div className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-wider">{label}</div>
+          <div className="text-lg md:text-xl font-display font-black" style={{ color }}>{value || "—"}</div>
       </div>
     </motion.div>
   );
@@ -504,18 +503,18 @@ export default function VirtualizationMonitor() {
                   />
                   {/* Network */}
                   <div className="flex flex-col items-center gap-3">
-                    <div className="w-36 h-36 md:w-44 md:h-44 flex flex-col items-center justify-center rounded-full border border-border/20"
+                    <div className="w-44 h-44 md:w-52 md:h-52 flex flex-col items-center justify-center rounded-full border border-border/20"
                       style={{ background: "hsl(220 40% 7% / 0.5)" }}
                     >
                       <Network className="w-6 h-6 mb-2" style={{ color: "hsl(142, 100%, 50%)" }} />
                       <div className="text-center space-y-1">
                         <div className="flex items-center gap-1">
                           <ArrowDownToLine className="w-3 h-3 text-neon-green/70" />
-                          <span className="text-sm font-mono-data font-bold text-neon-green">{formatToMbps(virt.network.bytesIn)}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <ArrowUpFromLine className="w-3 h-3 text-neon-blue/70" />
-                          <span className="text-sm font-mono-data font-bold text-neon-blue">{formatToMbps(virt.network.bytesOut)}</span>
+                        <span className="text-base font-mono-data font-bold text-neon-green">{formatToMbps(virt.network.bytesIn)}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <ArrowUpFromLine className="w-3 h-3 text-neon-blue/70" />
+                        <span className="text-base font-mono-data font-bold text-neon-blue">{formatToMbps(virt.network.bytesOut)}</span>
                         </div>
                       </div>
                     </div>
@@ -599,7 +598,7 @@ export default function VirtualizationMonitor() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <ArrowDownToLine className="w-5 h-5" style={{ color: "hsl(142, 100%, 50%)" }} />
-                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">INCOMING (RX)</span>
+                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">DOWNLOAD (RX)</span>
                       </div>
                     </div>
                     <div className="text-4xl font-mono-data font-black leading-none" style={{ color: "hsl(142, 100%, 50%)", textShadow: "0 0 20px hsl(142 100% 50% / 0.3)" }}>
@@ -620,7 +619,7 @@ export default function VirtualizationMonitor() {
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <ArrowUpFromLine className="w-5 h-5" style={{ color: "hsl(210, 100%, 56%)" }} />
-                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">OUTGOING (TX)</span>
+                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">UPLOAD (TX)</span>
                       </div>
                     </div>
                     <div className="text-4xl font-mono-data font-black leading-none" style={{ color: "hsl(210, 100%, 56%)", textShadow: "0 0 20px hsl(210 100% 56% / 0.3)" }}>
