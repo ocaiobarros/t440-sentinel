@@ -201,6 +201,11 @@ function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
               </span>
             </div>
             <MiniBar value={vm.cpuUsage} color={cpuColor} />
+            {vm.cpuUsageHz && (
+              <div className="text-[10px] font-mono text-muted-foreground/60 text-center">
+                {formatHz(vm.cpuUsageHz)}
+              </div>
+            )}
           </div>
 
           {/* Memory */}

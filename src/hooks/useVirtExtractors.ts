@@ -51,6 +51,7 @@ export interface VirtVM {
   name: string;
   status: string;
   cpuUsage: number;
+  cpuUsageHz?: string;
   memTotal: string;
   memUsed: string;
   memPercent: number;
@@ -381,6 +382,7 @@ export function extractVMwareGuestData(d: IdracData): VirtData {
     name: "This VM", // Will be overridden by the page using config.hostName
     status: vmStatus,
     cpuUsage: cpuPct,
+    cpuUsageHz: get("CPU usage") || "",
     memTotal,
     memUsed: get("Guest memory usage") || get("Host memory usage"),
     memPercent: Math.min(memPct, 100),
