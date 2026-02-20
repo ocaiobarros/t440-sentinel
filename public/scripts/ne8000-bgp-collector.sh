@@ -5,6 +5,10 @@
 # │  Extrai: bgp peer, netstream cache, interface brief, health        │
 # │  Envia para o endpoint bgp-collector via curl a cada N segundos    │
 # │                                                                      │
+# │  IMPORTANTE: Configure as variáveis de ambiente antes de rodar:     │
+# │    export ROUTER_HOST=10.150.255.1                                  │
+# │    export COLLECTOR_URL=https://SEU-PROJETO.supabase.co/functions/v1/bgp-collector │
+# │                                                                      │
 # │  Dependências:                                                       │
 # │    SSH mode:  expect, curl, jq                                      │
 # │    SNMP mode: snmpwalk, snmpget, curl, jq                           │
@@ -15,11 +19,11 @@ set -euo pipefail
 # ══════════════════════════════════════════════════════════════════════
 # CONFIGURAÇÃO — edite conforme seu ambiente
 # ══════════════════════════════════════════════════════════════════════
-ROUTER_HOST="${ROUTER_HOST:-10.150.255.1}"
-CONFIG_ID="${CONFIG_ID:-ne8000-cgr01}"
+ROUTER_HOST="${ROUTER_HOST:?❌ Defina ROUTER_HOST (ex: export ROUTER_HOST=10.150.255.1)}"
+CONFIG_ID="${CONFIG_ID:-$(echo "$ROUTER_HOST" | tr '.' '-')}"
 VENDOR="${VENDOR:-huawei}"
 MODEL="${MODEL:-NE8000-M8}"
-LOCAL_ASN="${LOCAL_ASN:-61614}"
+LOCAL_ASN="${LOCAL_ASN:-0}"
 
 # ── Modo de coleta: "ssh" ou "snmp"
 COLLECT_MODE="${COLLECT_MODE:-ssh}"
@@ -44,7 +48,8 @@ SNMP_PRIV_PROTO="${SNMP_PRIV_PROTO:-AES}"
 SNMP_PRIV_PASS="${SNMP_PRIV_PASS:-}"
 
 # Endpoint do bgp-collector (Edge Function)
-COLLECTOR_URL="${COLLECTOR_URL:-https://wbtpefszwywgmnqssrgx.supabase.co/functions/v1/bgp-collector}"
+# Cada ambiente tem sua própria URL — copie do painel FlowPulse ou configure manualmente
+COLLECTOR_URL="${COLLECTOR_URL:?❌ Defina COLLECTOR_URL (ex: export COLLECTOR_URL=https://SEU-PROJETO.supabase.co/functions/v1/bgp-collector)}"
 
 # Intervalo de coleta em segundos
 INTERVAL="${INTERVAL:-30}"

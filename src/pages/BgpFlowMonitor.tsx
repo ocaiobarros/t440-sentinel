@@ -873,29 +873,32 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
             Como enviar dados para o dashboard
           </h4>
           <div className="text-[11px] font-mono text-muted-foreground/70 space-y-2">
-            <p>Execute no seu coletor local (servidor com acesso SSH aos roteadores):</p>
+            <p>1. Baixe o script coletor e configure as variáveis de ambiente:</p>
             <div className="p-3 rounded-lg bg-black/40 border border-muted/10 overflow-x-auto">
-              <pre className="text-emerald-400/70 whitespace-pre">{`curl -X POST \\
-  https://${import.meta.env.VITE_SUPABASE_PROJECT_ID || "<PROJECT_ID>"}.supabase.co/functions/v1/bgp-collector \\
-  -H "apikey: <ANON_KEY>" \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "config_id": "${configId}",
-    "host": "${config.host}",
-    "vendor": "${config.vendor}",
-    "model": "${config.model}",
-    "peers": [
-      { "asn": 15169, "ip": "10.0.0.1", "state": "Established", "prefixes_received": 1200, "bw_in_mbps": 450 },
-      { "asn": 2906, "ip": "10.0.0.2", "state": "Established", "prefixes_received": 800, "bw_in_mbps": 1200 }
-    ],
-    "flow_data": [
-      { "source_asn": 26599, "target_asn": 15169, "bw_mbps": 2500 },
-      { "source_asn": 26599, "target_asn": 2906, "bw_mbps": 1800 }
-    ]
-  }'`}</pre>
+              <pre className="text-emerald-400/70 whitespace-pre">{`# Baixe o script
+wget ${window.location.origin}/scripts/ne8000-bgp-collector.sh
+
+# Configure as variáveis obrigatórias
+export ROUTER_HOST="${config.host || "10.150.255.1"}"
+export COLLECTOR_URL="https://${import.meta.env.VITE_SUPABASE_PROJECT_ID || "<PROJECT_ID>"}.supabase.co/functions/v1/bgp-collector"
+
+# Variáveis opcionais
+export CONFIG_ID="${configId}"
+export VENDOR="${config.vendor}"
+export MODEL="${config.model}"
+export COLLECT_MODE="ssh"        # ou "snmp"
+export ROUTER_USER="${config.username || "admin"}"
+export ROUTER_PASS="SuaSenhaAqui"
+export INTERVAL=30
+
+# Execute
+bash ne8000-bgp-collector.sh`}</pre>
             </div>
             <p className="text-muted-foreground/40 mt-2">
-              💡 O {config.vendor === "huawei" ? '"display bgp peer"' : '"show bgp summary"'} pode ser parseado com um script Python/Bash e enviado como JSON.
+              {'💡'} O script detecta automaticamente OIDs Huawei proprietários e faz fallback para BGP4-MIB genérico.
+            </p>
+            <p className="text-muted-foreground/40">
+              {'⚠️'} Nenhum IP ou URL fica hardcoded — cada ambiente configura suas próprias variáveis.
             </p>
           </div>
         </motion.div>
