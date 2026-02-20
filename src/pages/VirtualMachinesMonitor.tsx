@@ -127,7 +127,7 @@ function MiniBar({ value, color }: { value: number; color: string }) {
 
 /* ─── VM Detail Card (TV-optimized) ── */
 
-function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
+function VMDetailCard({ vm, index, hostCpuFreqHz }: { vm: VirtVM; index: number; hostCpuFreqHz?: number }) {
   const isRunning = vm.status === "running";
   const isStopped = vm.status === "stopped";
 
@@ -136,6 +136,17 @@ function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
 
   const cpuColor = vm.cpuUsage > 85 ? "#e02020" : vm.cpuUsage > 60 ? "#f5a623" : "#00e5ff";
   const memColor = vm.memPercent > 85 ? "#e02020" : vm.memPercent > 60 ? "#f5a623" : "#448aff";
+
+  // Compute CPU in MHz: use cpuUsageHz if available, else estimate from host frequency
+  const cpuMhzDisplay = useMemo(() => {
+    if (vm.cpuUsageHz) return formatHz(vm.cpuUsageHz);
+    // Estimate from host CPU frequency × usage%
+    if (hostCpuFreqHz && hostCpuFreqHz > 0) {
+      const estimatedHz = (vm.cpuUsage / 100) * hostCpuFreqHz;
+      return formatHz(String(estimatedHz));
+    }
+    return null;
+  }, [vm.cpuUsageHz, vm.cpuUsage, hostCpuFreqHz]);
 
   return (
     <motion.div
@@ -201,9 +212,9 @@ function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
               </span>
             </div>
             <MiniBar value={vm.cpuUsage} color={cpuColor} />
-            {vm.cpuUsageHz && (
+            {cpuMhzDisplay && (
               <div className="text-[10px] font-mono text-muted-foreground/60 text-center">
-                {formatHz(vm.cpuUsageHz)}
+                {cpuMhzDisplay}
               </div>
             )}
           </div>
@@ -460,6 +471,21 @@ export default function VirtualMachinesMonitor() {
     return { running: running.length, stopped: stopped.length, total: virt.vms.length, avgCpu, avgMem, maxCpuVM, maxMemVM };
   }, [virt]);
 
+  // Parse host CPU frequency to Hz for estimating VM MHz
+  const hostCpuFreqHz = useMemo(() => {
+    if (!virt?.cpu?.frequency) return 0;
+    const raw = virt.cpu.frequency;
+    const m = raw.match(/([\d.]+)\s*(Hz|KHz|MHz|GHz)/i);
+    if (m) {
+      const num = parseFloat(m[1]);
+      const unit = m[2].toLowerCase();
+      const mult: Record<string, number> = { hz: 1, khz: 1e3, mhz: 1e6, ghz: 1e9 };
+      return num * (mult[unit] || 1);
+    }
+    const num = parseFloat(raw);
+    return isNaN(num) ? 0 : num;
+  }, [virt?.cpu?.frequency]);
+
   if (showSetup) {
     return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} />;
   }
@@ -683,7 +709,7 @@ export default function VirtualMachinesMonitor() {
                 className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4"
               >
                 {filteredVMs.map((vm, i) => (
-                  <VMDetailCard key={vm.name} vm={vm} index={i} />
+                  <VMDetailCard key={vm.name} vm={vm} index={i} hostCpuFreqHz={hostCpuFreqHz} />
                 ))}
               </motion.div>
 
