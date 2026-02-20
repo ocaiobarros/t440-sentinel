@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion';
 import { Info, ExternalLink } from 'lucide-react';
+import { formatDynamicValue } from '@/lib/format-utils';
 
 interface InventoryData {
   model: string;
@@ -23,6 +24,14 @@ interface Props {
 }
 
 const InventorySection = ({ inventory }: Props) => {
+  const formatUptime = (raw?: string) => {
+    if (!raw) return undefined;
+    const num = Number(raw);
+    if (isNaN(num)) return raw;
+    const result = formatDynamicValue(num, 'uptime', { zabbixUnit: 's' });
+    return `${result.display} ${result.suffix}`.trim();
+  };
+
   const items = [
     { label: 'Modelo', value: inventory.model },
     { label: 'Asset Tag', value: inventory.assetTag },
@@ -30,7 +39,7 @@ const InventorySection = ({ inventory }: Props) => {
     { label: 'BIOS', value: `${inventory.biosVersion}${inventory.biosDate ? ` (${inventory.biosDate})` : ''}` },
     { label: 'Firmware', value: inventory.dracFirmware },
     { label: 'Nome', value: inventory.systemName },
-    { label: 'Uptime', value: inventory.uptime },
+    { label: 'Uptime', value: formatUptime(inventory.uptime) },
     { label: 'SO', value: inventory.os },
     { label: 'Local', value: inventory.systemLocation },
   ].filter(i => i.value && i.value.trim());
