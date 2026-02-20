@@ -26,7 +26,7 @@ export interface IdracData {
   getAny: (...names: string[]) => string;
   prefix: string;
   /** Detected host type */
-  hostType: "idrac" | "linux" | "vmware" | "proxmox" | "unknown";
+  hostType: "idrac" | "linux" | "vmware" | "vmware-guest" | "proxmox" | "unknown";
 }
 
 interface UseIdracLiveReturn {
@@ -66,9 +66,11 @@ function detectPrefix(items: Map<string, ZabbixItem>): string {
   return "";
 }
 
-function detectHostType(items: Map<string, ZabbixItem>): "idrac" | "linux" | "vmware" | "proxmox" | "unknown" {
+function detectHostType(items: Map<string, ZabbixItem>): "idrac" | "linux" | "vmware" | "vmware-guest" | "proxmox" | "unknown" {
+  let hasVmwareHv = false;
+  let hasVmwareGuest = false;
   for (const name of items.keys()) {
-    if (name.startsWith("VMware:") || name.startsWith("VMware: ")) return "vmware";
+    if (name.startsWith("VMware:") || name.startsWith("VMware: ")) hasVmwareHv = true;
     if (name.startsWith("Proxmox:") || name.startsWith("Proxmox: ")) return "proxmox";
     if (name.startsWith("Dell ") || name.includes("Temperature Sensor") || name.includes("Fan System Board") || name.includes("Power Supply") || name.includes("RAID Controller") || name.startsWith("Disk ") || name.startsWith("NIC ")) {
       return "idrac";
@@ -77,6 +79,19 @@ function detectHostType(items: Map<string, ZabbixItem>): "idrac" | "linux" | "vm
       return "linux";
     }
   }
+  if (hasVmwareHv) return "vmware";
+  // Detect VMware Guest by checking item keys
+  for (const item of items.values()) {
+    if (item.key_ && item.key_.startsWith("vmware.vm.")) { hasVmwareGuest = true; break; }
+  }
+  if (!hasVmwareGuest) {
+    // Also detect by specific item names from VMware Guest template
+    const guestNames = ["VM state", "Power state", "Hypervisor name", "VMware Tools status", "Snapshot consolidation needed"];
+    for (const name of items.keys()) {
+      if (guestNames.includes(name)) { hasVmwareGuest = true; break; }
+    }
+  }
+  if (hasVmwareGuest) return "vmware-guest";
   return "unknown";
 }
 

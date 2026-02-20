@@ -214,6 +214,86 @@ function VMDetailCard({ vm, index }: { vm: VirtVM; index: number }) {
             </div>
           </div>
         </div>
+
+        {/* VMware Guest extras */}
+        {vm.type === "vmware-guest" && (
+          <div className="pt-2 border-t border-border/15 space-y-2">
+            {/* vCPUs + Latency */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {vm.vCpus && (
+                <div>
+                  <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">vCPUs</div>
+                  <div className="text-sm font-mono-data font-bold text-foreground/80">{vm.vCpus}</div>
+                </div>
+              )}
+              {vm.cpuLatency && (
+                <div>
+                  <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">CPU Latency</div>
+                  <div className="text-sm font-mono-data font-bold text-foreground/80">{parseFloat(vm.cpuLatency).toFixed(2)}%</div>
+                </div>
+              )}
+              {vm.cpuReadiness && (
+                <div>
+                  <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Readiness</div>
+                  <div className="text-sm font-mono-data font-bold text-foreground/80">{parseFloat(vm.cpuReadiness).toFixed(2)}%</div>
+                </div>
+              )}
+            </div>
+
+            {/* Memory extras */}
+            {(vm.ballooned || vm.swapped || vm.compressed) && (
+              <div className="grid grid-cols-3 gap-2 text-center">
+                {vm.ballooned && (
+                  <div>
+                    <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Ballooned</div>
+                    <div className="text-[10px] font-mono text-foreground/70">{vm.ballooned}</div>
+                  </div>
+                )}
+                {vm.swapped && (
+                  <div>
+                    <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Swapped</div>
+                    <div className="text-[10px] font-mono text-foreground/70">{vm.swapped}</div>
+                  </div>
+                )}
+                {vm.compressed && (
+                  <div>
+                    <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Compressed</div>
+                    <div className="text-[10px] font-mono text-foreground/70">{vm.compressed}</div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Storage + Snapshots */}
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {vm.committedStorage && (
+                <div>
+                  <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Committed</div>
+                  <div className="text-[10px] font-mono text-foreground/70">{vm.committedStorage}</div>
+                </div>
+              )}
+              {vm.snapshotCount && (
+                <div>
+                  <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Snapshots</div>
+                  <div className="text-sm font-mono-data font-bold text-foreground/80">{vm.snapshotCount}</div>
+                </div>
+              )}
+              {vm.toolsVersion && (
+                <div>
+                  <div className="text-[9px] font-mono text-muted-foreground/50 uppercase">Tools</div>
+                  <div className="text-[10px] font-mono text-foreground/70">{vm.toolsVersion}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Hypervisor + Cluster info */}
+            {(vm.hypervisorName || vm.clusterName || vm.datacenter) && (
+              <div className="text-[9px] font-mono text-muted-foreground/40 text-center pt-1 border-t border-border/10">
+                {[vm.datacenter, vm.clusterName, vm.hypervisorName].filter(Boolean).join(" → ")}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </motion.div>
   );
@@ -277,7 +357,15 @@ export default function VirtualMachinesMonitor() {
     setShowSetup(true);
   };
 
-  const virt = useMemo(() => (data ? extractVirtData(data) : null), [data]);
+  const virt = useMemo(() => {
+    if (!data) return null;
+    const v = extractVirtData(data);
+    // For VMware Guest, use the host name from config as the VM name
+    if (v && v.vms.length === 1 && v.vms[0].name === "This VM" && config?.hostName) {
+      v.vms[0].name = config.hostName;
+    }
+    return v;
+  }, [data, config]);
 
   // Filter and sort VMs
   const filteredVMs = useMemo(() => {
@@ -424,7 +512,7 @@ export default function VirtualMachinesMonitor() {
           <div className="glass-card rounded-xl p-8 text-center">
             <Server className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
             <p className="text-sm text-muted-foreground font-mono">
-              Este host não parece ser VMware ESXi ou Proxmox VE.
+              Este host não parece ser VMware ESXi, VMware Guest ou Proxmox VE.
             </p>
           </div>
         )}
