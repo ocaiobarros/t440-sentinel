@@ -167,13 +167,11 @@ function StorageBar({ ds, index }: { ds: VirtDatastore; index: number }) {
   );
 }
 
-/* ─── Info Badge ──────────────────────── */
+/* ─── Formatting helpers ──────────────── */
 
 function formatUptimeHuman(raw: string): string {
   if (!raw) return "—";
-  // Already formatted like "311 dias, 20:24:11"
   if (/\d+\s*(dias?|days?)/i.test(raw)) return raw;
-  // Raw seconds
   const secs = parseInt(raw);
   if (isNaN(secs)) return raw;
   const days = Math.floor(secs / 86400);
@@ -182,6 +180,40 @@ function formatUptimeHuman(raw: string): string {
   if (days > 0) return `${days} dias, ${String(hours).padStart(2, "0")}:${String(mins).padStart(2, "0")}`;
   return `${hours}h ${mins}m`;
 }
+
+function formatToMbps(raw: string): string {
+  if (!raw) return "—";
+  // Already formatted like "22.51 Mbps"
+  const fmtMatch = raw.match(/([\d.]+)\s*(bps|Kbps|Mbps|Gbps|KBps|MBps|GBps|Bps)/i);
+  if (fmtMatch) {
+    const val = parseFloat(fmtMatch[1]);
+    const unit = fmtMatch[2];
+    let bps = val;
+    if (/^Bps$/i.test(unit)) bps = val * 8;
+    else if (/^KBps$/i.test(unit)) bps = val * 8 * 1000;
+    else if (/^MBps$/i.test(unit)) bps = val * 8 * 1e6;
+    else if (/^GBps$/i.test(unit)) bps = val * 8 * 1e9;
+    else if (/^bps$/i.test(unit)) bps = val;
+    else if (/^Kbps$/i.test(unit)) bps = val * 1000;
+    else if (/^Mbps$/i.test(unit)) bps = val * 1e6;
+    else if (/^Gbps$/i.test(unit)) bps = val * 1e9;
+    const mbps = bps / 1e6;
+    if (mbps >= 1000) return `${(mbps / 1000).toFixed(2)} Gbps`;
+    if (mbps >= 1) return `${mbps.toFixed(2)} Mbps`;
+    return `${(bps / 1000).toFixed(2)} Kbps`;
+  }
+  // Raw number (assume bytes/s from Zabbix)
+  const num = parseFloat(raw);
+  if (isNaN(num)) return raw;
+  const bps = num * 8;
+  const mbps = bps / 1e6;
+  if (mbps >= 1000) return `${(mbps / 1000).toFixed(2)} Gbps`;
+  if (mbps >= 1) return `${mbps.toFixed(2)} Mbps`;
+  if (bps >= 1000) return `${(bps / 1000).toFixed(2)} Kbps`;
+  return `${bps.toFixed(0)} bps`;
+}
+
+/* ─── Info Badge ──────────────────────── */
 
 function InfoBadge({ label, value, icon: Icon, color }: {
   label: string; value: string; icon: React.ElementType; color?: string;
@@ -296,9 +328,9 @@ export default function VirtualizationMonitor() {
           animate={{ opacity: 1, y: 0 }}
           className="flex items-center justify-between mb-6"
         >
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-4">
             <div className="relative">
-              <Box className="w-7 h-7" style={{ color: accentColor }} />
+              <Box className="w-8 h-8" style={{ color: accentColor }} />
               <motion.div
                 className="absolute inset-0 rounded-full"
                 animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0, 0.5] }}
@@ -307,16 +339,26 @@ export default function VirtualizationMonitor() {
               />
             </div>
             <div>
-              <h1 className="font-display text-xl font-bold tracking-wider">
-                <span style={{ color: accentColor, textShadow: `0 0 20px ${accentColor}60` }}>FLOWPULSE</span>
-                <span className="text-muted-foreground/40 mx-2">|</span>
-                <span className="text-foreground">Virtualization</span>
+              <h1 className="font-display text-2xl md:text-3xl font-black tracking-wider leading-tight">
+                <span style={{ color: accentColor, textShadow: `0 0 20px ${accentColor}60` }}>
+                  {config?.hostName || "HOST"}
+                </span>
               </h1>
-              <p className="text-[9px] font-mono text-muted-foreground/50">
-                {config?.hostName}
-                {virt?.type && <span className="ml-2 uppercase">[{virt.type}]</span>}
-                {lastRefresh && <span className="ml-2">• {lastRefresh.toLocaleTimeString()}</span>}
-              </p>
+              <div className="flex items-center gap-2 mt-0.5">
+                <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">
+                  {virt?.type === "vmware" ? "VMware ESXi" : virt?.type === "proxmox" ? "Proxmox VE" : "Virtualization"}
+                </span>
+                {virt?.host.version && (
+                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/30 text-muted-foreground/50">
+                    v{virt.host.version}
+                  </span>
+                )}
+                {lastRefresh && (
+                  <span className="text-[9px] font-mono text-muted-foreground/40">
+                    • {lastRefresh.toLocaleTimeString()}
+                  </span>
+                )}
+              </div>
             </div>
           </div>
           <div className="flex items-center gap-2">
@@ -435,11 +477,11 @@ export default function VirtualizationMonitor() {
                       <div className="text-center">
                         <div className="flex items-center gap-0.5">
                           <ArrowDownToLine className="w-2 h-2 text-neon-green/70" />
-                          <span className="text-[8px] font-mono-data text-neon-green">{virt.network.bytesIn || "—"}</span>
+                          <span className="text-[8px] font-mono-data text-neon-green">{formatToMbps(virt.network.bytesIn)}</span>
                         </div>
                         <div className="flex items-center gap-0.5">
                           <ArrowUpFromLine className="w-2 h-2 text-neon-blue/70" />
-                          <span className="text-[8px] font-mono-data text-neon-blue">{virt.network.bytesOut || "—"}</span>
+                          <span className="text-[8px] font-mono-data text-neon-blue">{formatToMbps(virt.network.bytesOut)}</span>
                         </div>
                       </div>
                     </div>
@@ -496,7 +538,55 @@ export default function VirtualizationMonitor() {
                 </motion.div>
               )}
 
-              {/* VM grid removed — host-only view */}
+              {/* ── Network Adapters ── */}
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.4 }}
+                className="glass-card rounded-xl p-5 border border-border/30"
+              >
+                <div className="flex items-center gap-2 mb-4">
+                  <Network className="w-4 h-4" style={{ color: accentColor }} />
+                  <span className="text-xs font-display font-bold uppercase tracking-wider text-foreground">
+                    Adaptadores de Rede
+                  </span>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Download */}
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border/20"
+                    style={{ background: "hsl(220 40% 7% / 0.7)" }}
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                      style={{ background: "hsl(142 100% 50% / 0.1)", border: "1px solid hsl(142 100% 50% / 0.2)" }}
+                    >
+                      <ArrowDownToLine className="w-5 h-5" style={{ color: "hsl(142, 100%, 50%)" }} />
+                    </div>
+                    <div>
+                      <div className="text-[8px] font-mono text-muted-foreground/60 uppercase tracking-wider">Incoming (RX)</div>
+                      <div className="text-lg font-mono-data font-bold" style={{ color: "hsl(142, 100%, 50%)", textShadow: "0 0 10px hsl(142 100% 50% / 0.3)" }}>
+                        {formatToMbps(virt.network.bytesIn)}
+                      </div>
+                    </div>
+                  </div>
+                  {/* Upload */}
+                  <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border/20"
+                    style={{ background: "hsl(220 40% 7% / 0.7)" }}
+                  >
+                    <div className="w-10 h-10 rounded-full flex items-center justify-center"
+                      style={{ background: "hsl(210 100% 56% / 0.1)", border: "1px solid hsl(210 100% 56% / 0.2)" }}
+                    >
+                      <ArrowUpFromLine className="w-5 h-5" style={{ color: "hsl(210, 100%, 56%)" }} />
+                    </div>
+                    <div>
+                      <div className="text-[8px] font-mono text-muted-foreground/60 uppercase tracking-wider">Outgoing (TX)</div>
+                      <div className="text-lg font-mono-data font-bold" style={{ color: "hsl(210, 100%, 56%)", textShadow: "0 0 10px hsl(210 100% 56% / 0.3)" }}>
+                        {formatToMbps(virt.network.bytesOut)}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </motion.div>
+
 
               {/* ── Host Info Footer ── */}
               <motion.div
