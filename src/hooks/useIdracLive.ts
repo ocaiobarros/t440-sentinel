@@ -26,7 +26,7 @@ export interface IdracData {
   getAny: (...names: string[]) => string;
   prefix: string;
   /** Detected host type */
-  hostType: "idrac" | "linux" | "unknown";
+  hostType: "idrac" | "linux" | "vmware" | "proxmox" | "unknown";
 }
 
 interface UseIdracLiveReturn {
@@ -66,8 +66,10 @@ function detectPrefix(items: Map<string, ZabbixItem>): string {
   return "";
 }
 
-function detectHostType(items: Map<string, ZabbixItem>): "idrac" | "linux" | "unknown" {
+function detectHostType(items: Map<string, ZabbixItem>): "idrac" | "linux" | "vmware" | "proxmox" | "unknown" {
   for (const name of items.keys()) {
+    if (name.startsWith("VMware:") || name.startsWith("VMware: ")) return "vmware";
+    if (name.startsWith("Proxmox:") || name.startsWith("Proxmox: ")) return "proxmox";
     if (name.startsWith("Dell ") || name.includes("Temperature Sensor") || name.includes("Fan System Board") || name.includes("Power Supply") || name.includes("RAID Controller") || name.startsWith("Disk ") || name.startsWith("NIC ")) {
       return "idrac";
     }

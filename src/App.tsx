@@ -17,6 +17,7 @@ import DashboardList from "./pages/DashboardList";
 import NotFound from "./pages/NotFound";
 import FleetIntelligence from "./pages/FleetIntelligence";
 import AdminHub from "./pages/AdminHub";
+import VirtualizationMonitor from "./pages/VirtualizationMonitor";
 
 const queryClient = new QueryClient();
 
@@ -92,6 +93,14 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <FleetIntelligence />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/templates/virtualization-monitor"
+              element={
+                <ProtectedRoute>
+                  <VirtualizationMonitor />
                 </ProtectedRoute>
               }
             />
