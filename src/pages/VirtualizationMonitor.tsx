@@ -125,43 +125,70 @@ function StorageBar({ ds, index }: { ds: VirtDatastore; index: number }) {
       ? "hsl(43, 100%, 50%)"
       : "hsl(186, 100%, 50%)";
 
+  const glowColor = usedPct > 85
+    ? "hsl(0 90% 50% / 0.25)"
+    : usedPct > 65
+      ? "hsl(43 100% 50% / 0.2)"
+      : "hsl(186 100% 50% / 0.15)";
+
   return (
     <motion.div
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      transition={{ delay: index * 0.05 }}
-      className="space-y-1"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: index * 0.08 }}
+      className="rounded-xl border border-border/30 p-4 relative overflow-hidden"
+      style={{
+        background: `linear-gradient(145deg, hsl(220 35% 8% / 0.95), hsl(225 30% 5% / 0.9))`,
+        boxShadow: `0 0 20px ${glowColor}, inset 0 1px 0 hsl(0 0% 100% / 0.03)`,
+      }}
     >
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-1.5">
-          <HardDrive className="w-3 h-3 text-muted-foreground/50" />
-          <span className="text-[10px] font-display font-bold text-foreground truncate max-w-[140px]">{ds.name}</span>
-          {ds.type && (
-            <span className="text-[7px] font-mono px-1 py-0.5 rounded bg-muted/40 text-muted-foreground uppercase">{ds.type}</span>
-          )}
-        </div>
+      {/* Top row: name + type */}
+      <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <span className="text-[9px] font-mono text-muted-foreground">
+          <HardDrive className="w-4 h-4" style={{ color: barColor }} />
+          <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">{ds.name}</span>
+        </div>
+        {ds.type && (
+          <span className="text-[9px] font-mono px-2 py-1 rounded-md uppercase tracking-wider font-bold"
+            style={{ background: `${barColor}15`, color: barColor, border: `1px solid ${barColor}30` }}
+          >
+            {ds.type}
+          </span>
+        )}
+      </div>
+
+      {/* Main row: big percentage + size info */}
+      <div className="flex items-end justify-between mb-3">
+        <div className="flex items-baseline gap-1">
+          <span className="text-4xl font-mono-data font-black leading-none" style={{ color: barColor, textShadow: `0 0 20px ${glowColor}` }}>
+            {usedPct.toFixed(1)}
+          </span>
+          <span className="text-lg font-mono-data font-bold" style={{ color: barColor, opacity: 0.7 }}>%</span>
+        </div>
+        <div className="text-right">
+          <div className="text-sm font-mono-data font-bold text-foreground">
             {ds.usedSize ? usedHuman : `${(100 - (ds.freePercent || 0)).toFixed(0)}% used`}
-            <span className="text-muted-foreground/40"> / </span>
-            {totalHuman}
-          </span>
-          <span className="text-[9px] font-mono-data font-bold" style={{ color: barColor }}>
-            {usedPct.toFixed(1)}%
-          </span>
+          </div>
+          <div className="text-xs font-mono text-muted-foreground/60">
+            de {totalHuman}
+          </div>
         </div>
       </div>
-      <div className="h-2 rounded-full bg-muted/25 overflow-hidden">
+
+      {/* Thick progress bar */}
+      <div className="h-4 rounded-full overflow-hidden relative" style={{ background: "hsl(220 30% 10% / 0.8)" }}>
         <motion.div
-          className="h-full rounded-full"
+          className="h-full rounded-full relative"
           initial={{ width: 0 }}
           animate={{ width: `${usedPct}%` }}
-          transition={{ duration: 0.8, ease: "easeOut", delay: index * 0.05 }}
+          transition={{ duration: 1, ease: "easeOut", delay: index * 0.08 }}
           style={{
-            background: `linear-gradient(90deg, hsl(186, 100%, 50%), ${barColor})`,
-            boxShadow: `0 0 8px ${barColor}60`,
+            background: `linear-gradient(90deg, ${barColor}90, ${barColor})`,
+            boxShadow: `0 0 12px ${barColor}60, inset 0 1px 0 hsl(0 0% 100% / 0.2)`,
           }}
         />
+        {/* Glow overlay on bar */}
+        <div className="absolute inset-0 rounded-full" style={{ background: `linear-gradient(180deg, hsl(0 0% 100% / 0.08), transparent)` }} />
       </div>
     </motion.div>
   );
@@ -530,7 +557,7 @@ export default function VirtualizationMonitor() {
                       {virt.datastores.length} {isVMware ? "datastores" : "pools"}
                     </span>
                   </div>
-                  <div className="space-y-3">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {virt.datastores.map((ds, i) => (
                       <StorageBar key={ds.name} ds={ds} index={i} />
                     ))}
