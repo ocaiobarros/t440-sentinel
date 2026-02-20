@@ -27,6 +27,8 @@ export interface IdracData {
   prefix: string;
   /** Detected host type */
   hostType: "idrac" | "linux" | "vmware" | "vmware-guest" | "proxmox" | "unknown";
+  /** Host inventory from Zabbix (if available) */
+  inventory?: Record<string, string>;
 }
 
 interface UseIdracLiveReturn {
@@ -145,6 +147,24 @@ export function useIdracLive(): UseIdracLiveReturn {
       const prefix = detectPrefix(map);
       const hostType = detectHostType(map);
 
+      // Fetch host inventory for Proxmox/VMware to get CPU model/frequency
+      let inventory: Record<string, string> | undefined;
+      if (hostType === "proxmox" || hostType === "vmware") {
+        try {
+          const invResult = await zabbixProxy(connectionId, "host.get", {
+            hostids: hostId,
+            output: ["hostid"],
+            selectInventory: ["model", "hardware", "hardware_full", "type", "os", "os_full"],
+          }) as Array<{ inventory?: Record<string, string> }>;
+          if (invResult?.[0]?.inventory) {
+            inventory = invResult[0].inventory;
+            console.log("[Inventory]", JSON.stringify(inventory));
+          }
+        } catch (e) {
+          console.warn("Failed to fetch host inventory:", e);
+        }
+      }
+
       const getAny = (...names: string[]): string => {
         for (const n of names) {
           const v = map.get(n)?.lastvalue;
@@ -160,6 +180,7 @@ export function useIdracLive(): UseIdracLiveReturn {
         getAny,
         prefix,
         hostType,
+        inventory,
       });
       setLastRefresh(new Date());
     } catch (err) {

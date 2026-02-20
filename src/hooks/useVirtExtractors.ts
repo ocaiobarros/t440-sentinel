@@ -197,13 +197,16 @@ export function extractVMwareData(d: IdracData): VirtData {
 /* ─── Proxmox Extraction ──────────────── */
 
 export function extractProxmoxData(d: IdracData): VirtData {
-  // Debug: dump ALL item names to discover available metrics
-  let debugCount = 0;
-  for (const [name, item] of d.items) {
-    if (debugCount < 80) {
-      console.log(`[PVE-ALL] "${name}" = "${item.lastvalue}" (units: "${item.units}")`);
-      debugCount++;
+  // Try to extract CPU frequency from host inventory
+  let inventoryFreqHz = 0;
+  if (d.inventory) {
+    const invStr = [d.inventory.model, d.inventory.hardware, d.inventory.hardware_full, d.inventory.type].filter(Boolean).join(" ");
+    const freqMatch = invStr.match(/@?\s*([\d.]+)\s*(GHz|MHz)/i);
+    if (freqMatch) {
+      const mult = freqMatch[2].toLowerCase() === "ghz" ? 1e9 : 1e6;
+      inventoryFreqHz = parseFloat(freqMatch[1]) * mult;
     }
+    console.log(`[PVE] Inventory freq: ${inventoryFreqHz} Hz from "${invStr}"`);
   }
 
   // Detect node name
@@ -300,31 +303,34 @@ export function extractProxmoxData(d: IdracData): VirtData {
 
   const runningCount = vms.filter(vm => vm.status === "running").length;
 
-  // Try to discover CPU frequency from node items
+  // Try to discover CPU frequency from node items or inventory
   let cpuFrequency = nodeGet("CPU, frequency") || nodeGet("CPU frequency") || "";
   let cpuModel = nodeGet("CPU, model") || nodeGet("CPU model") || "";
-  let cpuCores = nodeGet("CPU, cores") || nodeGet("Cores") || "";
-  let cpuThreads = nodeGet("CPU, threads") || nodeGet("Threads") || "";
+  const cpuCores = nodeGet("CPU, cores") || nodeGet("Cores") || "";
+  const cpuThreads = nodeGet("CPU, threads") || nodeGet("Threads") || "";
   
-  // Scan all node items for frequency/model if not found
+  // Scan node items for frequency/model
   if (!cpuFrequency || !cpuModel) {
     for (const [name, item] of d.items) {
       const nameLower = name.toLowerCase();
-      if (!cpuFrequency && nameLower.includes("cpu") && (nameLower.includes("freq") || nameLower.includes("mhz") || nameLower.includes("ghz"))) {
-        cpuFrequency = item.lastvalue || "";
-      }
       if (!cpuModel && nameLower.includes("cpu") && nameLower.includes("model")) {
         cpuModel = item.lastvalue || "";
       }
-      // Try to extract frequency from CPU model string (e.g., "Intel Xeon E5-2680 v4 @ 2.40GHz")
-      if (!cpuFrequency && cpuModel) {
-        const freqMatch = cpuModel.match(/@?\s*([\d.]+)\s*(GHz|MHz)/i);
-        if (freqMatch) {
-          const mult = freqMatch[2].toLowerCase() === "ghz" ? 1e9 : 1e6;
-          cpuFrequency = String(parseFloat(freqMatch[1]) * mult);
-        }
-      }
     }
+  }
+  
+  // Extract frequency from CPU model string or inventory
+  if (!cpuFrequency && cpuModel) {
+    const freqMatch = cpuModel.match(/@?\s*([\d.]+)\s*(GHz|MHz)/i);
+    if (freqMatch) {
+      const mult = freqMatch[2].toLowerCase() === "ghz" ? 1e9 : 1e6;
+      cpuFrequency = String(parseFloat(freqMatch[1]) * mult);
+    }
+  }
+  
+  // Use inventory frequency as fallback
+  if (!cpuFrequency && inventoryFreqHz > 0) {
+    cpuFrequency = String(inventoryFreqHz);
   }
 
   return {
