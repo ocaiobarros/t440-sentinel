@@ -1,9 +1,20 @@
 import { motion } from 'framer-motion';
 import { Fan } from 'lucide-react';
-import { fans, parseStatus } from '@/data/serverData';
+import { parseStatus } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
-const FanSection = () => {
+interface FanData {
+  name: string;
+  speed: string;
+  speedNum: number;
+  status: string;
+}
+
+interface Props {
+  fans: FanData[];
+}
+
+const FanSection = ({ fans }: Props) => {
   const maxRpm = 6000;
 
   return (
@@ -24,7 +35,7 @@ const FanSection = () => {
 
       <div className="space-y-4">
         {fans.map((fan, i) => {
-          const { level } = parseStatus(fan.status);
+          const { level } = parseStatus(fan.status || "OK (3)");
           const pct = (fan.speedNum / maxRpm) * 100;
 
           return (
@@ -42,7 +53,7 @@ const FanSection = () => {
                 </div>
                 <span className="text-sm font-mono text-neon-green font-bold">{fan.speed}</span>
               </div>
-              
+
               {/* RPM Bar */}
               <div className="relative h-6 bg-secondary/50 rounded-md overflow-hidden">
                 <motion.div

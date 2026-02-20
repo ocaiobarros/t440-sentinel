@@ -1,9 +1,41 @@
 import { motion } from 'framer-motion';
 import { HardDrive, Database, Shield } from 'lucide-react';
-import { disks, raidController, volumes, parseStatus } from '@/data/serverData';
+import { parseStatus } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
-const StorageSection = () => {
+interface DiskData {
+  id: number;
+  size: string;
+  state: string;
+  status: string;
+  manufacturer: string;
+  model: string;
+  name: string;
+  serial: string;
+}
+
+interface VolumeData {
+  id: number;
+  name: string;
+  size: string;
+  state: string;
+  status: string;
+  vdState: string;
+}
+
+interface RaidData {
+  name: string;
+  status: string;
+  firmware: string;
+}
+
+interface Props {
+  disks: DiskData[];
+  raidController: RaidData;
+  volumes: VolumeData[];
+}
+
+const StorageSection = ({ disks, raidController, volumes }: Props) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -45,13 +77,13 @@ const StorageSection = () => {
           </h3>
           <div className="space-y-1.5">
             {disks.map((d) => {
-              const { level } = parseStatus(d.status);
+              const { level } = parseStatus(d.status || "OK (3)");
               return (
                 <div key={d.id} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
                   <span className="text-muted-foreground">Disco {d.id}</span>
                   <div className="flex items-center gap-1.5">
                     <StatusIndicator status={level} size="sm" />
-                    <span className={level === 'ok' ? 'text-neon-green' : 'text-neon-red'}>{parseStatus(d.status).text}</span>
+                    <span className={level === 'ok' ? 'text-neon-green' : 'text-neon-red'}>{parseStatus(d.status || "OK").text}</span>
                   </div>
                 </div>
               );
@@ -69,7 +101,7 @@ const StorageSection = () => {
             {disks.map((d) => (
               <div key={d.id} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
                 <span className="text-muted-foreground">Disco {d.id}</span>
-                <span className="text-foreground font-bold">{d.size}</span>
+                <span className="text-foreground font-bold">{d.size || "—"}</span>
               </div>
             ))}
           </div>
@@ -83,29 +115,31 @@ const StorageSection = () => {
           </h3>
 
           {/* RAID Controller */}
-          <div className="glass-card rounded-lg p-2.5 mb-3">
-            <div className="flex items-center justify-between text-xs">
-              <span className="font-mono text-muted-foreground">RAID Controller</span>
-              <div className="flex items-center gap-1">
-                <StatusIndicator status={parseStatus(raidController.status).level} size="sm" />
-                <span className="text-neon-green font-bold font-display">{parseStatus(raidController.status).text}</span>
+          {raidController.name && (
+            <div className="glass-card rounded-lg p-2.5 mb-3">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-mono text-muted-foreground">RAID Controller</span>
+                <div className="flex items-center gap-1">
+                  <StatusIndicator status={parseStatus(raidController.status || "OK (3)").level} size="sm" />
+                  <span className="text-neon-green font-bold font-display">{parseStatus(raidController.status || "OK").text}</span>
+                </div>
               </div>
+              <div className="text-[10px] font-mono text-muted-foreground mt-1">FW: {raidController.firmware}</div>
             </div>
-            <div className="text-[10px] font-mono text-muted-foreground mt-1">FW: {raidController.firmware}</div>
-          </div>
+          )}
 
           {/* Volumes */}
           <div className="space-y-2">
             {volumes.map((v) => {
-              const stateClean = parseStatus(v.state).text;
-              const { level } = parseStatus(v.status);
+              const stateClean = parseStatus(v.state || "").text;
+              const { level } = parseStatus(v.status || "OK (3)");
               return (
                 <div key={v.id} className="glass-card rounded-lg p-2.5 space-y-1">
                   <div className="flex items-center justify-between text-xs">
                     <span className="font-mono text-foreground font-bold">Volume {v.id}</span>
                     <div className="flex items-center gap-1">
                       <StatusIndicator status={level} size="sm" />
-                      <span className="text-neon-green font-display text-[10px]">{parseStatus(v.vdState).text}</span>
+                      <span className="text-neon-green font-display text-[10px]">{parseStatus(v.vdState || "Online").text}</span>
                     </div>
                   </div>
                   <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">

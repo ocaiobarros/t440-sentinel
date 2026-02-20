@@ -1,9 +1,22 @@
 import { motion } from 'framer-motion';
 import { Network } from 'lucide-react';
-import { nics, parseStatus } from '@/data/serverData';
+import { parseStatus } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
-const NetworkSection = () => {
+interface NicData {
+  id: number;
+  name: string;
+  mac: string;
+  connectionStatus: string;
+  status: string;
+  slot?: string;
+}
+
+interface Props {
+  nics: NicData[];
+}
+
+const NetworkSection = ({ nics }: Props) => {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -33,9 +46,8 @@ const NetworkSection = () => {
           </thead>
           <tbody>
             {nics.map((nic) => {
-              const connStatus = parseStatus(nic.connectionStatus);
-              const healthStatus = parseStatus(nic.status);
-              // Shorten name
+              const connStatus = parseStatus(nic.connectionStatus || "");
+              const healthStatus = parseStatus(nic.status || "OK (3)");
               const shortName = nic.name.split(' - ')[0];
 
               return (
