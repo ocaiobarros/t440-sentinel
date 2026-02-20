@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { email, display_name, role } = await req.json();
+    const { email, display_name, role, password } = await req.json();
 
     if (!email || !role) {
       return new Response(JSON.stringify({ error: "email and role are required" }), {
@@ -99,11 +99,11 @@ Deno.serve(async (req) => {
       }
       userId = existingUser.id;
     } else {
-      // Create new user with a random password (they'll reset via email)
-      const tempPassword = crypto.randomUUID() + "Aa1!";
+      // Create new user with provided password or a random one
+      const userPassword = password || (crypto.randomUUID() + "Aa1!");
       const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
         email,
-        password: tempPassword,
+        password: userPassword,
         email_confirm: true,
         user_metadata: { display_name: display_name || email.split("@")[0] },
       });

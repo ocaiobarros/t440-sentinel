@@ -85,11 +85,8 @@ export default function Login() {
         </Button>
       </form>
 
-      <p className="text-center text-sm text-muted-foreground mt-6">
-        Não tem uma conta?{" "}
-        <Link to="/signup" className="text-primary hover:text-primary/80 font-medium transition-colors">
-          Criar conta
-        </Link>
+      <p className="text-center text-xs text-muted-foreground/60 mt-6">
+        Acesso restrito. Contate o administrador para obter credenciais.
       </p>
     </AuthLayout>
   );
