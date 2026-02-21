@@ -77,10 +77,7 @@ async function zabbixCall(url: string, auth: string, method: string, params: Rec
 }
 
 /* ─── In-memory status cache (per map+tenant, 10s TTL) ─── */
-interface CachedResult {
-  data: unknown;
-  expiresAt: number;
-}
+interface CachedResult { data: unknown; expiresAt: number }
 const statusCache = new Map<string, CachedResult>();
 const CACHE_TTL_MS = 10_000;
 
@@ -94,7 +91,15 @@ interface HostStatusResult {
 }
 
 /* ─── Ring break detection (BFS) ─── */
-interface LinkRow { id: string; origin_host_id: string; dest_host_id: string; is_ring: boolean }
+interface LinkRow {
+  id: string;
+  origin_host_id: string;
+  dest_host_id: string;
+  is_ring: boolean;
+  capacity_mbps: number;
+  status_strategy: string;
+  current_status: string;
+}
 
 function detectRingBreaks(
   links: LinkRow[],
@@ -180,38 +185,29 @@ function resolveStatus(
   };
 }
 
-/* ─── SLA Transition Engine ─── */
-/**
- * Derives link status from its two endpoint hosts:
- *  - Both UP → UP
- *  - One DOWN → DEGRADED
- *  - Both DOWN → DOWN
- */
+/* ─── Link status derivation ─── */
 function deriveLinkStatus(
   originStatus: "UP" | "DOWN" | "UNKNOWN",
   destStatus: "UP" | "DOWN" | "UNKNOWN",
 ): "UP" | "DOWN" | "DEGRADED" {
   if (originStatus === "UP" && destStatus === "UP") return "UP";
   if (originStatus === "DOWN" && destStatus === "DOWN") return "DOWN";
-  // One DOWN/UNKNOWN + one UP, or both UNKNOWN
   if (originStatus === "DOWN" || destStatus === "DOWN") return "DEGRADED";
-  return "UP"; // both UNKNOWN treated as UP (no data = no alarm)
+  return "UP";
 }
 
-interface OpenEvent {
-  id: string;
-  status: string;
-}
+/* ─── SLA Transition Engine ─── */
+interface OpenEvent { id: string; status: string }
 
 async function processLinkTransitions(
   serviceClient: ReturnType<typeof createClient>,
   links: LinkRow[],
   hostStatusById: Record<string, HostStatusResult>,
   tenantId: string,
+  linkStatusMap: Record<string, string>,
 ): Promise<void> {
   if (links.length === 0) return;
 
-  // Fetch all open events for this tenant's links in one query
   const linkIds = links.map((l) => l.id);
   const { data: openEvents } = await serviceClient
     .from("flow_map_link_events")
@@ -230,52 +226,147 @@ async function processLinkTransitions(
   const now = new Date().toISOString();
   const toInsert: Array<{ link_id: string; tenant_id: string; status: string; started_at: string }> = [];
   const toClose: string[] = [];
+  const statusUpdates: Array<{ id: string; current_status: string; last_status_change: string }> = [];
 
   for (const link of links) {
-    const originSt = hostStatusById[link.origin_host_id]?.status ?? "UNKNOWN";
-    const destSt = hostStatusById[link.dest_host_id]?.status ?? "UNKNOWN";
-    const newStatus = deriveLinkStatus(originSt, destSt);
-
+    const newStatus = linkStatusMap[link.id] ?? "UP";
     const openEvent = openEventByLink.get(link.id);
 
     if (!openEvent && newStatus !== "UP") {
-      // No open event, link is DOWN/DEGRADED → create event
       toInsert.push({ link_id: link.id, tenant_id: tenantId, status: newStatus, started_at: now });
     } else if (openEvent && openEvent.status !== newStatus) {
-      // Status changed → close current event
       toClose.push(openEvent.id);
-      // If new status is not UP, open a new event
       if (newStatus !== "UP") {
         toInsert.push({ link_id: link.id, tenant_id: tenantId, status: newStatus, started_at: now });
       }
     }
-    // If status unchanged, do nothing (idempotent)
+
+    // Update current_status on the link itself
+    if (link.current_status !== newStatus) {
+      statusUpdates.push({ id: link.id, current_status: newStatus, last_status_change: now });
+    }
   }
 
-  // Execute batch operations in parallel
   const ops: Promise<unknown>[] = [];
 
   if (toClose.length > 0) {
-    ops.push(
-      serviceClient
-        .from("flow_map_link_events")
-        .update({ ended_at: now })
-        .in("id", toClose)
-    );
+    ops.push(serviceClient.from("flow_map_link_events").update({ ended_at: now }).in("id", toClose));
   }
-
   if (toInsert.length > 0) {
+    ops.push(serviceClient.from("flow_map_link_events").insert(toInsert));
+  }
+  // Batch update current_status on links
+  for (const upd of statusUpdates) {
     ops.push(
-      serviceClient
-        .from("flow_map_link_events")
-        .insert(toInsert)
+      serviceClient.from("flow_map_links")
+        .update({ current_status: upd.current_status, last_status_change: upd.last_status_change })
+        .eq("id", upd.id)
     );
   }
 
   if (ops.length > 0) {
     await Promise.all(ops);
-    console.log(`[flowmap-status] SLA transitions: closed=${toClose.length}, opened=${toInsert.length}`);
+    console.log(`[flowmap-status] SLA transitions: closed=${toClose.length}, opened=${toInsert.length}, statusUpdates=${statusUpdates.length}`);
   }
+}
+
+/* ─── Link traffic telemetry ─── */
+interface LinkItemRow {
+  link_id: string;
+  side: string;
+  direction: string;
+  metric: string;
+  zabbix_item_id: string;
+}
+
+interface LinkTrafficSide {
+  in_bps: number | null;
+  out_bps: number | null;
+  utilization: number | null;
+}
+
+interface LinkTrafficResult {
+  sideA: LinkTrafficSide;
+  sideB: LinkTrafficSide;
+}
+
+async function fetchLinkTraffic(
+  serviceClient: ReturnType<typeof createClient>,
+  links: LinkRow[],
+  tenantId: string,
+  zabbixUrl: string,
+  zabbixAuth: string,
+): Promise<Record<string, LinkTrafficResult>> {
+  if (links.length === 0) return {};
+
+  const linkIds = links.map((l) => l.id);
+
+  // Fetch all link items for these links
+  const { data: linkItems } = await serviceClient
+    .from("flow_map_link_items")
+    .select("link_id, side, direction, metric, zabbix_item_id")
+    .eq("tenant_id", tenantId)
+    .in("link_id", linkIds);
+
+  if (!linkItems || linkItems.length === 0) return {};
+
+  // Collect all unique Zabbix item IDs to fetch in one call
+  const bpsItems = (linkItems as LinkItemRow[]).filter((i) => i.metric === "BPS");
+  const allItemIds = [...new Set(bpsItems.map((i) => i.zabbix_item_id))];
+
+  if (allItemIds.length === 0) return {};
+
+  // Fetch latest values from Zabbix in one call
+  const zbxItems = await zabbixCall(zabbixUrl, zabbixAuth, "item.get", {
+    itemids: allItemIds,
+    output: ["itemid", "lastvalue", "lastclock"],
+  }) as Array<{ itemid: string; lastvalue: string; lastclock: string }>;
+
+  const valueMap = new Map<string, number>();
+  for (const item of zbxItems) {
+    valueMap.set(item.itemid, parseFloat(item.lastvalue || "0"));
+  }
+
+  // Build capacity lookup
+  const capacityMap = new Map<string, number>();
+  for (const link of links) {
+    capacityMap.set(link.id, link.capacity_mbps);
+  }
+
+  // Aggregate per link
+  const result: Record<string, LinkTrafficResult> = {};
+
+  for (const linkId of linkIds) {
+    const items = bpsItems.filter((i) => i.link_id === linkId);
+    const capacity = capacityMap.get(linkId) ?? 1000;
+    const capacityBps = capacity * 1_000_000;
+
+    const sideA: LinkTrafficSide = { in_bps: null, out_bps: null, utilization: null };
+    const sideB: LinkTrafficSide = { in_bps: null, out_bps: null, utilization: null };
+
+    for (const item of items) {
+      const val = valueMap.get(item.zabbix_item_id);
+      if (val === undefined) continue;
+
+      const side = item.side === "A" ? sideA : sideB;
+      if (item.direction === "IN") side.in_bps = val;
+      if (item.direction === "OUT") side.out_bps = val;
+    }
+
+    // Calculate utilization = max(in, out) / capacity * 100
+    if (sideA.in_bps !== null || sideA.out_bps !== null) {
+      const maxBps = Math.max(sideA.in_bps ?? 0, sideA.out_bps ?? 0);
+      sideA.utilization = Math.round((maxBps / capacityBps) * 10000) / 100;
+    }
+    if (sideB.in_bps !== null || sideB.out_bps !== null) {
+      const maxBps = Math.max(sideB.in_bps ?? 0, sideB.out_bps ?? 0);
+      sideB.utilization = Math.round((maxBps / capacityBps) * 10000) / 100;
+    }
+
+    result[linkId] = { sideA, sideB };
+  }
+
+  return result;
 }
 
 /* ─── Main Handler ─── */
@@ -308,7 +399,6 @@ Deno.serve(async (req) => {
     const { map_id, connection_id } = body;
     if (!map_id || !connection_id) return json({ error: "map_id and connection_id are required" }, 400);
 
-    // Get tenant
     const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data: tenantId } = await serviceClient.rpc("get_user_tenant_id", { p_user_id: userId });
     if (!tenantId) return json({ error: "Tenant not found" }, 403);
@@ -331,12 +421,12 @@ Deno.serve(async (req) => {
       .eq("tenant_id", tenantId as string);
 
     if (hostsErr) return json({ error: `Hosts query failed: ${hostsErr.message}` }, 500);
-    if (!hosts || hosts.length === 0) return json({ hosts: {}, impactedLinks: [], isolatedNodes: [] });
+    if (!hosts || hosts.length === 0) return json({ hosts: {}, impactedLinks: [], isolatedNodes: [], linkTraffic: {} });
 
-    // Fetch links for ring detection + SLA transitions
+    // Fetch links (with new columns)
     const { data: links } = await serviceClient
       .from("flow_map_links")
-      .select("id, origin_host_id, dest_host_id, is_ring")
+      .select("id, origin_host_id, dest_host_id, is_ring, capacity_mbps, status_strategy, current_status")
       .eq("map_id", map_id)
       .eq("tenant_id", tenantId as string);
 
@@ -420,15 +510,17 @@ Deno.serve(async (req) => {
     }
 
     // Ring break detection
-    const ringResult = detectRingBreaks(links ?? [], resultByHostId);
+    const typedLinks = (links ?? []) as LinkRow[];
+    const ringResult = detectRingBreaks(typedLinks, resultByHostId);
 
     // ─── Derive per-link status ───
+    const linkStatusMap: Record<string, string> = {};
     const linkStatuses: Record<string, { status: string; originHost: string; destHost: string }> = {};
-    for (const link of (links ?? [])) {
+    for (const link of typedLinks) {
       const oSt = resultByHostId[link.origin_host_id]?.status ?? "UNKNOWN";
       const dSt = resultByHostId[link.dest_host_id]?.status ?? "UNKNOWN";
       const linkSt = deriveLinkStatus(oSt, dSt);
-      // Find host names
+      linkStatusMap[link.id] = linkSt;
       const oHost = hosts.find((h) => h.id === link.origin_host_id);
       const dHost = hosts.find((h) => h.id === link.dest_host_id);
       linkStatuses[link.id] = {
@@ -438,17 +530,26 @@ Deno.serve(async (req) => {
       };
     }
 
+    // ─── Fetch link traffic (BPS telemetry from link_items) ───
+    const linkTraffic = await fetchLinkTraffic(
+      serviceClient,
+      typedLinks,
+      tenantId as string,
+      conn.url,
+      zabbixAuth,
+    );
+
     // ─── Fetch active link events for SLA panel ───
     const { data: activeEvents } = await serviceClient
       .from("flow_map_link_events")
       .select("id, link_id, status, started_at, ended_at, duration_seconds")
       .eq("tenant_id", tenantId as string)
-      .in("link_id", (links ?? []).map((l) => l.id))
+      .in("link_id", typedLinks.map((l) => l.id))
       .order("started_at", { ascending: false })
       .limit(100);
 
-    // ─── SLA Transition Engine (fire-and-forget, non-blocking) ───
-    processLinkTransitions(serviceClient, links ?? [], resultByHostId, tenantId as string)
+    // ─── SLA Transition Engine (fire-and-forget) ───
+    processLinkTransitions(serviceClient, typedLinks, resultByHostId, tenantId as string, linkStatusMap)
       .catch((err) => console.error("[flowmap-status] SLA transition error:", err));
 
     const responseData = {
@@ -457,6 +558,7 @@ Deno.serve(async (req) => {
       isolatedNodes: ringResult.isolatedNodeIds,
       linkStatuses,
       linkEvents: activeEvents ?? [],
+      linkTraffic,
     };
 
     // Store in cache

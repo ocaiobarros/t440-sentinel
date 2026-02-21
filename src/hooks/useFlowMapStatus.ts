@@ -11,6 +11,17 @@ export interface LinkEvent {
   duration_seconds: number | null;
 }
 
+export interface LinkTrafficSide {
+  in_bps: number | null;
+  out_bps: number | null;
+  utilization: number | null;
+}
+
+export interface LinkTraffic {
+  sideA: LinkTrafficSide;
+  sideB: LinkTrafficSide;
+}
+
 const BROADCAST_CHANNEL_NAME = "flowmap-status-poll";
 const LEADER_HEARTBEAT_MS = 5_000;
 const LEADER_TIMEOUT_MS = 8_000;
@@ -42,6 +53,7 @@ export function useFlowMapStatus({
   const [isolatedNodes, setIsolatedNodes] = useState<string[]>([]);
   const [linkStatuses, setLinkStatuses] = useState<Record<string, { status: string; originHost: string; destHost: string }>>({});
   const [linkEvents, setLinkEvents] = useState<LinkEvent[]>([]);
+  const [linkTraffic, setLinkTraffic] = useState<Record<string, LinkTraffic>>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -99,6 +111,7 @@ export function useFlowMapStatus({
           setIsolatedNodes(payload.isolatedNodes ?? []);
           setLinkStatuses(payload.linkStatuses ?? {});
           setLinkEvents(payload.linkEvents ?? []);
+          setLinkTraffic(payload.linkTraffic ?? {});
         }
       }
 
@@ -186,6 +199,7 @@ export function useFlowMapStatus({
           setIsolatedNodes(msg.payload.isolatedNodes ?? []);
           setLinkStatuses(msg.payload.linkStatuses ?? {});
           setLinkEvents(msg.payload.linkEvents ?? []);
+          setLinkTraffic(msg.payload.linkTraffic ?? {});
         }
       }
     };
@@ -242,5 +256,5 @@ export function useFlowMapStatus({
     return () => document.removeEventListener("visibilitychange", handler);
   }, [canPoll, startPolling, stopPolling]);
 
-  return { statusMap, impactedLinks, isolatedNodes, linkStatuses, linkEvents, loading, error, refetch: fetchStatus };
+  return { statusMap, impactedLinks, isolatedNodes, linkStatuses, linkEvents, linkTraffic, loading, error, refetch: fetchStatus };
 }

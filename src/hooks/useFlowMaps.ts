@@ -38,6 +38,27 @@ export interface FlowMapLink {
   is_ring: boolean;
   priority: number;
   geometry: { type: string; coordinates: [number, number][] };
+  /* ── Engine columns ── */
+  capacity_mbps: number;
+  status_strategy: string;
+  origin_role: string;
+  dest_role: string;
+  current_status: string;
+  last_status_change: string | null;
+}
+
+export interface FlowMapLinkItem {
+  id: string;
+  tenant_id: string;
+  link_id: string;
+  side: "A" | "B";
+  direction: "IN" | "OUT";
+  metric: "BPS" | "PPS" | "STATUS" | "UTIL" | "ERRORS";
+  zabbix_host_id: string;
+  zabbix_item_id: string;
+  key_: string;
+  name: string;
+  created_at: string;
 }
 
 export interface HostStatus {
@@ -79,6 +100,22 @@ export function useFlowMapDetail(mapId: string | undefined) {
         hosts: (hostsRes.data ?? []) as FlowMapHost[],
         links: (linksRes.data ?? []) as unknown as FlowMapLink[],
       };
+    },
+  });
+}
+
+/* ── Link items for a specific link ── */
+export function useFlowMapLinkItems(linkId: string | undefined) {
+  return useQuery({
+    queryKey: ["flow-map-link-items", linkId],
+    enabled: !!linkId,
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("flow_map_link_items" as any)
+        .select("*")
+        .eq("link_id", linkId!);
+      if (error) throw error;
+      return (data ?? []) as unknown as FlowMapLinkItem[];
     },
   });
 }
@@ -143,7 +180,7 @@ export function useFlowMapMutations() {
   });
 
   const addLink = useMutation({
-    mutationFn: async (input: Omit<FlowMapLink, "id">) => {
+    mutationFn: async (input: Omit<FlowMapLink, "id" | "capacity_mbps" | "status_strategy" | "origin_role" | "dest_role" | "current_status" | "last_status_change"> & Partial<Pick<FlowMapLink, "capacity_mbps" | "status_strategy" | "origin_role" | "dest_role" | "current_status" | "last_status_change">>) => {
       const { data, error } = await supabase.from("flow_map_links").insert(input as any).select().single();
       if (error) throw error;
       return data as unknown as FlowMapLink;
@@ -169,5 +206,32 @@ export function useFlowMapMutations() {
     onSuccess: (mapId) => qc.invalidateQueries({ queryKey: ["flow-map", mapId] }),
   });
 
-  return { createMap, updateMap, deleteMap, addHost, removeHost, addLink, updateLink, removeLink };
+  /* ── Link Item mutations ── */
+  const addLinkItem = useMutation({
+    mutationFn: async (input: Omit<FlowMapLinkItem, "id" | "created_at">) => {
+      const { data, error } = await supabase
+        .from("flow_map_link_items" as any)
+        .insert(input as any)
+        .select()
+        .single();
+      if (error) throw error;
+      return data as unknown as FlowMapLinkItem;
+    },
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ["flow-map-link-items", d.link_id] });
+    },
+  });
+
+  const removeLinkItem = useMutation({
+    mutationFn: async ({ id, link_id }: { id: string; link_id: string }) => {
+      const { error } = await supabase.from("flow_map_link_items" as any).delete().eq("id", id);
+      if (error) throw error;
+      return link_id;
+    },
+    onSuccess: (linkId) => {
+      qc.invalidateQueries({ queryKey: ["flow-map-link-items", linkId] });
+    },
+  });
+
+  return { createMap, updateMap, deleteMap, addHost, removeHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem };
 }
