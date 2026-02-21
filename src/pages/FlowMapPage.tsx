@@ -128,7 +128,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data, isLoading } = useFlowMapDetail(mapId);
-  const { addHost, removeHost, addLink, updateLink, removeLink } = useFlowMapMutations();
+  const { addHost, removeHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem } = useFlowMapMutations();
 
   const [mode, setMode] = useState<BuilderMode>("idle");
   const [pendingOrigin, setPendingOrigin] = useState<string | null>(null);
@@ -449,12 +449,15 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 mode={mode}
                 onModeChange={setMode}
                 connectionId={activeConnectionId}
+                tenantId={tenantId ?? undefined}
                 onAddHost={handleAddHost}
                 onRemoveHost={(id) => removeHost.mutate({ id, map_id: mapId })}
                 pendingOrigin={pendingOrigin}
                 onSelectOrigin={handleHostClick}
                 onCreateLink={handleCreateLink}
                 onRemoveLink={(id) => removeLink.mutate({ id, map_id: mapId })}
+                onAddLinkItem={(item) => addLinkItem.mutate(item)}
+                onRemoveLinkItem={(id, linkId) => removeLinkItem.mutate({ id, link_id: linkId })}
                 editingLinkId={editingLinkId}
                 onEditRoute={handleEditRoute}
                 onCancelEditRoute={handleSaveRoute}

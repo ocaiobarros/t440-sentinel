@@ -3,14 +3,15 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, MapPin, Link2, AlertTriangle, Save, X, Pencil,
   Navigation, Network, Server, ChevronRight, ChevronLeft,
-  Loader2, Search,
+  Loader2, Search, Cable,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import type { FlowMapHost, FlowMapLink } from "@/hooks/useFlowMaps";
+import type { FlowMapHost, FlowMapLink, FlowMapLinkItem } from "@/hooks/useFlowMaps";
+import LinkItemsEditor from "./LinkItemsEditor";
 
 export type BuilderMode = "idle" | "place-host" | "connect-origin" | "connect-dest" | "draw-route";
 
@@ -36,6 +37,7 @@ interface Props {
   mode: BuilderMode;
   onModeChange: (m: BuilderMode) => void;
   connectionId?: string;
+  tenantId?: string;
   /* Host actions */
   onAddHost: (data: { zabbix_host_id: string; host_name: string; host_group: string; icon_type: string; is_critical: boolean; lat: number; lon: number }) => void;
   onRemoveHost: (id: string) => void;
@@ -44,6 +46,9 @@ interface Props {
   onSelectOrigin: (id: string) => void;
   onCreateLink: (data: { origin_host_id: string; dest_host_id: string; link_type: string; is_ring: boolean }) => void;
   onRemoveLink: (id: string) => void;
+  /* Link item actions */
+  onAddLinkItem?: (item: Omit<FlowMapLinkItem, "id" | "created_at">) => void;
+  onRemoveLinkItem?: (id: string, linkId: string) => void;
   /* Route editor */
   editingLinkId: string | null;
   onEditRoute: (linkId: string) => void;
@@ -51,11 +56,13 @@ interface Props {
 }
 
 export default function MapBuilderPanel({
-  hosts, links, mode, onModeChange, connectionId,
+  hosts, links, mode, onModeChange, connectionId, tenantId,
   onAddHost, onRemoveHost,
   pendingOrigin, onSelectOrigin, onCreateLink, onRemoveLink,
+  onAddLinkItem, onRemoveLinkItem,
   editingLinkId, onEditRoute, onCancelEditRoute,
 }: Props) {
+  const [editingLinkItemsId, setEditingLinkItemsId] = useState<string | null>(null);
   /* ── Host add state ── */
   const [hostStep, setHostStep] = useState<HostAddStep>("idle");
   const [groups, setGroups] = useState<ZabbixHostGroup[]>([]);
@@ -383,25 +390,52 @@ export default function MapBuilderPanel({
           </AnimatePresence>
 
           {/* Link list */}
-          <div className="space-y-1 max-h-40 overflow-y-auto">
+          <div className="space-y-1 max-h-60 overflow-y-auto">
             {links.map((l) => {
               const oName = hosts.find((h) => h.id === l.origin_host_id)?.host_name || "?";
               const dName = hosts.find((h) => h.id === l.dest_host_id)?.host_name || "?";
               return (
-                <div key={l.id} className="flex items-center justify-between p-1.5 rounded bg-muted/20 text-[10px]">
-                  <div className="flex items-center gap-1 min-w-0">
-                    <Link2 className="w-3 h-3 text-neon-blue shrink-0" />
-                    <span className="font-mono text-foreground truncate">{oName} → {dName}</span>
-                    {l.is_ring && <span className="text-[8px] px-1 rounded bg-neon-amber/10 text-neon-amber">ANEL</span>}
+                <div key={l.id} className="space-y-1">
+                  <div className="flex items-center justify-between p-1.5 rounded bg-muted/20 text-[10px]">
+                    <div className="flex items-center gap-1 min-w-0">
+                      <Link2 className="w-3 h-3 text-neon-blue shrink-0" />
+                      <span className="font-mono text-foreground truncate">{oName} → {dName}</span>
+                      {l.is_ring && <span className="text-[8px] px-1 rounded bg-neon-amber/10 text-neon-amber">ANEL</span>}
+                    </div>
+                    <div className="flex gap-0.5">
+                      {connectionId && tenantId && onAddLinkItem && onRemoveLinkItem && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className={`h-5 w-5 ${editingLinkItemsId === l.id ? "text-neon-blue" : ""}`}
+                          onClick={() => setEditingLinkItemsId(editingLinkItemsId === l.id ? null : l.id)}
+                          title="Telemetria"
+                        >
+                          <Cable className="w-3 h-3 text-muted-foreground" />
+                        </Button>
+                      )}
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onEditRoute(l.id)}>
+                        <Pencil className="w-3 h-3 text-muted-foreground" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onRemoveLink(l.id)}>
+                        <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex gap-0.5">
-                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onEditRoute(l.id)}>
-                      <Pencil className="w-3 h-3 text-muted-foreground" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onRemoveLink(l.id)}>
-                      <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
-                    </Button>
-                  </div>
+                  {/* Link Items Editor inline */}
+                  <AnimatePresence>
+                    {editingLinkItemsId === l.id && connectionId && tenantId && onAddLinkItem && onRemoveLinkItem && (
+                      <LinkItemsEditor
+                        link={l}
+                        hosts={hosts}
+                        connectionId={connectionId}
+                        tenantId={tenantId}
+                        onAddItem={onAddLinkItem}
+                        onRemoveItem={onRemoveLinkItem}
+                        onClose={() => setEditingLinkItemsId(null)}
+                      />
+                    )}
+                  </AnimatePresence>
                 </div>
               );
             })}
