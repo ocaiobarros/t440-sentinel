@@ -806,3 +806,22 @@
   40% { opacity: 1; transform: scale(2); }
   100% { opacity: 0; transform: scale(1); }
 }
+
+/* ── FlowMap Leaflet tooltip ── */
+.flowmap-tooltip {
+  background: hsl(228 30% 6% / 0.95) !important;
+  border: 1px solid hsl(142 100% 50% / 0.2) !important;
+  border-radius: 8px !important;
+  padding: 8px 12px !important;
+  box-shadow: 0 0 20px hsl(0 0% 0% / 0.6) !important;
+  color: #e0e0e0 !important;
+}
+.flowmap-tooltip::before {
+  border-top-color: hsl(228 30% 6% / 0.95) !important;
+}
+
+/* Leaflet container dark override */
+.leaflet-container {
+  background: #0a0b10 !important;
+  font-family: 'Inter', sans-serif !important;
+}

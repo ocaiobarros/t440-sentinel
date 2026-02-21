@@ -20,6 +20,7 @@ import AdminHub from "./pages/AdminHub";
 import VirtualizationMonitor from "./pages/VirtualizationMonitor";
 import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
 import BgpFlowMonitor from "./pages/BgpFlowMonitor";
+import FlowMapPage from "./pages/FlowMapPage";
 
 const queryClient = new QueryClient();
 
@@ -119,6 +120,22 @@ const App = () => (
               element={
                 <ProtectedRoute>
                   <BgpFlowMonitor />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/flowmap/maps"
+              element={
+                <ProtectedRoute>
+                  <FlowMapPage />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/flowmap/maps/:mapId"
+              element={
+                <ProtectedRoute>
+                  <FlowMapPage />
                 </ProtectedRoute>
               }
             />
