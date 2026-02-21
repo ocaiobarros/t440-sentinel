@@ -141,7 +141,8 @@ function ensurePulseStyle() {
     .fm-traffic-glow{animation:fmGlow 2s ease-in-out infinite}
     .flowmap-tooltip{background:#0d0e1a!important;border:1px solid #00e67650!important;border-radius:10px!important;padding:12px 14px!important;box-shadow:0 8px 32px rgba(0,0,0,0.7),0 0 15px rgba(0,230,118,0.1)!important;}
     .flowmap-tooltip::before{border-top-color:#00e67650!important;}
-    .fm-traffic-label{background:transparent!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:auto!important;transition:transform 0.2s ease,opacity 0.2s ease;}
+    .fm-traffic-label{background:transparent!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:auto!important;transition:transform 0.2s ease,opacity 0.2s ease;margin:0!important;width:auto!important;height:auto!important;}
+    .leaflet-div-icon.fm-traffic-label{background:transparent!important;border:none!important;}
     .fm-label-content{background:rgba(10,11,16,0.95);border:1px solid #00e67660;border-radius:10px;padding:8px 14px;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 12px rgba(0,230,118,0.08);}
     .fm-traffic-label:hover .fm-label-content{border-color:#00e5ff;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 20px rgba(0,229,255,0.15);}
     .fm-traffic-label.fm-zoom-far{transform:scale(0.55);opacity:0.6;}
