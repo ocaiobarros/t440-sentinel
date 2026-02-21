@@ -45,8 +45,9 @@ interface Props {
   /* Link actions */
   pendingOrigin: string | null;
   onSelectOrigin: (id: string) => void;
-  onCreateLink: (data: { origin_host_id: string; dest_host_id: string; link_type: string; is_ring: boolean }) => void;
+  onCreateLink: (data: { origin_host_id: string; dest_host_id: string; link_type: string; is_ring: boolean; capacity_mbps?: number }) => void;
   onRemoveLink: (id: string) => void;
+  onUpdateLinkCapacity?: (id: string, capacity_mbps: number) => void;
   /* Link item actions */
   onAddLinkItem?: (item: Omit<FlowMapLinkItem, "id" | "created_at">) => void;
   onRemoveLinkItem?: (id: string, linkId: string) => void;
@@ -62,7 +63,7 @@ export default function MapBuilderPanel({
   onAddHost, onRemoveHost, onUpdateHostPosition,
   pendingOrigin, onSelectOrigin, onCreateLink, onRemoveLink,
   onAddLinkItem, onRemoveLinkItem,
-  editingLinkId, onEditRoute, onCancelEditRoute, onRecalculateRoute,
+  editingLinkId, onEditRoute, onCancelEditRoute, onRecalculateRoute, onUpdateLinkCapacity,
 }: Props) {
   const [editingLinkItemsId, setEditingLinkItemsId] = useState<string | null>(null);
   const [editingHostCoords, setEditingHostCoords] = useState<string | null>(null);
@@ -79,7 +80,7 @@ export default function MapBuilderPanel({
   const [error, setError] = useState<string | null>(null);
 
   /* ── Link form ── */
-  const [linkForm, setLinkForm] = useState({ link_type: "fiber", is_ring: false });
+  const [linkForm, setLinkForm] = useState({ link_type: "fiber", is_ring: false, capacity_mbps: 1000 });
   const [recalculating, setRecalculating] = useState<string | null>(null);
 
   /* ── Fetch groups ── */
@@ -461,6 +462,17 @@ export default function MapBuilderPanel({
                     <span className="text-[10px] text-muted-foreground">Topologia em Anel</span>
                     <Switch checked={linkForm.is_ring} onCheckedChange={(c) => setLinkForm((p) => ({ ...p, is_ring: c }))} />
                   </div>
+                  <div>
+                    <label className="text-[9px] text-muted-foreground">Capacidade (Mbps)</label>
+                    <Input
+                      type="number"
+                      value={linkForm.capacity_mbps ?? 1000}
+                      onChange={(e) => setLinkForm((p) => ({ ...p, capacity_mbps: parseInt(e.target.value) || 1000 }))}
+                      className="h-7 text-xs font-mono"
+                      placeholder="100000 = 100GE"
+                    />
+                    <p className="text-[8px] text-muted-foreground/60 mt-0.5">Ex: 100000 (100GE), 10000 (10G), 1000 (1G)</p>
+                  </div>
                 </div>
               </motion.div>
             )}
@@ -478,6 +490,7 @@ export default function MapBuilderPanel({
                       <Link2 className="w-3 h-3 text-neon-blue shrink-0" />
                       <span className="font-mono text-foreground truncate">{oName} → {dName}</span>
                       {l.is_ring && <span className="text-[8px] px-1 rounded bg-neon-amber/10 text-neon-amber">ANEL</span>}
+                      <span className="text-[8px] text-muted-foreground/60 shrink-0">{l.capacity_mbps >= 1000 ? `${l.capacity_mbps / 1000}G` : `${l.capacity_mbps}M`}</span>
                     </div>
                     <div className="flex gap-0.5">
                       {connectionId && tenantId && onAddLinkItem && onRemoveLinkItem && (
@@ -517,15 +530,61 @@ export default function MapBuilderPanel({
                   {/* Link Items Editor inline */}
                   <AnimatePresence>
                     {editingLinkItemsId === l.id && connectionId && tenantId && onAddLinkItem && onRemoveLinkItem && (
-                      <LinkItemsEditor
-                        link={l}
-                        hosts={hosts}
-                        connectionId={connectionId}
-                        tenantId={tenantId}
-                        onAddItem={onAddLinkItem}
-                        onRemoveItem={onRemoveLinkItem}
-                        onClose={() => setEditingLinkItemsId(null)}
-                      />
+                      <motion.div
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: "auto", opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden space-y-1"
+                      >
+                        {/* Capacity editor */}
+                        {onUpdateLinkCapacity && (
+                          <div className="p-2 rounded border border-border/20 bg-muted/10 space-y-1">
+                            <label className="text-[9px] text-muted-foreground font-mono">Capacidade (Mbps)</label>
+                            <div className="flex gap-1">
+                              <Input
+                                type="number"
+                                defaultValue={l.capacity_mbps}
+                                className="h-6 text-[10px] font-mono flex-1"
+                                placeholder="100000"
+                                onBlur={(e) => {
+                                  const val = parseInt(e.target.value);
+                                  if (!isNaN(val) && val > 0 && val !== l.capacity_mbps) {
+                                    onUpdateLinkCapacity(l.id, val);
+                                  }
+                                }}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    const val = parseInt((e.target as HTMLInputElement).value);
+                                    if (!isNaN(val) && val > 0) onUpdateLinkCapacity(l.id, val);
+                                  }
+                                }}
+                              />
+                              <div className="flex gap-0.5">
+                                {[1000, 10000, 100000].map((v) => (
+                                  <Button
+                                    key={v}
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-6 px-1.5 text-[8px] font-mono"
+                                    onClick={() => onUpdateLinkCapacity(l.id, v)}
+                                  >
+                                    {v >= 1000 ? `${v / 1000}G` : `${v}M`}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        <LinkItemsEditor
+                          link={l}
+                          hosts={hosts}
+                          connectionId={connectionId}
+                          tenantId={tenantId}
+                          onAddItem={onAddLinkItem}
+                          onRemoveItem={onRemoveLinkItem}
+                          onClose={() => setEditingLinkItemsId(null)}
+                        />
+                      </motion.div>
                     )}
                   </AnimatePresence>
                 </div>

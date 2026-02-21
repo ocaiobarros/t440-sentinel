@@ -394,7 +394,7 @@ export default function FlowMapCanvas({
       const totalErrors = (traffic?.sideA?.errors_in ?? 0) + (traffic?.sideA?.errors_out ?? 0) + (traffic?.sideB?.errors_in ?? 0) + (traffic?.sideB?.errors_out ?? 0);
 
       const qualityColor = linkSt === "DOWN" ? "#ff1744" : linkSt === "DEGRADED" ? "#ff9100" : "#00e676";
-      const qualityLabel = linkSt === "DOWN" ? "⛔ DOWN" : linkSt === "DEGRADED" ? "⚠ DEGRADED" : "● UP";
+      const qualityLabel = linkSt === "DOWN" ? "⛔ DOWN" : linkSt === "DEGRADED" ? "⚠ DEGRADED" : "✔ UP";
       const distKm = geom?.distance_km;
 
       // Utilization bar color (capped at 100% for display)
@@ -429,7 +429,7 @@ export default function FlowMapCanvas({
       const labelIcon = L.divIcon({
         className: "fm-traffic-label",
         html: labelHtml,
-        iconSize: [0, 0],
+        iconSize: [1, 1],
         iconAnchor: [0, 0],
       });
 

@@ -203,7 +203,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
   );
 
   const handleCreateLink = useCallback(
-    async (linkData: { origin_host_id: string; dest_host_id: string; link_type: string; is_ring: boolean }) => {
+    async (linkData: { origin_host_id: string; dest_host_id: string; link_type: string; is_ring: boolean; capacity_mbps?: number }) => {
       if (!tenantId || !data) return;
       try {
         const originHost = data.hosts.find((h) => h.id === linkData.origin_host_id);
@@ -234,6 +234,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
           map_id: mapId,
           tenant_id: tenantId,
           ...linkData,
+          capacity_mbps: linkData.capacity_mbps ?? 1000,
           priority: 0,
           geometry: geometry as any,
         });
@@ -447,7 +448,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
 
           {/* War Room floating controls */}
           {warRoom && (
-            <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+            <div className="absolute top-3 left-3 z-30 flex items-center gap-1.5">
               <Button
                 variant="ghost"
                 size="icon"
@@ -459,8 +460,18 @@ function MapEditorView({ mapId }: { mapId: string }) {
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-8 w-8 bg-background/50 backdrop-blur-xl border border-border/30 text-muted-foreground hover:text-neon-green"
+                className={`h-8 w-8 bg-background/50 backdrop-blur-xl border border-border/30 ${showNoc ? "text-neon-green" : "text-muted-foreground"}`}
+                onClick={() => setShowNoc((p) => !p)}
+                title={showNoc ? "Esconder Console NOC" : "Mostrar Console NOC"}
+              >
+                <Radio className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 bg-background/50 backdrop-blur-xl border border-border/30 text-muted-foreground hover:text-neon-red"
                 onClick={toggleWarRoom}
+                title="Sair da Tela Cheia"
               >
                 <Minimize className="w-4 h-4" />
               </Button>
@@ -517,6 +528,10 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 onRemoveLink={(id) => removeLink.mutate({ id, map_id: mapId })}
                 onAddLinkItem={(item) => addLinkItem.mutate(item)}
                 onRemoveLinkItem={(id, linkId) => removeLinkItem.mutate({ id, link_id: linkId })}
+                onUpdateLinkCapacity={async (id, capacity) => {
+                  await updateLink.mutateAsync({ id, map_id: mapId, capacity_mbps: capacity });
+                  toast({ title: `Capacidade atualizada: ${capacity >= 1000 ? `${capacity / 1000}G` : `${capacity}M`}` });
+                }}
                 editingLinkId={editingLinkId}
                 onEditRoute={handleEditRoute}
                 onCancelEditRoute={handleSaveRoute}
