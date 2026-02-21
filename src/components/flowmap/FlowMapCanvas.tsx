@@ -41,7 +41,7 @@ function linkTooltipHtml(
   linkId: string,
   linkStatus: { status: string; originHost: string; destHost: string } | undefined,
   activeEvent: { status: string; started_at: string } | undefined,
-  linkMeta?: { link_type: string; is_ring: boolean; priority: number; distance_km?: number; duration_min?: number },
+  linkMeta?: { link_type: string; is_ring: boolean; priority: number; distance_km?: number },
   traffic?: LinkTraffic,
 ): string {
   const st = linkStatus?.status ?? "UNKNOWN";
@@ -72,31 +72,33 @@ function linkTooltipHtml(
   if (linkMeta?.distance_km != null && linkMeta.distance_km > 0) {
     routeHtml += `<div>📏 Distância: <span style="color:#00e5ff;font-weight:700;">${linkMeta.distance_km} km</span></div>`;
   }
-  if (linkMeta?.duration_min != null && linkMeta.duration_min > 0) {
-    const hrs = Math.floor(linkMeta.duration_min / 60);
-    const mins = Math.round(linkMeta.duration_min % 60);
-    const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-    routeHtml += `<div>🕐 Tempo est.: <span style="color:#00e5ff;">${timeStr}</span></div>`;
-  }
 
-  // Traffic section
+  // Traffic section — Upload first, Download second
   const dlA = traffic?.sideA?.in_bps;
   const ulA = traffic?.sideA?.out_bps;
   const dlB = traffic?.sideB?.in_bps;
   const ulB = traffic?.sideB?.out_bps;
   const utilA = traffic?.sideA?.utilization;
   const utilB = traffic?.sideB?.utilization;
+  const errInA = traffic?.sideA?.errors_in;
+  const errOutA = traffic?.sideA?.errors_out;
+  const errInB = traffic?.sideB?.errors_in;
+  const errOutB = traffic?.sideB?.errors_out;
   const hasTraffic = dlA != null || ulA != null || dlB != null || ulB != null;
 
   let trafficHtml = "";
   if (hasTraffic) {
     trafficHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #333;">
       <div style="font-weight:700;color:#e0e0e0;margin-bottom:4px;">📊 Tráfego</div>`;
-    if (dlA != null || ulA != null) {
-      trafficHtml += `<div style="margin-bottom:2px;">Lado A: <span style="color:#00e5ff;">▼ ${fmtBps(dlA)}</span> <span style="color:#ff9100;">▲ ${fmtBps(ulA)}</span>${utilA != null ? ` <span style="color:#888;">(${utilA.toFixed(1)}%)</span>` : ""}</div>`;
+    if (ulA != null || dlA != null) {
+      const errA = (errInA ?? 0) + (errOutA ?? 0);
+      const errHtml = errA > 0 ? ` <span style="color:#ff1744;">⚠ ${errA} erros</span>` : ` <span style="color:#4caf50;">0 erros</span>`;
+      trafficHtml += `<div style="margin-bottom:2px;">Lado A: <span style="color:#ff9100;">▲ ${fmtBps(ulA)}</span> <span style="color:#00e5ff;">▼ ${fmtBps(dlA)}</span>${utilA != null ? ` <span style="color:#888;">(${Math.min(utilA, 100).toFixed(1)}%)</span>` : ""}${errHtml}</div>`;
     }
-    if (dlB != null || ulB != null) {
-      trafficHtml += `<div>Lado B: <span style="color:#00e5ff;">▼ ${fmtBps(dlB)}</span> <span style="color:#ff9100;">▲ ${fmtBps(ulB)}</span>${utilB != null ? ` <span style="color:#888;">(${utilB.toFixed(1)}%)</span>` : ""}</div>`;
+    if (ulB != null || dlB != null) {
+      const errB = (errInB ?? 0) + (errOutB ?? 0);
+      const errHtml = errB > 0 ? ` <span style="color:#ff1744;">⚠ ${errB} erros</span>` : ` <span style="color:#4caf50;">0 erros</span>`;
+      trafficHtml += `<div>Lado B: <span style="color:#ff9100;">▲ ${fmtBps(ulB)}</span> <span style="color:#00e5ff;">▼ ${fmtBps(dlB)}</span>${utilB != null ? ` <span style="color:#888;">(${Math.min(utilB, 100).toFixed(1)}%)</span>` : ""}${errHtml}</div>`;
     }
     trafficHtml += `</div>`;
   }
@@ -139,8 +141,12 @@ function ensurePulseStyle() {
     .fm-traffic-glow{animation:fmGlow 2s ease-in-out infinite}
     .flowmap-tooltip{background:#0d0e1a!important;border:1px solid #00e67650!important;border-radius:10px!important;padding:12px 14px!important;box-shadow:0 8px 32px rgba(0,0,0,0.7),0 0 15px rgba(0,230,118,0.1)!important;}
     .flowmap-tooltip::before{border-top-color:#00e67650!important;}
-    .fm-traffic-label{background:rgba(10,11,16,0.95)!important;border:1px solid #00e67660!important;border-radius:10px!important;padding:8px 14px!important;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 12px rgba(0,230,118,0.08)!important;pointer-events:auto!important;}
+    .fm-traffic-label{background:rgba(10,11,16,0.95)!important;border:1px solid #00e67660!important;border-radius:10px!important;padding:8px 14px!important;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 12px rgba(0,230,118,0.08)!important;pointer-events:auto!important;transition:transform 0.2s ease,opacity 0.2s ease;}
     .fm-traffic-label:hover{border-color:#00e5ff!important;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 20px rgba(0,229,255,0.15)!important;}
+    .fm-traffic-label.fm-zoom-far{transform:scale(0.55);opacity:0.6;}
+    .fm-traffic-label.fm-zoom-mid{transform:scale(0.75);opacity:0.8;}
+    .fm-traffic-label.fm-zoom-close{transform:scale(1);opacity:1;}
+    .fm-traffic-label.fm-zoom-detail{transform:scale(1.1);opacity:1;}
   `;
   document.head.appendChild(s);
 }
@@ -243,6 +249,26 @@ export default function FlowMapCanvas({
       duration: 1.2,
     });
   }, [focusHost]);
+
+  /* Zoom-responsive label sizing */
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map) return;
+
+    function applyZoomClass() {
+      const zoom = map!.getZoom();
+      const labels = document.querySelectorAll(".fm-traffic-label");
+      const cls = zoom <= 6 ? "fm-zoom-far" : zoom <= 9 ? "fm-zoom-mid" : zoom <= 13 ? "fm-zoom-close" : "fm-zoom-detail";
+      labels.forEach((el) => {
+        el.classList.remove("fm-zoom-far", "fm-zoom-mid", "fm-zoom-close", "fm-zoom-detail");
+        el.classList.add(cls);
+      });
+    }
+
+    applyZoomClass();
+    map.on("zoomend", applyZoomClass);
+    return () => { map.off("zoomend", applyZoomClass); };
+  }, [hosts, links]);
 
   /* Update layers */
   useEffect(() => {
@@ -351,7 +377,6 @@ export default function FlowMapCanvas({
           is_ring: link.is_ring,
           priority: link.priority,
           distance_km: geom?.distance_km,
-          duration_min: geom?.duration_min,
         }, traffic),
         { className: "flowmap-tooltip", sticky: true },
       );
@@ -362,35 +387,42 @@ export default function FlowMapCanvas({
       const midIdx = Math.floor(coords.length / 2);
       const midPoint: [number, number] = coords[midIdx] || coords[0];
 
-      const dlBps = traffic?.sideA?.in_bps ?? traffic?.sideB?.in_bps;
       const ulBps = traffic?.sideA?.out_bps ?? traffic?.sideB?.out_bps;
+      const dlBps = traffic?.sideA?.in_bps ?? traffic?.sideB?.in_bps;
       const util = traffic?.sideA?.utilization ?? traffic?.sideB?.utilization;
       const hasTelemetry = dlBps != null || ulBps != null;
+      const totalErrors = (traffic?.sideA?.errors_in ?? 0) + (traffic?.sideA?.errors_out ?? 0) + (traffic?.sideB?.errors_in ?? 0) + (traffic?.sideB?.errors_out ?? 0);
 
       const qualityColor = linkSt === "DOWN" ? "#ff1744" : linkSt === "DEGRADED" ? "#ff9100" : "#00e676";
       const qualityLabel = linkSt === "DOWN" ? "⛔ DOWN" : linkSt === "DEGRADED" ? "⚠ DEGRADED" : "● UP";
       const distKm = geom?.distance_km;
 
-      // Utilization bar color
+      // Utilization bar color (capped at 100% for display)
       const utilVal = util ?? 0;
+      const utilDisplay = Math.min(utilVal, 100);
       const utilColor = utilVal > 80 ? "#ff1744" : utilVal > 50 ? "#ff9100" : "#00e676";
 
+      const errHtml = totalErrors > 0
+        ? `<div style="color:#ff1744;font-size:9px;font-weight:700;margin-top:2px;">⚠ ${totalErrors} erros</div>`
+        : "";
+
       const labelHtml = `
-        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;white-space:nowrap;text-align:center;">
-          <div style="font-family:'Orbitron',sans-serif;font-size:10px;color:${qualityColor};font-weight:700;text-shadow:0 0 8px ${qualityColor}60;margin-bottom:3px;">${qualityLabel}</div>
-          ${distKm ? `<div style="color:#888;font-size:9px;margin-bottom:2px;">${distKm} km</div>` : ""}
+        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.6;white-space:nowrap;text-align:center;">
+          <div style="font-family:'Orbitron',sans-serif;color:${qualityColor};font-weight:700;text-shadow:0 0 8px ${qualityColor}60;">${qualityLabel}</div>
+          ${distKm ? `<div style="color:#888;">${distKm} km</div>` : ""}
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:12px;font-weight:600;">
-              <span style="color:#00e5ff;">▼ ${fmtBps(dlBps)}</span>
+            <div style="display:flex;align-items:center;gap:8px;justify-content:center;font-weight:600;">
               <span style="color:#ff9100;">▲ ${fmtBps(ulBps)}</span>
+              <span style="color:#00e5ff;">▼ ${fmtBps(dlBps)}</span>
             </div>
             ${util != null ? `
-              <div style="margin-top:4px;width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden;">
-                <div style="width:${Math.min(utilVal, 100)}%;height:100%;background:${utilColor};border-radius:2px;transition:width 0.5s;"></div>
+              <div style="margin-top:3px;width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden;">
+                <div style="width:${utilDisplay}%;height:100%;background:${utilColor};border-radius:2px;transition:width 0.5s;"></div>
               </div>
-              <div style="color:${utilColor};font-size:9px;font-weight:700;margin-top:1px;">Util: ${utilVal.toFixed(1)}%</div>
+              <div style="color:${utilColor};font-weight:700;">Util: ${utilVal.toFixed(1)}%</div>
             ` : ""}
-          ` : `<div style="color:#555;font-size:10px;">Sem telemetria</div>`}
+          ` : `<div style="color:#555;">Sem telemetria</div>`}
+          ${errHtml}
         </div>
       `;
 

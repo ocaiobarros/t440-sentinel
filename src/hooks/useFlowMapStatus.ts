@@ -15,6 +15,8 @@ export interface LinkTrafficSide {
   in_bps: number | null;
   out_bps: number | null;
   utilization: number | null;
+  errors_in: number | null;
+  errors_out: number | null;
 }
 
 export interface LinkTraffic {

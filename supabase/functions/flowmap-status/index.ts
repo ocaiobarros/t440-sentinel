@@ -283,6 +283,8 @@ interface LinkTrafficSide {
   in_bps: number | null;
   out_bps: number | null;
   utilization: number | null;
+  errors_in: number | null;
+  errors_out: number | null;
 }
 
 interface LinkTrafficResult {
@@ -311,8 +313,10 @@ async function fetchLinkTraffic(
   if (!linkItems || linkItems.length === 0) return {};
 
   // Collect all unique Zabbix item IDs to fetch in one call
-  const bpsItems = (linkItems as LinkItemRow[]).filter((i) => i.metric === "BPS");
-  const allItemIds = [...new Set(bpsItems.map((i) => i.zabbix_item_id))];
+  const typedItems = linkItems as LinkItemRow[];
+  const bpsItems = typedItems.filter((i) => i.metric === "BPS");
+  const errorItems = typedItems.filter((i) => i.metric === "ERRORS");
+  const allItemIds = [...new Set([...bpsItems, ...errorItems].map((i) => i.zabbix_item_id))];
 
   if (allItemIds.length === 0) return {};
 
@@ -341,9 +345,10 @@ async function fetchLinkTraffic(
     const capacity = capacityMap.get(linkId) ?? 1000;
     const capacityBps = capacity * 1_000_000;
 
-    const sideA: LinkTrafficSide = { in_bps: null, out_bps: null, utilization: null };
-    const sideB: LinkTrafficSide = { in_bps: null, out_bps: null, utilization: null };
+    const sideA: LinkTrafficSide = { in_bps: null, out_bps: null, utilization: null, errors_in: null, errors_out: null };
+    const sideB: LinkTrafficSide = { in_bps: null, out_bps: null, utilization: null, errors_in: null, errors_out: null };
 
+    // BPS items
     for (const item of items) {
       const val = valueMap.get(item.zabbix_item_id);
       if (val === undefined) continue;
@@ -351,6 +356,17 @@ async function fetchLinkTraffic(
       const side = item.side === "A" ? sideA : sideB;
       if (item.direction === "IN") side.in_bps = val;
       if (item.direction === "OUT") side.out_bps = val;
+    }
+
+    // ERROR items
+    const errItems = errorItems.filter((i) => i.link_id === linkId);
+    for (const item of errItems) {
+      const val = valueMap.get(item.zabbix_item_id);
+      if (val === undefined) continue;
+
+      const side = item.side === "A" ? sideA : sideB;
+      if (item.direction === "IN") side.errors_in = val;
+      if (item.direction === "OUT") side.errors_out = val;
     }
 
     // Calculate utilization = max(in, out) / capacity * 100
