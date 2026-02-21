@@ -3,7 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, MapPin, Link2, AlertTriangle, Save, X, Pencil,
   Navigation, Network, Server, ChevronRight, ChevronLeft,
-  Loader2, Search, Cable,
+  Loader2, Search, Cable, RotateCcw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ interface Props {
   /* Host actions */
   onAddHost: (data: { zabbix_host_id: string; host_name: string; host_group: string; icon_type: string; is_critical: boolean; lat: number; lon: number }) => void;
   onRemoveHost: (id: string) => void;
+  onUpdateHostPosition?: (id: string, lat: number, lon: number) => void;
   /* Link actions */
   pendingOrigin: string | null;
   onSelectOrigin: (id: string) => void;
@@ -53,16 +54,19 @@ interface Props {
   editingLinkId: string | null;
   onEditRoute: (linkId: string) => void;
   onCancelEditRoute: () => void;
+  onRecalculateRoute?: (linkId: string) => Promise<void>;
 }
 
 export default function MapBuilderPanel({
   hosts, links, mode, onModeChange, connectionId, tenantId,
-  onAddHost, onRemoveHost,
+  onAddHost, onRemoveHost, onUpdateHostPosition,
   pendingOrigin, onSelectOrigin, onCreateLink, onRemoveLink,
   onAddLinkItem, onRemoveLinkItem,
-  editingLinkId, onEditRoute, onCancelEditRoute,
+  editingLinkId, onEditRoute, onCancelEditRoute, onRecalculateRoute,
 }: Props) {
   const [editingLinkItemsId, setEditingLinkItemsId] = useState<string | null>(null);
+  const [editingHostCoords, setEditingHostCoords] = useState<string | null>(null);
+  const [coordsForm, setCoordsForm] = useState({ lat: "", lon: "" });
   /* ── Host add state ── */
   const [hostStep, setHostStep] = useState<HostAddStep>("idle");
   const [groups, setGroups] = useState<ZabbixHostGroup[]>([]);
@@ -76,6 +80,7 @@ export default function MapBuilderPanel({
 
   /* ── Link form ── */
   const [linkForm, setLinkForm] = useState({ link_type: "fiber", is_ring: false });
+  const [recalculating, setRecalculating] = useState<string | null>(null);
 
   /* ── Fetch groups ── */
   const fetchGroups = async () => {
@@ -326,15 +331,87 @@ export default function MapBuilderPanel({
           {/* Host list */}
           <div className="space-y-1 max-h-40 overflow-y-auto">
             {hosts.map((h) => (
-              <div key={h.id} className="flex items-center justify-between p-1.5 rounded bg-muted/20 text-[10px]">
-                <div className="flex items-center gap-1.5 min-w-0">
-                  <MapPin className="w-3 h-3 text-neon-green shrink-0" />
-                  <span className="font-mono text-foreground truncate">{h.host_name || h.zabbix_host_id}</span>
-                  {h.is_critical && <AlertTriangle className="w-3 h-3 text-neon-red shrink-0" />}
+              <div key={h.id} className="space-y-1">
+                <div className="flex items-center justify-between p-1.5 rounded bg-muted/20 text-[10px]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <MapPin className="w-3 h-3 text-neon-green shrink-0" />
+                    <span className="font-mono text-foreground truncate">{h.host_name || h.zabbix_host_id}</span>
+                    {h.is_critical && <AlertTriangle className="w-3 h-3 text-neon-red shrink-0" />}
+                  </div>
+                  <div className="flex gap-0.5">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-5 w-5 ${editingHostCoords === h.id ? "text-neon-blue" : ""}`}
+                      onClick={() => {
+                        if (editingHostCoords === h.id) {
+                          setEditingHostCoords(null);
+                        } else {
+                          setEditingHostCoords(h.id);
+                          setCoordsForm({ lat: String(h.lat), lon: String(h.lon) });
+                        }
+                      }}
+                      title="Editar coordenadas"
+                    >
+                      <Pencil className="w-3 h-3 text-muted-foreground" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onRemoveHost(h.id)}>
+                      <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
+                    </Button>
+                  </div>
                 </div>
-                <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onRemoveHost(h.id)}>
-                  <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
-                </Button>
+                {/* Inline coords editor */}
+                <AnimatePresence>
+                  {editingHostCoords === h.id && onUpdateHostPosition && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: "auto", opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="p-2 rounded border border-neon-blue/20 bg-neon-blue/5 space-y-1.5">
+                        <div className="flex gap-1.5">
+                          <div className="flex-1">
+                            <label className="text-[8px] text-muted-foreground">Latitude</label>
+                            <Input
+                              value={coordsForm.lat}
+                              onChange={(e) => setCoordsForm((p) => ({ ...p, lat: e.target.value }))}
+                              className="h-6 text-[10px] font-mono"
+                              placeholder="-23.5505"
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <label className="text-[8px] text-muted-foreground">Longitude</label>
+                            <Input
+                              value={coordsForm.lon}
+                              onChange={(e) => setCoordsForm((p) => ({ ...p, lon: e.target.value }))}
+                              className="h-6 text-[10px] font-mono"
+                              placeholder="-46.6333"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            className="h-5 text-[9px] flex-1 gap-1 bg-neon-green/10 text-neon-green border border-neon-green/30"
+                            onClick={() => {
+                              const lat = parseFloat(coordsForm.lat);
+                              const lon = parseFloat(coordsForm.lon);
+                              if (isNaN(lat) || isNaN(lon)) return;
+                              onUpdateHostPosition(h.id, lat, lon);
+                              setEditingHostCoords(null);
+                            }}
+                          >
+                            <Save className="w-2.5 h-2.5" />Aplicar
+                          </Button>
+                          <Button size="sm" variant="outline" className="h-5 text-[9px]" onClick={() => setEditingHostCoords(null)}>
+                            <X className="w-2.5 h-2.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
               </div>
             ))}
           </div>
@@ -412,6 +489,21 @@ export default function MapBuilderPanel({
                           title="Telemetria"
                         >
                           <Cable className="w-3 h-3 text-muted-foreground" />
+                        </Button>
+                      )}
+                      {onRecalculateRoute && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          disabled={recalculating === l.id}
+                          onClick={async () => {
+                            setRecalculating(l.id);
+                            try { await onRecalculateRoute(l.id); } finally { setRecalculating(null); }
+                          }}
+                          title="Recalcular Rota"
+                        >
+                          <RotateCcw className={`w-3 h-3 text-muted-foreground ${recalculating === l.id ? "animate-spin" : ""}`} />
                         </Button>
                       )}
                       <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onEditRoute(l.id)}>

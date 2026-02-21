@@ -170,6 +170,15 @@ export function useFlowMapMutations() {
     onSuccess: (_, v) => qc.invalidateQueries({ queryKey: ["flow-map", v.map_id] }),
   });
 
+  const updateHost = useMutation({
+    mutationFn: async ({ id, map_id, ...rest }: Partial<FlowMapHost> & { id: string; map_id: string }) => {
+      const { error } = await supabase.from("flow_map_hosts").update(rest as any).eq("id", id);
+      if (error) throw error;
+      return map_id;
+    },
+    onSuccess: (mapId) => qc.invalidateQueries({ queryKey: ["flow-map", mapId] }),
+  });
+
   const removeHost = useMutation({
     mutationFn: async ({ id, map_id }: { id: string; map_id: string }) => {
       const { error } = await supabase.from("flow_map_hosts").delete().eq("id", id);
@@ -233,5 +242,5 @@ export function useFlowMapMutations() {
     },
   });
 
-  return { createMap, updateMap, deleteMap, addHost, removeHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem };
+  return { createMap, updateMap, deleteMap, addHost, updateHost, removeHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem };
 }
