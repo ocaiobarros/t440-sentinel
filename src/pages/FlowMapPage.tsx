@@ -204,14 +204,38 @@ function MapEditorView({ mapId }: { mapId: string }) {
 
   const handleCreateLink = useCallback(
     async (linkData: { origin_host_id: string; dest_host_id: string; link_type: string; is_ring: boolean }) => {
-      if (!tenantId) return;
+      if (!tenantId || !data) return;
       try {
+        const originHost = data.hosts.find((h) => h.id === linkData.origin_host_id);
+        const destHost = data.hosts.find((h) => h.id === linkData.dest_host_id);
+
+        // Try to fetch road route via OSRM
+        let geometry: { type: string; coordinates: [number, number][] } = { type: "LineString", coordinates: [] };
+        if (originHost && destHost) {
+          try {
+            const { data: routeData, error: routeError } = await supabase.functions.invoke("flowmap-route", {
+              body: {
+                origin_lat: originHost.lat,
+                origin_lon: originHost.lon,
+                dest_lat: destHost.lat,
+                dest_lon: destHost.lon,
+              },
+            });
+            if (!routeError && routeData?.geometry?.coordinates?.length > 0) {
+              geometry = routeData.geometry;
+              toast({ title: routeData.routed ? "Rota rodoviária calculada" : "Sem rota — linha direta" });
+            }
+          } catch {
+            // Fallback: straight line (empty geometry uses host coords in canvas)
+          }
+        }
+
         await addLink.mutateAsync({
           map_id: mapId,
           tenant_id: tenantId,
           ...linkData,
           priority: 0,
-          geometry: { type: "LineString", coordinates: [] },
+          geometry,
         });
         setPendingOrigin(null);
         setMode("idle");
@@ -220,7 +244,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
         toast({ variant: "destructive", title: "Erro ao criar link", description: e.message });
       }
     },
-    [tenantId, mapId, addLink, toast],
+    [tenantId, mapId, data, addLink, toast, supabase],
   );
 
   const handleEditRoute = useCallback((linkId: string) => {
