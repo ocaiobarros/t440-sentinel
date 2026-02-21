@@ -604,6 +604,47 @@ export type Database = {
           },
         ]
       }
+      flow_map_link_events: {
+        Row: {
+          created_at: string
+          duration_seconds: number | null
+          ended_at: string | null
+          id: string
+          link_id: string
+          started_at: string
+          status: string
+          tenant_id: string
+        }
+        Insert: {
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          link_id: string
+          started_at?: string
+          status: string
+          tenant_id: string
+        }
+        Update: {
+          created_at?: string
+          duration_seconds?: number | null
+          ended_at?: string | null
+          id?: string
+          link_id?: string
+          started_at?: string
+          status?: string
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_fmle_link"
+            columns: ["link_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "flow_map_links"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
       flow_map_links: {
         Row: {
           created_at: string
