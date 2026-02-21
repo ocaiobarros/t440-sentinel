@@ -3,10 +3,9 @@ import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import FlowMapSetupWizard, { type FlowMapWizardResult } from "@/components/flowmap/FlowMapSetupWizard";
 import {
   useFlowMapList,
   useFlowMapDetail,
@@ -25,10 +24,9 @@ import NocConsolePanel from "@/components/flowmap/NocConsolePanel";
 function MapListView() {
   const navigate = useNavigate();
   const { data: maps = [], isLoading } = useFlowMapList();
-  const { deleteMap, createMap } = useFlowMapMutations();
+  const { deleteMap, createMap, addHost } = useFlowMapMutations();
   const { toast } = useToast();
-  const [showCreate, setShowCreate] = useState(false);
-  const [name, setName] = useState("");
+  const [showWizard, setShowWizard] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -37,14 +35,35 @@ function MapListView() {
     });
   }, []);
 
-  const handleCreate = async () => {
-    if (!name.trim() || !tenantId) return;
+  const handleWizardComplete = async (result: FlowMapWizardResult) => {
+    if (!tenantId) return;
     try {
-      const result = await createMap.mutateAsync({ name: name.trim(), tenant_id: tenantId });
-      setShowCreate(false);
-      setName("");
-      navigate(`/flowmap/maps/${result.id}`);
-    } catch {}
+      const mapResult = await createMap.mutateAsync({ name: result.mapName, tenant_id: tenantId });
+      // Add selected hosts with auto-generated positions (spread around center)
+      const centerLat = -15.7;
+      const centerLon = -47.9;
+      await Promise.all(
+        result.selectedHosts.map((h, i) => {
+          const angle = (2 * Math.PI * i) / result.selectedHosts.length;
+          const radius = 0.5 + Math.random() * 0.5;
+          return addHost.mutateAsync({
+            map_id: mapResult.id,
+            tenant_id: tenantId,
+            zabbix_host_id: h.hostid,
+            host_name: h.hostName,
+            host_group: h.groupName,
+            icon_type: "router",
+            is_critical: false,
+            lat: centerLat + radius * Math.sin(angle),
+            lon: centerLon + radius * Math.cos(angle),
+          });
+        }),
+      );
+      setShowWizard(false);
+      navigate(`/flowmap/maps/${mapResult.id}`);
+    } catch (e: any) {
+      toast({ variant: "destructive", title: "Erro ao criar mapa", description: e.message });
+    }
   };
 
   return (
@@ -64,7 +83,7 @@ function MapListView() {
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/")}>
               <ArrowLeft className="w-3.5 h-3.5" />Dashboards
             </Button>
-            <Button size="sm" className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowCreate(true)}>
+            <Button size="sm" className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowWizard(true)}>
               <Plus className="w-3.5 h-3.5" />Novo Mapa
             </Button>
           </div>
@@ -79,7 +98,7 @@ function MapListView() {
             <Map className="w-12 h-12 text-neon-green mx-auto mb-4" />
             <h2 className="text-lg font-display font-bold text-foreground mb-2">Crie seu primeiro FlowMap</h2>
             <p className="text-sm text-muted-foreground mb-6">Mapas geoespaciais com topologia de rede, detecção de anel e status em tempo real via Zabbix.</p>
-            <Button className="gap-2 bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowCreate(true)}>
+            <Button className="gap-2 bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowWizard(true)}>
               <Plus className="w-4 h-4" />Criar Mapa
             </Button>
           </motion.div>
@@ -111,20 +130,14 @@ function MapListView() {
         )}
       </div>
 
-      <Dialog open={showCreate} onOpenChange={setShowCreate}>
-        <DialogContent className="glass-card-elevated border-border/50">
-          <DialogHeader>
-            <DialogTitle className="font-display text-neon-green">Novo FlowMap</DialogTitle>
-          </DialogHeader>
-          <Input placeholder="Nome do mapa" value={name} onChange={(e) => setName(e.target.value)} className="text-sm" autoFocus />
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowCreate(false)}>Cancelar</Button>
-            <Button onClick={handleCreate} disabled={!name.trim() || createMap.isPending} className="bg-neon-green/20 text-neon-green border border-neon-green/30">
-              {createMap.isPending ? "Criando..." : "Criar"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {showWizard && (
+        <div className="fixed inset-0 z-50">
+          <FlowMapSetupWizard
+            onComplete={handleWizardComplete}
+            onCancel={() => setShowWizard(false)}
+          />
+        </div>
+      )}
     </div>
   );
 }
