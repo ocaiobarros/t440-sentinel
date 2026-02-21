@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2, Radio, Maximize, Minimize, Volume2, VolumeX } from "lucide-react";
@@ -25,7 +25,7 @@ import { useAudioAlert } from "@/hooks/useAudioAlert";
 function MapListView() {
   const navigate = useNavigate();
   const { data: maps = [], isLoading } = useFlowMapList();
-  const { deleteMap, createMap, addHost } = useFlowMapMutations();
+  const { deleteMap, createMap } = useFlowMapMutations();
   const { toast } = useToast();
   const [showWizard, setShowWizard] = useState(false);
   const [tenantId, setTenantId] = useState<string | null>(null);
@@ -40,26 +40,6 @@ function MapListView() {
     if (!tenantId) return;
     try {
       const mapResult = await createMap.mutateAsync({ name: result.mapName, tenant_id: tenantId });
-      // Add selected hosts with auto-generated positions (spread around center)
-      const centerLat = -15.7;
-      const centerLon = -47.9;
-      await Promise.all(
-        result.selectedHosts.map((h, i) => {
-          const angle = (2 * Math.PI * i) / result.selectedHosts.length;
-          const radius = 0.5 + Math.random() * 0.5;
-          return addHost.mutateAsync({
-            map_id: mapResult.id,
-            tenant_id: tenantId,
-            zabbix_host_id: h.hostid,
-            host_name: h.hostName,
-            host_group: h.groupName,
-            icon_type: "router",
-            is_critical: false,
-            lat: centerLat + radius * Math.sin(angle),
-            lon: centerLon + radius * Math.cos(angle),
-          });
-        }),
-      );
       setShowWizard(false);
       navigate(`/flowmap/maps/${mapResult.id}`);
     } catch (e: any) {
@@ -183,8 +163,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
 
   const handleMapClick = useCallback(
     (lat: number, lon: number) => {
-      if (mode === "add-host" && tenantId) {
-        window.dispatchEvent(new CustomEvent("flowmap-click", { detail: { lat, lon } }));
+      if (mode === "place-host" && tenantId) {
+        window.dispatchEvent(new CustomEvent("flowmap-place-host", { detail: { lat, lon } }));
       } else if (mode === "draw-route" && editingLinkId) {
         setRoutePoints((p) => [...p, [lon, lat]]);
       }
@@ -192,43 +172,21 @@ function MapEditorView({ mapId }: { mapId: string }) {
     [mode, tenantId, editingLinkId],
   );
 
-  const pendingClickRef = useRef<{ lat: number; lon: number } | null>(null);
-
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { lat, lon } = (e as CustomEvent).detail;
-      pendingClickRef.current = { lat, lon };
-    };
-    window.addEventListener("flowmap-click", handler);
-    return () => window.removeEventListener("flowmap-click", handler);
-  }, []);
-
   const handleAddHost = useCallback(
     async (hostData: { zabbix_host_id: string; host_name: string; host_group: string; icon_type: string; is_critical: boolean; lat: number; lon: number }) => {
       if (!tenantId) return;
-      const pos = pendingClickRef.current;
-      if (!pos && !hostData.lat) {
-        toast({ variant: "destructive", title: "Clique no mapa primeiro" });
-        return;
-      }
       await addHost.mutateAsync({
         map_id: mapId,
         tenant_id: tenantId,
-        zabbix_host_id: hostData.zabbix_host_id,
-        host_name: hostData.host_name,
-        host_group: hostData.host_group,
-        icon_type: hostData.icon_type,
-        is_critical: hostData.is_critical,
-        lat: pos?.lat ?? hostData.lat,
-        lon: pos?.lon ?? hostData.lon,
+        ...hostData,
       });
-      pendingClickRef.current = null;
       toast({ title: "Host adicionado" });
     },
     [tenantId, mapId, addHost, toast],
   );
 
-  const handleSelectOriginOrDest = useCallback(
+  /* Handle host marker click on canvas — used for link origin/dest selection */
+  const handleHostClick = useCallback(
     (hostId: string) => {
       if (mode === "connect-origin") {
         setPendingOrigin(hostId);
@@ -425,6 +383,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             impactedLinkIds={impactedLinks}
             isolatedNodeIds={isolatedNodes}
             onMapClick={handleMapClick}
+            onHostClick={handleHostClick}
             focusHost={focusHost}
           />
 
@@ -489,10 +448,11 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 links={data.links}
                 mode={mode}
                 onModeChange={setMode}
+                connectionId={activeConnectionId}
                 onAddHost={handleAddHost}
                 onRemoveHost={(id) => removeHost.mutate({ id, map_id: mapId })}
                 pendingOrigin={pendingOrigin}
-                onSelectOrigin={handleSelectOriginOrDest}
+                onSelectOrigin={handleHostClick}
                 onCreateLink={handleCreateLink}
                 onRemoveLink={(id) => removeLink.mutate({ id, map_id: mapId })}
                 editingLinkId={editingLinkId}

@@ -14,7 +14,7 @@ function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean): L.Div
     iconSize: [size * 2, size * 2],
     iconAnchor: [size, size],
     html: `<div style="width:${size * 2}px;height:${size * 2}px;display:flex;align-items:center;justify-content:center;">
-      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};box-shadow:0 0 ${size}px ${color}80;${pulse}"></div>
+      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};box-shadow:0 0 ${size}px ${color}80;${pulse}cursor:pointer;"></div>
     </div>`,
   });
 }
@@ -119,6 +119,7 @@ interface Props {
   impactedLinkIds?: string[];
   isolatedNodeIds?: string[];
   onMapClick?: (lat: number, lon: number) => void;
+  onHostClick?: (hostId: string) => void;
   focusHost?: FlowMapHost | null;
   className?: string;
 }
@@ -133,6 +134,7 @@ export default function FlowMapCanvas({
   impactedLinkIds = [],
   isolatedNodeIds = [],
   onMapClick,
+  onHostClick,
   focusHost,
   className,
 }: Props) {
@@ -227,7 +229,6 @@ export default function FlowMapCanvas({
       const isImpacted = impactedSet.has(link.id);
       const isAffected = linkSt === "DOWN" || linkSt === "DEGRADED" || isImpacted;
 
-      // Color based on link status
       let color: string;
       if (linkSt === "DOWN") color = "#ff1744";
       else if (linkSt === "DEGRADED") color = "#ff9100";
@@ -237,8 +238,6 @@ export default function FlowMapCanvas({
       const weight = linkSt === "DOWN" ? 5 : linkSt === "DEGRADED" ? 4 : isImpacted ? 5 : link.is_ring ? 3 : 2;
       const dashArray = linkSt === "DOWN" ? "10, 6" : linkSt === "DEGRADED" ? "6, 4" : isImpacted ? "8, 4" : undefined;
       const pulseClass = linkSt === "DOWN" ? "fm-link-pulse" : linkSt === "DEGRADED" ? "fm-link-pulse-slow" : "";
-
-      // Dim healthy links when there's an incident
       const opacity = hasIncident && !isAffected ? 0.25 : 0.9;
 
       const coords =
@@ -257,7 +256,6 @@ export default function FlowMapCanvas({
         className: pulseClass,
       });
 
-      // Tooltip with event duration + link metadata
       const activeEvent = activeEventByLink.get(link.id);
       polyline.bindTooltip(
         linkTooltipHtml(link.id, ls, activeEvent, {
@@ -271,7 +269,7 @@ export default function FlowMapCanvas({
       polyline.addTo(linesLayer);
     });
 
-    // Hosts
+    // Hosts — clickable markers
     const isolatedSet = new Set(isolatedNodeIds);
     hosts.forEach((h) => {
       const st = hostStatusById[h.id];
@@ -284,9 +282,16 @@ export default function FlowMapCanvas({
         direction: "top",
         offset: [0, -12],
       });
+
+      // Emit host click for link creation
+      marker.on("click", (e) => {
+        L.DomEvent.stopPropagation(e);
+        onHostClick?.(h.id);
+      });
+
       marker.addTo(markers);
     });
-  }, [hosts, links, statusMap, linkStatuses, linkEvents, impactedLinkIds, isolatedNodeIds]);
+  }, [hosts, links, statusMap, linkStatuses, linkEvents, impactedLinkIds, isolatedNodeIds, onHostClick]);
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className ?? ""}`} style={{ background: "#0a0b10" }} />
