@@ -141,9 +141,8 @@ function ensurePulseStyle() {
     .fm-traffic-glow{animation:fmGlow 2s ease-in-out infinite}
     .flowmap-tooltip{background:#0d0e1a!important;border:1px solid #00e67650!important;border-radius:10px!important;padding:12px 14px!important;box-shadow:0 8px 32px rgba(0,0,0,0.7),0 0 15px rgba(0,230,118,0.1)!important;}
     .flowmap-tooltip::before{border-top-color:#00e67650!important;}
-    .fm-traffic-label{background:transparent!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:auto!important;transition:transform 0.2s ease,opacity 0.2s ease;margin:0!important;width:auto!important;height:auto!important;}
-    .leaflet-div-icon.fm-traffic-label{background:transparent!important;border:none!important;}
-    .fm-label-content{background:rgba(10,11,16,0.95);border:1px solid #00e67660;border-radius:10px;padding:8px 14px;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 12px rgba(0,230,118,0.08);}
+    .fm-traffic-label,.fm-traffic-label.leaflet-div-icon{background:none!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:auto!important;transition:transform 0.2s ease,opacity 0.2s ease;margin:0!important;width:auto!important;height:auto!important;outline:none!important;}
+    .fm-label-content{background:rgba(10,11,16,0.75);border:1px solid #00e67640;border-radius:6px;padding:3px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-size:9px;}
     .fm-traffic-label:hover .fm-label-content{border-color:#00e5ff;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 20px rgba(0,229,255,0.15);}
     .fm-traffic-label.fm-zoom-far{transform:scale(0.55);opacity:0.6;}
     .fm-traffic-label.fm-zoom-mid{transform:scale(0.75);opacity:0.8;}
@@ -409,30 +408,24 @@ export default function FlowMapCanvas({
         : "";
 
       const labelHtml = `
-        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.6;white-space:nowrap;text-align:center;">
-          <div style="font-family:'Orbitron',sans-serif;color:${qualityColor};font-weight:700;text-shadow:0 0 8px ${qualityColor}60;">${qualityLabel}</div>
-          ${distKm ? `<div style="color:#888;">${distKm} km</div>` : ""}
+        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.4;white-space:nowrap;text-align:center;">
+          <div style="font-size:10px;color:${qualityColor};font-weight:700;text-shadow:0 0 6px ${qualityColor}60;">${qualityLabel}</div>
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:8px;justify-content:center;font-weight:600;">
-              <span style="color:#ff9100;">▲ ${fmtBps(ulBps)}</span>
-              <span style="color:#00e5ff;">▼ ${fmtBps(dlBps)}</span>
+            <div style="display:flex;align-items:center;gap:6px;justify-content:center;font-weight:600;font-size:9px;">
+              <span style="color:#ff9100;">▲${fmtBps(ulBps)}</span>
+              <span style="color:#00e5ff;">▼${fmtBps(dlBps)}</span>
             </div>
-            ${util != null ? `
-              <div style="margin-top:3px;width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden;">
-                <div style="width:${utilDisplay}%;height:100%;background:${utilColor};border-radius:2px;transition:width 0.5s;"></div>
-              </div>
-              <div style="color:${utilColor};font-weight:700;">Util: ${utilVal.toFixed(1)}%</div>
-            ` : ""}
-          ` : `<div style="color:#555;">Sem telemetria</div>`}
-          ${errHtml}
+            ${util != null ? `<div style="color:${utilColor};font-size:9px;">${utilVal.toFixed(1)}%</div>` : ""}
+          ` : ""}
+          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:8px;">⚠${totalErrors}</div>` : ""}
         </div>
       `;
 
       const labelIcon = L.divIcon({
         className: "fm-traffic-label",
         html: labelHtml,
-        iconSize: [1, 1],
-        iconAnchor: [0, 0],
+        iconSize: L.point(0, 0),
+        iconAnchor: L.point(0, 0),
       });
 
       const labelMarker = L.marker(midPoint, { icon: labelIcon, interactive: false });
