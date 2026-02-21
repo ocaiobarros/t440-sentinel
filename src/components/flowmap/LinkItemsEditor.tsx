@@ -63,19 +63,50 @@ export default function LinkItemsEditor({ link, hosts, connectionId, tenantId, o
     if (!sideHost || !connectionId) return;
     setLoading(true);
     try {
-      const searchKeys: Record<Metric, string> = {
-        BPS: "bits",
-        STATUS: "ifOperStatus",
-        ERRORS: "if.errors",
+      const searchPatterns: Record<Metric, string[]> = {
+        BPS: ["bits", "bps", "octets", "net.if", "ifHC", "traffic", "bandwidth"],
+        STATUS: ["ifOperStatus", "ifAdmin", "net.if.status", "status"],
+        ERRORS: ["if.errors", "ifError", "error", "discard", "net.if.in.errors"],
       };
-      const result = await zabbixProxy(connectionId, "item.get", {
-        hostids: sideHost.zabbix_host_id,
-        search: { key_: searchKeys[metric] },
-        output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
-        sortfield: "name",
-        limit: 200,
-      });
-      setItems(result as ZabbixItem[]);
+      const patterns = searchPatterns[metric];
+      let allItems: ZabbixItem[] = [];
+      const seenIds = new Set<string>();
+
+      for (const pattern of patterns) {
+        try {
+          const result = await zabbixProxy(connectionId, "item.get", {
+            hostids: sideHost.zabbix_host_id,
+            search: { key_: pattern },
+            output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
+            sortfield: "name",
+            limit: 200,
+          });
+          for (const item of (result as ZabbixItem[])) {
+            if (!seenIds.has(item.itemid)) {
+              seenIds.add(item.itemid);
+              allItems.push(item);
+            }
+          }
+          if (allItems.length > 0) break; // Found items with this pattern, stop
+        } catch { /* try next pattern */ }
+      }
+
+      // If nothing found, try searching by name as well
+      if (allItems.length === 0) {
+        try {
+          const nameSearch = metric === "BPS" ? "traffic" : metric === "STATUS" ? "status" : "error";
+          const result = await zabbixProxy(connectionId, "item.get", {
+            hostids: sideHost.zabbix_host_id,
+            search: { name: nameSearch },
+            output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
+            sortfield: "name",
+            limit: 200,
+          });
+          allItems = result as ZabbixItem[];
+        } catch { /* ignore */ }
+      }
+
+      setItems(allItems);
     } catch (err) {
       console.error("Failed to fetch items:", err);
       setItems([]);
