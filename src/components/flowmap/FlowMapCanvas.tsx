@@ -42,11 +42,20 @@ function linkTooltipHtml(
   linkStatus: { status: string; originHost: string; destHost: string } | undefined,
   activeEvent: { status: string; started_at: string } | undefined,
   linkMeta?: { link_type: string; is_ring: boolean; priority: number; distance_km?: number; duration_min?: number },
+  traffic?: LinkTraffic,
 ): string {
   const st = linkStatus?.status ?? "UNKNOWN";
   const color = st === "DOWN" ? "#ff1744" : st === "DEGRADED" ? "#ff9100" : st === "UP" ? "#00e676" : "#9e9e9e";
   const origin = linkStatus?.originHost ?? "?";
   const dest = linkStatus?.destHost ?? "?";
+
+  const fmtBps = (bps: number | null): string => {
+    if (bps == null || bps === 0) return "0";
+    if (bps >= 1e9) return `${(bps / 1e9).toFixed(2)} Gbps`;
+    if (bps >= 1e6) return `${(bps / 1e6).toFixed(1)} Mbps`;
+    if (bps >= 1e3) return `${(bps / 1e3).toFixed(0)} Kbps`;
+    return `${bps.toFixed(0)} bps`;
+  };
 
   let durationHtml = "";
   if (activeEvent && !activeEvent.started_at.includes("null")) {
@@ -56,35 +65,58 @@ function linkTooltipHtml(
     const m = Math.floor((elapsed % 3600) / 60);
     const s = elapsed % 60;
     const dur = h > 0 ? `${h}h ${m}m` : m > 0 ? `${m}m ${s}s` : `${s}s`;
-    durationHtml = `<div style="margin-top:4px;">Duração: <span style="color:#ff9100;font-weight:700;">${dur}</span></div>`;
+    durationHtml = `<div>⏱ Duração: <span style="color:#ff9100;font-weight:700;">${dur}</span></div>`;
   }
 
   let routeHtml = "";
   if (linkMeta?.distance_km != null && linkMeta.distance_km > 0) {
-    routeHtml += `<div>Distância: <span style="color:#00e5ff;font-weight:700;">${linkMeta.distance_km} km</span></div>`;
+    routeHtml += `<div>📏 Distância: <span style="color:#00e5ff;font-weight:700;">${linkMeta.distance_km} km</span></div>`;
   }
   if (linkMeta?.duration_min != null && linkMeta.duration_min > 0) {
     const hrs = Math.floor(linkMeta.duration_min / 60);
     const mins = Math.round(linkMeta.duration_min % 60);
     const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
-    routeHtml += `<div>Tempo est.: <span style="color:#00e5ff;">${timeStr}</span></div>`;
+    routeHtml += `<div>🕐 Tempo est.: <span style="color:#00e5ff;">${timeStr}</span></div>`;
+  }
+
+  // Traffic section
+  const dlA = traffic?.sideA?.in_bps;
+  const ulA = traffic?.sideA?.out_bps;
+  const dlB = traffic?.sideB?.in_bps;
+  const ulB = traffic?.sideB?.out_bps;
+  const utilA = traffic?.sideA?.utilization;
+  const utilB = traffic?.sideB?.utilization;
+  const hasTraffic = dlA != null || ulA != null || dlB != null || ulB != null;
+
+  let trafficHtml = "";
+  if (hasTraffic) {
+    trafficHtml = `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #333;">
+      <div style="font-weight:700;color:#e0e0e0;margin-bottom:4px;">📊 Tráfego</div>`;
+    if (dlA != null || ulA != null) {
+      trafficHtml += `<div style="margin-bottom:2px;">Lado A: <span style="color:#00e5ff;">▼ ${fmtBps(dlA)}</span> <span style="color:#ff9100;">▲ ${fmtBps(ulA)}</span>${utilA != null ? ` <span style="color:#888;">(${utilA.toFixed(1)}%)</span>` : ""}</div>`;
+    }
+    if (dlB != null || ulB != null) {
+      trafficHtml += `<div>Lado B: <span style="color:#00e5ff;">▼ ${fmtBps(dlB)}</span> <span style="color:#ff9100;">▲ ${fmtBps(ulB)}</span>${utilB != null ? ` <span style="color:#888;">(${utilB.toFixed(1)}%)</span>` : ""}</div>`;
+    }
+    trafficHtml += `</div>`;
   }
 
   const metaHtml = linkMeta
-    ? `<div style="margin-top:4px;color:#888;font-size:9px;">
-        Tipo: <span style="color:#e0e0e0;">${linkMeta.link_type}</span>
+    ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #333;color:#888;font-size:10px;">
+        Tipo: <span style="color:#e0e0e0;font-weight:600;">${linkMeta.link_type}</span>
         ${linkMeta.is_ring ? ' • <span style="color:#00e5ff;">Ring</span>' : ""}
-        ${linkMeta.priority > 0 ? ` • P${linkMeta.priority}` : ""}
+        ${linkMeta.priority > 0 ? ` • Prioridade: P${linkMeta.priority}` : ""}
       </div>`
     : "";
 
   return `
-    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;min-width:180px;">
-      <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:10px;color:#e0e0e0;margin-bottom:2px;">${origin} ⟷ ${dest}</div>
-      <hr style="border:none;border-top:1px solid #333;margin:4px 0;">
-      <div>Link: <span style="color:${color};font-weight:700;">${st}</span></div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.7;min-width:220px;max-width:320px;">
+      <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:11px;color:#e0e0e0;margin-bottom:4px;">${origin} ⟷ ${dest}</div>
+      <hr style="border:none;border-top:1px solid #333;margin:6px 0;">
+      <div style="font-size:13px;">Status: <span style="color:${color};font-weight:700;text-shadow:0 0 6px ${color}80;">${st}</span></div>
       ${durationHtml}
       ${routeHtml}
+      ${trafficHtml}
       ${metaHtml}
     </div>
   `;
@@ -99,14 +131,16 @@ function ensurePulseStyle() {
   s.textContent = `
     @keyframes fmPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:0.5}}
     @keyframes fmLinkPulse{0%,100%{opacity:0.9}50%{opacity:0.3}}
-    @keyframes fmTrafficFlow{0%{stroke-dashoffset:24}100%{stroke-dashoffset:0}}
+    @keyframes fmTrafficFlow{0%{stroke-dashoffset:40}100%{stroke-dashoffset:0}}
+    @keyframes fmGlow{0%,100%{filter:drop-shadow(0 0 2px currentColor)}50%{filter:drop-shadow(0 0 8px currentColor)}}
     .fm-link-pulse{animation:fmLinkPulse 1.2s ease-in-out infinite}
     .fm-link-pulse-slow{animation:fmLinkPulse 2s ease-in-out infinite}
-    .fm-traffic-flow{animation:fmTrafficFlow 1s linear infinite}
-    .flowmap-tooltip{background:#1a1a2e!important;border:1px solid #333!important;border-radius:8px!important;padding:8px 10px!important;box-shadow:0 4px 20px rgba(0,0,0,0.5)!important;}
-    .flowmap-tooltip::before{border-top-color:#333!important;}
-    .fm-traffic-label{background:rgba(10,11,16,0.92)!important;border:1px solid #00e67640!important;border-radius:8px!important;padding:6px 10px!important;box-shadow:0 4px 20px rgba(0,0,0,0.6)!important;pointer-events:auto!important;}
-    .fm-traffic-label:hover{border-color:#00e5ff80!important;}
+    .fm-traffic-flow{animation:fmTrafficFlow 0.6s linear infinite}
+    .fm-traffic-glow{animation:fmGlow 2s ease-in-out infinite}
+    .flowmap-tooltip{background:#0d0e1a!important;border:1px solid #00e67650!important;border-radius:10px!important;padding:12px 14px!important;box-shadow:0 8px 32px rgba(0,0,0,0.7),0 0 15px rgba(0,230,118,0.1)!important;}
+    .flowmap-tooltip::before{border-top-color:#00e67650!important;}
+    .fm-traffic-label{background:rgba(10,11,16,0.95)!important;border:1px solid #00e67660!important;border-radius:10px!important;padding:8px 14px!important;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 12px rgba(0,230,118,0.08)!important;pointer-events:auto!important;}
+    .fm-traffic-label:hover{border-color:#00e5ff!important;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 20px rgba(0,229,255,0.15)!important;}
   `;
   document.head.appendChild(s);
 }
@@ -265,9 +299,9 @@ export default function FlowMapCanvas({
       else if (isImpacted) color = "#8b0000";
       else color = "#00e676";
 
-      const weight = linkSt === "DOWN" ? 5 : linkSt === "DEGRADED" ? 4 : isImpacted ? 5 : link.is_ring ? 3 : 2;
+      const weight = linkSt === "DOWN" ? 6 : linkSt === "DEGRADED" ? 5 : isImpacted ? 6 : link.is_ring ? 4 : 3;
       const dashArray = linkSt === "DOWN" ? "10, 6" : linkSt === "DEGRADED" ? "6, 4" : isImpacted ? "8, 4" : undefined;
-      const pulseClass = linkSt === "DOWN" ? "fm-link-pulse" : linkSt === "DEGRADED" ? "fm-link-pulse-slow" : "";
+      const pulseClass = linkSt === "DOWN" ? "fm-link-pulse" : linkSt === "DEGRADED" ? "fm-link-pulse-slow" : "fm-traffic-glow";
       const opacity = hasIncident && !isAffected ? 0.25 : 0.9;
 
       const coords =
@@ -278,6 +312,14 @@ export default function FlowMapCanvas({
               [destHost.lat, destHost.lon] as [number, number],
             ];
 
+      // Glow underlay for visibility
+      const glowLine = L.polyline(coords, {
+        color,
+        weight: weight + 4,
+        opacity: 0.15,
+      });
+      glowLine.addTo(linesLayer);
+
       // Main polyline
       const polyline = L.polyline(coords, {
         color,
@@ -287,13 +329,13 @@ export default function FlowMapCanvas({
         className: pulseClass,
       });
 
-      // Traffic flow animation overlay (UP links only)
+      // Traffic flow animation overlay — bold dashes
       if (linkSt === "UP" || linkSt === "UNKNOWN") {
         const flowLine = L.polyline(coords, {
-          color: color,
-          weight: Math.max(weight + 1, 3),
-          opacity: 0.3,
-          dashArray: "6, 18",
+          color: "#00e5ff",
+          weight: weight + 2,
+          opacity: 0.45,
+          dashArray: "8, 32",
           className: "fm-traffic-flow",
         });
         flowLine.addTo(linesLayer);
@@ -301,6 +343,8 @@ export default function FlowMapCanvas({
 
       const activeEvent = activeEventByLink.get(link.id);
       const geom = link.geometry as any;
+      const traffic = linkTraffic[link.id];
+
       polyline.bindTooltip(
         linkTooltipHtml(link.id, ls, activeEvent, {
           link_type: link.link_type,
@@ -308,14 +352,13 @@ export default function FlowMapCanvas({
           priority: link.priority,
           distance_km: geom?.distance_km,
           duration_min: geom?.duration_min,
-        }),
+        }, traffic),
         { className: "flowmap-tooltip", sticky: true },
       );
 
       polyline.addTo(linesLayer);
 
       // ── Persistent traffic label at midpoint ──
-      const traffic = linkTraffic[link.id];
       const midIdx = Math.floor(coords.length / 2);
       const midPoint: [number, number] = coords[midIdx] || coords[0];
 
@@ -325,19 +368,29 @@ export default function FlowMapCanvas({
       const hasTelemetry = dlBps != null || ulBps != null;
 
       const qualityColor = linkSt === "DOWN" ? "#ff1744" : linkSt === "DEGRADED" ? "#ff9100" : "#00e676";
-      const qualityLabel = linkSt === "DOWN" ? "DOWN" : linkSt === "DEGRADED" ? "DEGRADED" : "UP";
+      const qualityLabel = linkSt === "DOWN" ? "⛔ DOWN" : linkSt === "DEGRADED" ? "⚠ DEGRADED" : "● UP";
       const distKm = geom?.distance_km;
 
+      // Utilization bar color
+      const utilVal = util ?? 0;
+      const utilColor = utilVal > 80 ? "#ff1744" : utilVal > 50 ? "#ff9100" : "#00e676";
+
       const labelHtml = `
-        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.5;white-space:nowrap;text-align:center;">
-          <div style="font-family:'Orbitron',sans-serif;font-size:8px;color:${qualityColor};font-weight:700;margin-bottom:2px;">${qualityLabel}${distKm ? ` • ${distKm} km` : ""}</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;line-height:1.6;white-space:nowrap;text-align:center;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:10px;color:${qualityColor};font-weight:700;text-shadow:0 0 8px ${qualityColor}60;margin-bottom:3px;">${qualityLabel}</div>
+          ${distKm ? `<div style="color:#888;font-size:9px;margin-bottom:2px;">${distKm} km</div>` : ""}
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
+            <div style="display:flex;align-items:center;gap:8px;justify-content:center;font-size:12px;font-weight:600;">
               <span style="color:#00e5ff;">▼ ${fmtBps(dlBps)}</span>
               <span style="color:#ff9100;">▲ ${fmtBps(ulBps)}</span>
             </div>
-            ${util != null ? `<div style="color:#888;font-size:8px;">Util: ${util.toFixed(1)}%</div>` : ""}
-          ` : `<div style="color:#555;font-size:9px;">Sem telemetria</div>`}
+            ${util != null ? `
+              <div style="margin-top:4px;width:100%;height:4px;background:#222;border-radius:2px;overflow:hidden;">
+                <div style="width:${Math.min(utilVal, 100)}%;height:100%;background:${utilColor};border-radius:2px;transition:width 0.5s;"></div>
+              </div>
+              <div style="color:${utilColor};font-size:9px;font-weight:700;margin-top:1px;">Util: ${utilVal.toFixed(1)}%</div>
+            ` : ""}
+          ` : `<div style="color:#555;font-size:10px;">Sem telemetria</div>`}
         </div>
       `;
 
