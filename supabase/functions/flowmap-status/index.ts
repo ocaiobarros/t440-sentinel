@@ -82,7 +82,7 @@ interface CachedResult {
   expiresAt: number;
 }
 const statusCache = new Map<string, CachedResult>();
-const CACHE_TTL_MS = 10_000; // 10 seconds
+const CACHE_TTL_MS = 10_000;
 
 /* ─── Host status type ─── */
 interface HostStatusResult {
@@ -106,7 +106,6 @@ function detectRingBreaks(
   const allHosts = new Set<string>();
   ringLinks.forEach((l) => { allHosts.add(l.origin_host_id); allHosts.add(l.dest_host_id); });
 
-  // Build adjacency only with links where BOTH endpoints are UP
   const adj = new Map<string, Set<string>>();
   for (const hid of allHosts) adj.set(hid, new Set());
 
@@ -126,7 +125,6 @@ function detectRingBreaks(
     return { impactedLinkIds: ringLinks.map((l) => l.id), isolatedNodeIds: [...allHosts] };
   }
 
-  // BFS from first UP host
   const visited = new Set<string>();
   const queue = [upHosts[0]];
   visited.add(upHosts[0]);
@@ -154,7 +152,6 @@ function resolveStatus(
   hasTriggerProblem: boolean,
   icmpItem: { lastvalue: string; lastclock: string } | undefined,
 ): HostStatusResult {
-  // Priority 1: Active trigger problem → DOWN
   if (hasTriggerProblem) {
     const lat = icmpItem ? parseFloat(icmpItem.lastvalue || "0") * 1000 : undefined;
     return {
@@ -165,11 +162,6 @@ function resolveStatus(
     };
   }
 
-  // Priority 2: ICMP ping result (icmpping key, value 0 = DOWN)
-  // We check icmppingsec for latency, but icmpping for reachability
-  // If icmppingsec exists and latency > 0, host responds to ping → UP
-
-  // Priority 3: interfaces.available
   let interfaceAvailable = 0;
   const interfaces = zbxHost.interfaces as Array<Record<string, string>> | undefined;
   if (interfaces && interfaces.length > 0) {
@@ -186,6 +178,104 @@ function resolveStatus(
     latency: lat != null ? Math.round(lat * 100) / 100 : undefined,
     lastCheck: icmpItem?.lastclock ? new Date(parseInt(icmpItem.lastclock) * 1000).toISOString() : new Date().toISOString(),
   };
+}
+
+/* ─── SLA Transition Engine ─── */
+/**
+ * Derives link status from its two endpoint hosts:
+ *  - Both UP → UP
+ *  - One DOWN → DEGRADED
+ *  - Both DOWN → DOWN
+ */
+function deriveLinkStatus(
+  originStatus: "UP" | "DOWN" | "UNKNOWN",
+  destStatus: "UP" | "DOWN" | "UNKNOWN",
+): "UP" | "DOWN" | "DEGRADED" {
+  if (originStatus === "UP" && destStatus === "UP") return "UP";
+  if (originStatus === "DOWN" && destStatus === "DOWN") return "DOWN";
+  // One DOWN/UNKNOWN + one UP, or both UNKNOWN
+  if (originStatus === "DOWN" || destStatus === "DOWN") return "DEGRADED";
+  return "UP"; // both UNKNOWN treated as UP (no data = no alarm)
+}
+
+interface OpenEvent {
+  id: string;
+  status: string;
+}
+
+async function processLinkTransitions(
+  serviceClient: ReturnType<typeof createClient>,
+  links: LinkRow[],
+  hostStatusById: Record<string, HostStatusResult>,
+  tenantId: string,
+): Promise<void> {
+  if (links.length === 0) return;
+
+  // Fetch all open events for this tenant's links in one query
+  const linkIds = links.map((l) => l.id);
+  const { data: openEvents } = await serviceClient
+    .from("flow_map_link_events")
+    .select("id, link_id, status")
+    .eq("tenant_id", tenantId)
+    .in("link_id", linkIds)
+    .is("ended_at", null);
+
+  const openEventByLink = new Map<string, OpenEvent>();
+  if (openEvents) {
+    for (const ev of openEvents) {
+      openEventByLink.set(ev.link_id, { id: ev.id, status: ev.status });
+    }
+  }
+
+  const now = new Date().toISOString();
+  const toInsert: Array<{ link_id: string; tenant_id: string; status: string; started_at: string }> = [];
+  const toClose: string[] = [];
+
+  for (const link of links) {
+    const originSt = hostStatusById[link.origin_host_id]?.status ?? "UNKNOWN";
+    const destSt = hostStatusById[link.dest_host_id]?.status ?? "UNKNOWN";
+    const newStatus = deriveLinkStatus(originSt, destSt);
+
+    const openEvent = openEventByLink.get(link.id);
+
+    if (!openEvent && newStatus !== "UP") {
+      // No open event, link is DOWN/DEGRADED → create event
+      toInsert.push({ link_id: link.id, tenant_id: tenantId, status: newStatus, started_at: now });
+    } else if (openEvent && openEvent.status !== newStatus) {
+      // Status changed → close current event
+      toClose.push(openEvent.id);
+      // If new status is not UP, open a new event
+      if (newStatus !== "UP") {
+        toInsert.push({ link_id: link.id, tenant_id: tenantId, status: newStatus, started_at: now });
+      }
+    }
+    // If status unchanged, do nothing (idempotent)
+  }
+
+  // Execute batch operations in parallel
+  const ops: Promise<unknown>[] = [];
+
+  if (toClose.length > 0) {
+    ops.push(
+      serviceClient
+        .from("flow_map_link_events")
+        .update({ ended_at: now })
+        .in("id", toClose)
+    );
+  }
+
+  if (toInsert.length > 0) {
+    ops.push(
+      serviceClient
+        .from("flow_map_link_events")
+        .insert(toInsert)
+    );
+  }
+
+  if (ops.length > 0) {
+    await Promise.all(ops);
+    console.log(`[flowmap-status] SLA transitions: closed=${toClose.length}, opened=${toInsert.length}`);
+  }
 }
 
 /* ─── Main Handler ─── */
@@ -243,7 +333,7 @@ Deno.serve(async (req) => {
     if (hostsErr) return json({ error: `Hosts query failed: ${hostsErr.message}` }, 500);
     if (!hosts || hosts.length === 0) return json({ hosts: {}, impactedLinks: [], isolatedNodes: [] });
 
-    // Fetch links for ring detection
+    // Fetch links for ring detection + SLA transitions
     const { data: links } = await serviceClient
       .from("flow_map_links")
       .select("id, origin_host_id, dest_host_id, is_ring")
@@ -268,14 +358,12 @@ Deno.serve(async (req) => {
     const zabbixHostIds = hosts.map((h) => h.zabbix_host_id);
 
     const [zbxHosts, zbxItems, zbxTriggers] = await Promise.all([
-      // host.get with interfaces
       zabbixCall(conn.url, zabbixAuth, "host.get", {
         hostids: zabbixHostIds,
         output: ["hostid", "host", "name", "status", "available"],
         selectInterfaces: ["ip", "dns", "port", "type", "available"],
       }) as Promise<Array<Record<string, unknown>>>,
 
-      // item.get for ICMP latency
       zabbixCall(conn.url, zabbixAuth, "item.get", {
         hostids: zabbixHostIds,
         search: { key_: "icmppingsec" },
@@ -283,12 +371,11 @@ Deno.serve(async (req) => {
         limit: 500,
       }) as Promise<Array<Record<string, string>>>,
 
-      // trigger.get for active problems (Priority 1)
       zabbixCall(conn.url, zabbixAuth, "trigger.get", {
         hostids: zabbixHostIds,
         only_true: true,
         monitored: true,
-        filter: { value: "1" }, // PROBLEM state
+        filter: { value: "1" },
         output: ["triggerid", "description", "priority"],
         selectHosts: ["hostid"],
         limit: 500,
@@ -302,7 +389,6 @@ Deno.serve(async (req) => {
       icmpMap.set(item.hostid, { lastvalue: item.lastvalue, lastclock: item.lastclock });
     }
 
-    // Build trigger problem set (hostids that have active problems)
     const triggerProblemHosts = new Set<string>();
     for (const trigger of zbxTriggers) {
       const trigHosts = trigger.hosts as Array<{ hostid: string }> | undefined;
@@ -311,7 +397,7 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Build result keyed by zabbix_host_id, AND by flow_map_hosts.id for ring detection
+    // Build result keyed by zabbix_host_id AND by flow_map_hosts.id
     const resultByZabbixId: Record<string, HostStatusResult> = {};
     const resultByHostId: Record<string, HostStatusResult> = {};
 
@@ -333,8 +419,12 @@ Deno.serve(async (req) => {
       resultByHostId[host.id] = st;
     }
 
-    // Ring break detection on backend
+    // Ring break detection
     const ringResult = detectRingBreaks(links ?? [], resultByHostId);
+
+    // ─── SLA Transition Engine (fire-and-forget, non-blocking) ───
+    processLinkTransitions(serviceClient, links ?? [], resultByHostId, tenantId as string)
+      .catch((err) => console.error("[flowmap-status] SLA transition error:", err));
 
     const responseData = {
       hosts: resultByZabbixId,
@@ -345,7 +435,7 @@ Deno.serve(async (req) => {
     // Store in cache
     statusCache.set(cacheKey, { data: responseData, expiresAt: now + CACHE_TTL_MS });
 
-    // Evict old entries (prevent memory leak)
+    // Evict old entries
     if (statusCache.size > 200) {
       for (const [k, v] of statusCache) {
         if (v.expiresAt < now) statusCache.delete(k);
