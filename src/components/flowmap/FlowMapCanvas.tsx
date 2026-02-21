@@ -141,13 +141,12 @@ function ensurePulseStyle() {
     .fm-traffic-glow{animation:fmGlow 2s ease-in-out infinite}
     .flowmap-tooltip{background:#0d0e1a!important;border:1px solid #00e67650!important;border-radius:10px!important;padding:12px 14px!important;box-shadow:0 8px 32px rgba(0,0,0,0.7),0 0 15px rgba(0,230,118,0.1)!important;}
     .flowmap-tooltip::before{border-top-color:#00e67650!important;}
-    .fm-traffic-label,.fm-traffic-label.leaflet-div-icon{background:none!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:auto!important;transition:transform 0.2s ease,opacity 0.2s ease;margin:0!important;width:auto!important;height:auto!important;outline:none!important;}
-    .fm-label-content{background:rgba(10,11,16,0.75);border:1px solid #00e67640;border-radius:6px;padding:3px 8px;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-size:9px;}
-    .fm-traffic-label:hover .fm-label-content{border-color:#00e5ff;box-shadow:0 4px 24px rgba(0,0,0,0.7),0 0 20px rgba(0,229,255,0.15);}
-    .fm-traffic-label.fm-zoom-far{transform:scale(0.55);opacity:0.6;}
-    .fm-traffic-label.fm-zoom-mid{transform:scale(0.75);opacity:0.8;}
-    .fm-traffic-label.fm-zoom-close{transform:scale(1);opacity:1;}
-    .fm-traffic-label.fm-zoom-detail{transform:scale(1.1);opacity:1;}
+    .fm-traffic-label,.fm-traffic-label.leaflet-div-icon{background:none!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:none!important;transition:opacity 0.3s ease;margin:0!important;width:auto!important;height:auto!important;outline:none!important;}
+    .fm-label-content{background:none;border:none;border-radius:0;padding:0;box-shadow:none;font-size:10px;text-shadow:0 0 4px rgba(0,0,0,0.9),0 1px 2px rgba(0,0,0,0.8);}
+    .fm-traffic-label.fm-zoom-far{display:none!important;}
+    .fm-traffic-label.fm-zoom-mid{display:none!important;}
+    .fm-traffic-label.fm-zoom-close{opacity:1;}
+    .fm-traffic-label.fm-zoom-detail{opacity:1;}
   `;
   document.head.appendChild(s);
 }
@@ -407,17 +406,18 @@ export default function FlowMapCanvas({
         ? `<div style="color:#ff1744;font-size:9px;font-weight:700;margin-top:2px;">⚠ ${totalErrors} erros</div>`
         : "";
 
+      const ts = "text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;";
       const labelHtml = `
-        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.4;white-space:nowrap;text-align:center;">
-          <div style="font-size:10px;color:${qualityColor};font-weight:700;text-shadow:0 0 6px ${qualityColor}60;">${qualityLabel}</div>
+        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.3;white-space:nowrap;text-align:center;">
+          <div style="font-size:11px;color:${qualityColor};font-weight:700;${ts}text-shadow:0 0 6px ${qualityColor}80,0 0 3px #000,0 1px 2px #000;">${qualityLabel}</div>
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:6px;justify-content:center;font-weight:600;font-size:9px;">
+            <div style="display:flex;align-items:center;gap:5px;justify-content:center;font-weight:600;font-size:10px;${ts}">
               <span style="color:#ff9100;">▲${fmtBps(ulBps)}</span>
               <span style="color:#00e5ff;">▼${fmtBps(dlBps)}</span>
             </div>
-            ${util != null ? `<div style="color:${utilColor};font-size:9px;">${utilVal.toFixed(1)}%</div>` : ""}
+            ${util != null ? `<div style="color:${utilColor};font-size:9px;font-weight:700;${ts}">${utilVal.toFixed(1)}%</div>` : ""}
           ` : ""}
-          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:8px;">⚠${totalErrors}</div>` : ""}
+          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:9px;font-weight:700;${ts}">⚠${totalErrors}</div>` : ""}
         </div>
       `;
 
