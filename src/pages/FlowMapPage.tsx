@@ -153,7 +153,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
     [connections],
   );
 
-  const { statusMap, impactedLinks, isolatedNodes, linkStatuses, linkEvents, loading: statusLoading, error: statusError } = useFlowMapStatus({
+  const { statusMap, impactedLinks, isolatedNodes, linkStatuses, linkEvents, linkTraffic, loading: statusLoading, error: statusError } = useFlowMapStatus({
     mapId,
     hosts: data?.hosts ?? [],
     connectionId: activeConnectionId,
@@ -437,6 +437,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             statusMap={statusMap}
             linkStatuses={linkStatuses}
             linkEvents={linkEvents}
+            linkTraffic={linkTraffic}
             impactedLinkIds={impactedLinks}
             isolatedNodeIds={isolatedNodes}
             onMapClick={handleMapClick}

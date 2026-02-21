@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Activity, ArrowDownUp, Trash2, Plus, Loader2, Search,
+  Activity, ArrowDown, ArrowUp, Trash2, Plus, Loader2, Search,
   ChevronLeft, ChevronRight, X, Cable,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -145,6 +145,9 @@ export default function LinkItemsEditor({ link, hosts, connectionId, tenantId, o
   const usedItemIds = new Set((existingItems ?? []).map((i) => i.zabbix_item_id));
 
   const sideColor = (s: string) => s === "A" ? "text-neon-green" : "text-neon-blue";
+  const dirIcon = (d: string) => d === "IN"
+    ? <ArrowDown className="w-3 h-3 text-neon-cyan shrink-0" />
+    : <ArrowUp className="w-3 h-3 text-neon-amber shrink-0" />;
   const metricBadge = (m: string) => {
     if (m === "BPS") return "bg-neon-blue/10 text-neon-blue border-neon-blue/30";
     if (m === "STATUS") return "bg-neon-green/10 text-neon-green border-neon-green/30";
@@ -189,20 +192,20 @@ export default function LinkItemsEditor({ link, hosts, connectionId, tenantId, o
               ) : (existingItems ?? []).length === 0 ? (
                 <p className="text-[10px] text-muted-foreground text-center py-2">Nenhum item associado</p>
               ) : (
-                <div className="space-y-1 max-h-32 overflow-y-auto">
+                <div className="space-y-1 max-h-52 overflow-y-auto">
                   {(existingItems ?? []).map((item) => (
-                    <div key={item.id} className="flex items-center justify-between p-1.5 rounded bg-muted/20 text-[9px]">
-                      <div className="flex items-center gap-1 min-w-0">
-                        <Activity className="w-3 h-3 text-muted-foreground shrink-0" />
-                        <span className={`font-bold ${sideColor(item.side)}`}>{item.side}</span>
-                        <span className="text-muted-foreground">{item.direction}</span>
-                        <Badge variant="outline" className={`text-[8px] h-4 px-1 ${metricBadge(item.metric)}`}>
+                    <div key={item.id} className="flex items-start justify-between p-2 rounded bg-muted/20 text-[10px] gap-1">
+                      <div className="flex items-start gap-1.5 min-w-0 flex-1">
+                        {dirIcon(item.direction)}
+                        <span className={`font-bold shrink-0 ${sideColor(item.side)}`}>{item.side}</span>
+                        <span className={`shrink-0 text-[9px] ${item.direction === "IN" ? "text-neon-cyan" : "text-neon-amber"}`}>{item.direction}</span>
+                        <Badge variant="outline" className={`text-[8px] h-4 px-1 shrink-0 ${metricBadge(item.metric)}`}>
                           {item.metric}
                         </Badge>
-                        <span className="font-mono text-foreground truncate">{item.name || item.key_}</span>
+                        <span className="font-mono text-foreground break-all leading-tight" title={item.name || item.key_}>{item.name || item.key_}</span>
                       </div>
-                      <Button variant="ghost" size="icon" className="h-4 w-4" onClick={() => onRemoveItem(item.id, link.id)}>
-                        <Trash2 className="w-2.5 h-2.5 text-muted-foreground hover:text-neon-red" />
+                      <Button variant="ghost" size="icon" className="h-5 w-5 shrink-0" onClick={() => onRemoveItem(item.id, link.id)}>
+                        <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
                       </Button>
                     </div>
                   ))}
@@ -281,10 +284,10 @@ export default function LinkItemsEditor({ link, hosts, connectionId, tenantId, o
                             : "border-border/20 hover:border-neon-blue/30"
                         }`}
                       >
-                        <div className="flex items-center justify-between">
-                          <div className="min-w-0">
-                            <p className="text-[10px] font-mono text-foreground truncate">{item.name}</p>
-                            <p className="text-[8px] text-muted-foreground font-mono truncate">{item.key_}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[10px] font-mono text-foreground break-all leading-tight">{item.name}</p>
+                            <p className="text-[8px] text-muted-foreground font-mono break-all">{item.key_}</p>
                           </div>
                           {used ? (
                             <span className="text-[8px] text-neon-green/60 shrink-0">✓</span>

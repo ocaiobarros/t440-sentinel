@@ -2,6 +2,7 @@ import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FlowMap, FlowMapHost, FlowMapLink, HostStatus } from "@/hooks/useFlowMaps";
+import type { LinkTraffic } from "@/hooks/useFlowMapStatus";
 
 /* ── Icon factories ── */
 function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean): L.DivIcon {
@@ -98,10 +99,14 @@ function ensurePulseStyle() {
   s.textContent = `
     @keyframes fmPulse{0%,100%{transform:scale(1);opacity:1}50%{transform:scale(1.6);opacity:0.5}}
     @keyframes fmLinkPulse{0%,100%{opacity:0.9}50%{opacity:0.3}}
+    @keyframes fmTrafficFlow{0%{stroke-dashoffset:24}100%{stroke-dashoffset:0}}
     .fm-link-pulse{animation:fmLinkPulse 1.2s ease-in-out infinite}
     .fm-link-pulse-slow{animation:fmLinkPulse 2s ease-in-out infinite}
+    .fm-traffic-flow{animation:fmTrafficFlow 1s linear infinite}
     .flowmap-tooltip{background:#1a1a2e!important;border:1px solid #333!important;border-radius:8px!important;padding:8px 10px!important;box-shadow:0 4px 20px rgba(0,0,0,0.5)!important;}
     .flowmap-tooltip::before{border-top-color:#333!important;}
+    .fm-traffic-label{background:rgba(10,11,16,0.92)!important;border:1px solid #00e67640!important;border-radius:8px!important;padding:6px 10px!important;box-shadow:0 4px 20px rgba(0,0,0,0.6)!important;pointer-events:auto!important;}
+    .fm-traffic-label:hover{border-color:#00e5ff80!important;}
   `;
   document.head.appendChild(s);
 }
@@ -128,6 +133,7 @@ interface Props {
   statusMap: Record<string, HostStatus>;
   linkStatuses?: Record<string, LinkStatusInfo>;
   linkEvents?: LinkEventInfo[];
+  linkTraffic?: Record<string, LinkTraffic>;
   impactedLinkIds?: string[];
   isolatedNodeIds?: string[];
   onMapClick?: (lat: number, lon: number) => void;
@@ -143,6 +149,7 @@ export default function FlowMapCanvas({
   statusMap,
   linkStatuses = {},
   linkEvents = [],
+  linkTraffic = {},
   impactedLinkIds = [],
   isolatedNodeIds = [],
   onMapClick,
@@ -152,7 +159,7 @@ export default function FlowMapCanvas({
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const layersRef = useRef<{ markers: L.LayerGroup; lines: L.LayerGroup } | null>(null);
+  const layersRef = useRef<{ markers: L.LayerGroup; lines: L.LayerGroup; labels: L.LayerGroup } | null>(null);
 
   /* Init map once */
   useEffect(() => {
@@ -175,7 +182,8 @@ export default function FlowMapCanvas({
 
     const markers = L.layerGroup().addTo(map);
     const lines = L.layerGroup().addTo(map);
-    layersRef.current = { markers, lines };
+    const labels = L.layerGroup().addTo(map);
+    layersRef.current = { markers, lines, labels };
     mapRef.current = map;
 
     return () => {
@@ -205,9 +213,10 @@ export default function FlowMapCanvas({
   /* Update layers */
   useEffect(() => {
     if (!layersRef.current) return;
-    const { markers, lines: linesLayer } = layersRef.current;
+    const { markers, lines: linesLayer, labels: labelsLayer } = layersRef.current;
     markers.clearLayers();
     linesLayer.clearLayers();
+    labelsLayer.clearLayers();
 
     const hostStatusById: Record<string, HostStatus> = {};
     hosts.forEach((h) => {
@@ -229,6 +238,15 @@ export default function FlowMapCanvas({
       const s = linkStatuses[l.id]?.status;
       return s === "DOWN" || s === "DEGRADED";
     });
+
+    // Helper: format bps to Mbps/Gbps
+    const fmtBps = (bps: number | null): string => {
+      if (bps == null || bps === 0) return "0";
+      if (bps >= 1e9) return `${(bps / 1e9).toFixed(2)} Gbps`;
+      if (bps >= 1e6) return `${(bps / 1e6).toFixed(1)} Mbps`;
+      if (bps >= 1e3) return `${(bps / 1e3).toFixed(0)} Kbps`;
+      return `${bps.toFixed(0)} bps`;
+    };
 
     // Links
     links.forEach((link) => {
@@ -260,6 +278,7 @@ export default function FlowMapCanvas({
               [destHost.lat, destHost.lon] as [number, number],
             ];
 
+      // Main polyline
       const polyline = L.polyline(coords, {
         color,
         weight,
@@ -267,6 +286,18 @@ export default function FlowMapCanvas({
         dashArray,
         className: pulseClass,
       });
+
+      // Traffic flow animation overlay (UP links only)
+      if (linkSt === "UP" || linkSt === "UNKNOWN") {
+        const flowLine = L.polyline(coords, {
+          color: color,
+          weight: Math.max(weight + 1, 3),
+          opacity: 0.3,
+          dashArray: "6, 18",
+          className: "fm-traffic-flow",
+        });
+        flowLine.addTo(linesLayer);
+      }
 
       const activeEvent = activeEventByLink.get(link.id);
       const geom = link.geometry as any;
@@ -282,6 +313,43 @@ export default function FlowMapCanvas({
       );
 
       polyline.addTo(linesLayer);
+
+      // ── Persistent traffic label at midpoint ──
+      const traffic = linkTraffic[link.id];
+      const midIdx = Math.floor(coords.length / 2);
+      const midPoint: [number, number] = coords[midIdx] || coords[0];
+
+      const dlBps = traffic?.sideA?.in_bps ?? traffic?.sideB?.in_bps;
+      const ulBps = traffic?.sideA?.out_bps ?? traffic?.sideB?.out_bps;
+      const util = traffic?.sideA?.utilization ?? traffic?.sideB?.utilization;
+      const hasTelemetry = dlBps != null || ulBps != null;
+
+      const qualityColor = linkSt === "DOWN" ? "#ff1744" : linkSt === "DEGRADED" ? "#ff9100" : "#00e676";
+      const qualityLabel = linkSt === "DOWN" ? "DOWN" : linkSt === "DEGRADED" ? "DEGRADED" : "UP";
+      const distKm = geom?.distance_km;
+
+      const labelHtml = `
+        <div style="font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.5;white-space:nowrap;text-align:center;">
+          <div style="font-family:'Orbitron',sans-serif;font-size:8px;color:${qualityColor};font-weight:700;margin-bottom:2px;">${qualityLabel}${distKm ? ` • ${distKm} km` : ""}</div>
+          ${hasTelemetry ? `
+            <div style="display:flex;align-items:center;gap:6px;justify-content:center;">
+              <span style="color:#00e5ff;">▼ ${fmtBps(dlBps)}</span>
+              <span style="color:#ff9100;">▲ ${fmtBps(ulBps)}</span>
+            </div>
+            ${util != null ? `<div style="color:#888;font-size:8px;">Util: ${util.toFixed(1)}%</div>` : ""}
+          ` : `<div style="color:#555;font-size:9px;">Sem telemetria</div>`}
+        </div>
+      `;
+
+      const labelIcon = L.divIcon({
+        className: "fm-traffic-label",
+        html: labelHtml,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const labelMarker = L.marker(midPoint, { icon: labelIcon, interactive: false });
+      labelMarker.addTo(labelsLayer);
     });
 
     // Hosts — clickable markers
@@ -306,7 +374,7 @@ export default function FlowMapCanvas({
 
       marker.addTo(markers);
     });
-  }, [hosts, links, statusMap, linkStatuses, linkEvents, impactedLinkIds, isolatedNodeIds, onHostClick]);
+  }, [hosts, links, statusMap, linkStatuses, linkEvents, linkTraffic, impactedLinkIds, isolatedNodeIds, onHostClick]);
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className ?? ""}`} style={{ background: "#0a0b10" }} />
