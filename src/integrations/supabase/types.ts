@@ -551,6 +551,173 @@ export type Database = {
           },
         ]
       }
+      flow_map_hosts: {
+        Row: {
+          created_at: string
+          host_group: string
+          host_name: string
+          icon_type: string
+          id: string
+          is_critical: boolean
+          lat: number
+          lon: number
+          map_id: string
+          tenant_id: string
+          updated_at: string
+          zabbix_host_id: string
+        }
+        Insert: {
+          created_at?: string
+          host_group?: string
+          host_name?: string
+          icon_type?: string
+          id?: string
+          is_critical?: boolean
+          lat: number
+          lon: number
+          map_id: string
+          tenant_id: string
+          updated_at?: string
+          zabbix_host_id: string
+        }
+        Update: {
+          created_at?: string
+          host_group?: string
+          host_name?: string
+          icon_type?: string
+          id?: string
+          is_critical?: boolean
+          lat?: number
+          lon?: number
+          map_id?: string
+          tenant_id?: string
+          updated_at?: string
+          zabbix_host_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_host_map"
+            columns: ["map_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "flow_maps"
+            referencedColumns: ["id", "tenant_id"]
+          },
+        ]
+      }
+      flow_map_links: {
+        Row: {
+          created_at: string
+          dest_host_id: string
+          geometry: Json
+          id: string
+          is_ring: boolean
+          link_type: string
+          map_id: string
+          origin_host_id: string
+          priority: number
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          dest_host_id: string
+          geometry?: Json
+          id?: string
+          is_ring?: boolean
+          link_type?: string
+          map_id: string
+          origin_host_id: string
+          priority?: number
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          dest_host_id?: string
+          geometry?: Json
+          id?: string
+          is_ring?: boolean
+          link_type?: string
+          map_id?: string
+          origin_host_id?: string
+          priority?: number
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_link_map"
+            columns: ["map_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "flow_maps"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "flow_map_links_dest_host_id_fkey"
+            columns: ["dest_host_id"]
+            isOneToOne: false
+            referencedRelation: "flow_map_hosts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_map_links_origin_host_id_fkey"
+            columns: ["origin_host_id"]
+            isOneToOne: false
+            referencedRelation: "flow_map_hosts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flow_maps: {
+        Row: {
+          center_lat: number
+          center_lon: number
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          refresh_interval: number
+          tenant_id: string
+          theme: string
+          updated_at: string
+          zoom: number
+        }
+        Insert: {
+          center_lat?: number
+          center_lon?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          refresh_interval?: number
+          tenant_id: string
+          theme?: string
+          updated_at?: string
+          zoom?: number
+        }
+        Update: {
+          center_lat?: number
+          center_lon?: number
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          refresh_interval?: number
+          tenant_id?: string
+          theme?: string
+          updated_at?: string
+          zoom?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_maps_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       maintenance_scopes: {
         Row: {
           created_at: string
