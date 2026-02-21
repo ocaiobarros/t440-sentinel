@@ -2,7 +2,6 @@ import { useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import type { FlowMap, FlowMapHost, FlowMapLink, HostStatus } from "@/hooks/useFlowMaps";
-import { detectRingBreaks } from "@/lib/flowmap-graph";
 
 /* ── Icon factories ── */
 function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean): L.DivIcon {
@@ -64,11 +63,24 @@ interface Props {
   hosts: FlowMapHost[];
   links: FlowMapLink[];
   statusMap: Record<string, HostStatus>;
+  impactedLinkIds?: string[];
+  isolatedNodeIds?: string[];
   onMapClick?: (lat: number, lon: number) => void;
+  focusHost?: FlowMapHost | null;
   className?: string;
 }
 
-export default function FlowMapCanvas({ flowMap, hosts, links, statusMap, onMapClick, className }: Props) {
+export default function FlowMapCanvas({
+  flowMap,
+  hosts,
+  links,
+  statusMap,
+  impactedLinkIds = [],
+  isolatedNodeIds = [],
+  onMapClick,
+  focusHost,
+  className,
+}: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<{ markers: L.LayerGroup; lines: L.LayerGroup } | null>(null);
@@ -87,7 +99,6 @@ export default function FlowMapCanvas({ flowMap, hosts, links, statusMap, onMapC
 
     L.control.zoom({ position: "bottomright" }).addTo(map);
 
-    // Dark OSM tiles
     L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", {
       maxZoom: 19,
       subdomains: "abcd",
@@ -114,12 +125,20 @@ export default function FlowMapCanvas({ flowMap, hosts, links, statusMap, onMapC
     return () => { map.off("click", handler); };
   }, [onMapClick]);
 
+  /* Auto-zoom to focused host */
+  useEffect(() => {
+    if (!focusHost || !mapRef.current) return;
+    mapRef.current.flyTo([focusHost.lat, focusHost.lon], Math.max(mapRef.current.getZoom(), 12), {
+      duration: 1.2,
+    });
+  }, [focusHost]);
+
   /* Update layers (no map recreation) */
   useEffect(() => {
     if (!layersRef.current) return;
-    const { markers, lines } = layersRef.current;
+    const { markers, lines: linesLayer } = layersRef.current;
     markers.clearLayers();
-    lines.clearLayers();
+    linesLayer.clearLayers();
 
     // Build host-id → status map keyed by flow_map_hosts.id
     const hostStatusById: Record<string, HostStatus> = {};
@@ -127,8 +146,8 @@ export default function FlowMapCanvas({ flowMap, hosts, links, statusMap, onMapC
       hostStatusById[h.id] = statusMap[h.zabbix_host_id] ?? { status: "UNKNOWN" };
     });
 
-    // Ring break detection
-    const impacted = detectRingBreaks(links, hostStatusById);
+    // Use backend-provided impacted links set
+    const impactedSet = new Set(impactedLinkIds);
 
     // Links
     links.forEach((link) => {
@@ -138,8 +157,10 @@ export default function FlowMapCanvas({ flowMap, hosts, links, statusMap, onMapC
 
       const oSt = hostStatusById[link.origin_host_id]?.status ?? "UNKNOWN";
       const dSt = hostStatusById[link.dest_host_id]?.status ?? "UNKNOWN";
-      const color = linkColor(oSt, dSt, impacted.has(link.id));
-      const weight = impacted.has(link.id) ? 5 : link.is_ring ? 3 : 2;
+      const isImpacted = impactedSet.has(link.id);
+      const color = linkColor(oSt, dSt, isImpacted);
+      const weight = isImpacted ? 5 : link.is_ring ? 3 : 2;
+      const dashArray = isImpacted ? "8, 4" : undefined;
 
       const coords =
         link.geometry?.coordinates?.length >= 2
@@ -149,14 +170,16 @@ export default function FlowMapCanvas({ flowMap, hosts, links, statusMap, onMapC
               [destHost.lat, destHost.lon] as [number, number],
             ];
 
-      L.polyline(coords, { color, weight, opacity: 0.85 }).addTo(lines);
+      L.polyline(coords, { color, weight, opacity: 0.85, dashArray }).addTo(linesLayer);
     });
 
     // Hosts
+    const isolatedSet = new Set(isolatedNodeIds);
     hosts.forEach((h) => {
       const st = hostStatusById[h.id];
+      const isIsolated = isolatedSet.has(h.id);
       const marker = L.marker([h.lat, h.lon], {
-        icon: hostIcon(st?.status ?? "UNKNOWN", h.is_critical),
+        icon: hostIcon(st?.status ?? "UNKNOWN", h.is_critical || isIsolated),
       });
       marker.bindTooltip(hostTooltipHtml(h, st), {
         className: "flowmap-tooltip",
@@ -165,7 +188,7 @@ export default function FlowMapCanvas({ flowMap, hosts, links, statusMap, onMapC
       });
       marker.addTo(markers);
     });
-  }, [hosts, links, statusMap]);
+  }, [hosts, links, statusMap, impactedLinkIds, isolatedNodeIds]);
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className ?? ""}`} style={{ background: "#0a0b10" }} />

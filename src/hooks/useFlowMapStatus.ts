@@ -29,6 +29,8 @@ export function useFlowMapStatus({
   enabled = true,
 }: UseFlowMapStatusOptions) {
   const [statusMap, setStatusMap] = useState<Record<string, HostStatus>>({});
+  const [impactedLinks, setImpactedLinks] = useState<string[]>([]);
+  const [isolatedNodes, setIsolatedNodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -78,16 +80,18 @@ export function useFlowMapStatus({
       const hostsData = payload.hosts as Record<string, HostStatus> | undefined;
 
       if (hostsData) {
-        const hash = JSON.stringify(hostsData);
+        const hash = JSON.stringify(payload);
         if (hash !== prevStatusRef.current) {
           prevStatusRef.current = hash;
           setStatusMap(hostsData);
+          setImpactedLinks(payload.impactedLinks ?? []);
+          setIsolatedNodes(payload.isolatedNodes ?? []);
         }
       }
 
       // Broadcast data to passive tabs
       try {
-        channelRef.current?.postMessage({ type: "status-data", hosts: hostsData });
+        channelRef.current?.postMessage({ type: "status-data", payload });
       } catch { /* channel may be closed */ }
 
       setError(null);
@@ -160,12 +164,14 @@ export function useFlowMapStatus({
         }
       }
 
-      if (msg.type === "status-data" && !isLeaderRef.current && msg.hosts) {
+      if (msg.type === "status-data" && !isLeaderRef.current && msg.payload) {
         // Passive tab receives data from leader
-        const hash = JSON.stringify(msg.hosts);
+        const hash = JSON.stringify(msg.payload);
         if (hash !== prevStatusRef.current) {
           prevStatusRef.current = hash;
-          setStatusMap(msg.hosts);
+          setStatusMap(msg.payload.hosts ?? {});
+          setImpactedLinks(msg.payload.impactedLinks ?? []);
+          setIsolatedNodes(msg.payload.isolatedNodes ?? []);
         }
       }
     };
@@ -222,5 +228,5 @@ export function useFlowMapStatus({
     return () => document.removeEventListener("visibilitychange", handler);
   }, [canPoll, startPolling, stopPolling]);
 
-  return { statusMap, loading, error, refetch: fetchStatus };
+  return { statusMap, impactedLinks, isolatedNodes, loading, error, refetch: fetchStatus };
 }

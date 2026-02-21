@@ -1,12 +1,11 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2 } from "lucide-react";
+import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2, Radio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import {
   useFlowMapList,
@@ -20,6 +19,7 @@ import { useFlowMapStatus } from "@/hooks/useFlowMapStatus";
 import { useZabbixConnections } from "@/hooks/useZabbixConnections";
 import FlowMapCanvas from "@/components/flowmap/FlowMapCanvas";
 import MapBuilderPanel, { type BuilderMode } from "@/components/flowmap/MapBuilderPanel";
+import NocConsolePanel from "@/components/flowmap/NocConsolePanel";
 
 /* ─────────── MAP LIST ─────────── */
 function MapListView() {
@@ -32,8 +32,6 @@ function MapListView() {
   const [tenantId, setTenantId] = useState<string | null>(null);
 
   useEffect(() => {
-    supabase.rpc("get_user_tenant_id", { p_user_id: (supabase as any).auth.user?.()?.id }).then(() => {});
-    // fetch tenant_id from profile
     supabase.from("profiles").select("tenant_id").limit(1).single().then(({ data }) => {
       if (data) setTenantId(data.tenant_id);
     });
@@ -113,7 +111,6 @@ function MapListView() {
         )}
       </div>
 
-      {/* Create dialog */}
       <Dialog open={showCreate} onOpenChange={setShowCreate}>
         <DialogContent className="glass-card-elevated border-border/50">
           <DialogHeader>
@@ -143,25 +140,24 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const [pendingOrigin, setPendingOrigin] = useState<string | null>(null);
   const [editingLinkId, setEditingLinkId] = useState<string | null>(null);
   const [routePoints, setRoutePoints] = useState<[number, number][]>([]);
-  const [showBuilder, setShowBuilder] = useState(true);
+  const [showBuilder, setShowBuilder] = useState(false);
+  const [showNoc, setShowNoc] = useState(true);
   const [tenantId, setTenantId] = useState<string | null>(null);
+  const [focusHost, setFocusHost] = useState<FlowMapHost | null>(null);
 
-  // Fetch tenant
   useEffect(() => {
     supabase.from("profiles").select("tenant_id").limit(1).single().then(({ data }) => {
       if (data) setTenantId(data.tenant_id);
     });
   }, []);
 
-  // Get first active Zabbix connection
   const { connections } = useZabbixConnections();
   const activeConnectionId = useMemo(
     () => connections.find((c) => c.is_active)?.id,
     [connections],
   );
 
-  // Real Zabbix status polling
-  const { statusMap, loading: statusLoading, error: statusError } = useFlowMapStatus({
+  const { statusMap, impactedLinks, isolatedNodes, loading: statusLoading, error: statusError } = useFlowMapStatus({
     mapId,
     hosts: data?.hosts ?? [],
     connectionId: activeConnectionId,
@@ -172,8 +168,6 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const handleMapClick = useCallback(
     (lat: number, lon: number) => {
       if (mode === "add-host" && tenantId) {
-        // Host will be added via panel form — store lat/lon temporarily
-        // For simplicity, trigger a custom event
         window.dispatchEvent(new CustomEvent("flowmap-click", { detail: { lat, lon } }));
       } else if (mode === "draw-route" && editingLinkId) {
         setRoutePoints((p) => [...p, [lon, lat]]);
@@ -182,7 +176,6 @@ function MapEditorView({ mapId }: { mapId: string }) {
     [mode, tenantId, editingLinkId],
   );
 
-  // Listen for map clicks to add host
   const pendingClickRef = useRef<{ lat: number; lon: number } | null>(null);
 
   useEffect(() => {
@@ -225,12 +218,10 @@ function MapEditorView({ mapId }: { mapId: string }) {
         setPendingOrigin(hostId);
         setMode("connect-dest");
       } else if (mode === "connect-dest" && pendingOrigin) {
-        // Create link
         if (pendingOrigin === hostId) {
           toast({ variant: "destructive", title: "Origem e destino devem ser diferentes" });
           return;
         }
-        // link_type and is_ring come from panel form — use defaults for now
         handleCreateLink({ origin_host_id: pendingOrigin, dest_host_id: hostId, link_type: "fiber", is_ring: false });
       }
     },
@@ -278,6 +269,12 @@ function MapEditorView({ mapId }: { mapId: string }) {
     toast({ title: "Rota salva" });
   }, [editingLinkId, routePoints, mapId, updateLink, toast]);
 
+  const handleFocusHost = useCallback((host: FlowMapHost) => {
+    setFocusHost(host);
+    // Reset after animation
+    setTimeout(() => setFocusHost(null), 2000);
+  }, []);
+
   if (isLoading || !data) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
@@ -286,7 +283,6 @@ function MapEditorView({ mapId }: { mapId: string }) {
     );
   }
 
-  // Merge route points into links for preview
   const displayLinks = data.links.map((l) => {
     if (l.id === editingLinkId) {
       return { ...l, geometry: { type: "LineString" as const, coordinates: routePoints } };
@@ -297,23 +293,35 @@ function MapEditorView({ mapId }: { mapId: string }) {
   return (
     <div className="h-screen flex flex-col bg-background">
       {/* Top bar */}
-      <div className="h-12 flex items-center justify-between px-4 border-b border-border/30 bg-card/90 backdrop-blur-xl shrink-0 z-20">
-        <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => navigate("/flowmap/maps")}>
-            <ArrowLeft className="w-4 h-4" />
+      <div className="h-11 flex items-center justify-between px-3 border-b border-border/30 bg-card/90 backdrop-blur-xl shrink-0 z-20">
+        <div className="flex items-center gap-2">
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate("/flowmap/maps")}>
+            <ArrowLeft className="w-3.5 h-3.5" />
           </Button>
-          <h1 className="font-display text-sm font-bold text-neon-green tracking-wider">{data.map.name}</h1>
-          {/* Zabbix status indicator */}
-          <div className="flex items-center gap-1.5 ml-3">
+          <h1 className="font-display text-xs font-bold text-neon-green tracking-wider">{data.map.name}</h1>
+          <div className="flex items-center gap-1 ml-2">
             <span className={`w-1.5 h-1.5 rounded-full ${activeConnectionId ? (statusError ? "bg-neon-red" : "bg-neon-green pulse-green") : "bg-muted-foreground/30"}`} />
             <span className="text-[9px] font-mono text-muted-foreground">
-              {!activeConnectionId ? "Sem conexão Zabbix" : statusError ? "Erro" : statusLoading ? "Polling..." : "Zabbix Live"}
+              {!activeConnectionId ? "Sem Zabbix" : statusError ? "Erro" : statusLoading ? "Polling..." : "Live"}
             </span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" className="h-7 text-[10px] gap-1" onClick={() => setShowBuilder((p) => !p)}>
-            <Settings2 className="w-3 h-3" />{showBuilder ? "Ocultar" : "Builder"}
+        <div className="flex items-center gap-1.5">
+          <Button
+            variant={showNoc ? "default" : "outline"}
+            size="sm"
+            className={`h-7 text-[10px] gap-1 ${showNoc ? "bg-neon-green/20 text-neon-green border border-neon-green/30" : ""}`}
+            onClick={() => { setShowNoc((p) => !p); if (!showNoc) setShowBuilder(false); }}
+          >
+            <Radio className="w-3 h-3" />NOC
+          </Button>
+          <Button
+            variant={showBuilder ? "default" : "outline"}
+            size="sm"
+            className="h-7 text-[10px] gap-1"
+            onClick={() => { setShowBuilder((p) => !p); if (!showBuilder) setShowNoc(false); }}
+          >
+            <Settings2 className="w-3 h-3" />Builder
           </Button>
         </div>
       </div>
@@ -326,12 +334,36 @@ function MapEditorView({ mapId }: { mapId: string }) {
             hosts={data.hosts}
             links={displayLinks}
             statusMap={statusMap}
+            impactedLinkIds={impactedLinks}
+            isolatedNodeIds={isolatedNodes}
             onMapClick={handleMapClick}
+            focusHost={focusHost}
           />
         </div>
-        <AnimatePresence>
+
+        <AnimatePresence mode="wait">
+          {showNoc && (
+            <motion.div
+              key="noc"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 280, opacity: 1 }}
+              exit={{ width: 0, opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="overflow-hidden shrink-0"
+            >
+              <NocConsolePanel
+                hosts={data.hosts}
+                links={data.links}
+                statusMap={statusMap}
+                impactedLinks={impactedLinks}
+                isolatedNodes={isolatedNodes}
+                onFocusHost={handleFocusHost}
+              />
+            </motion.div>
+          )}
           {showBuilder && (
             <motion.div
+              key="builder"
               initial={{ width: 0, opacity: 0 }}
               animate={{ width: 320, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
