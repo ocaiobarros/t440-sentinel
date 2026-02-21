@@ -26,6 +26,8 @@ interface NocConsolePanelProps {
   linkStatuses: Record<string, { status: string; originHost: string; destHost: string }>;
   linkEvents: LinkEvent[];
   onFocusHost?: (host: FlowMapHost) => void;
+  onCriticalDown?: (host: FlowMapHost) => void;
+  warRoom?: boolean;
 }
 
 /* ─── Helpers ─── */
@@ -79,6 +81,8 @@ export default function NocConsolePanel({
   linkStatuses,
   linkEvents,
   onFocusHost,
+  onCriticalDown,
+  warRoom = false,
 }: NocConsolePanelProps) {
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [activeTab, setActiveTab] = useState<"timeline" | "sla">("timeline");
@@ -118,8 +122,15 @@ export default function NocConsolePanel({
 
     if (newEvents.length > 0) {
       setEvents((old) => [...newEvents, ...old].slice(0, maxEvents));
+      // Fire audio alert for critical hosts going DOWN
+      for (const ev of newEvents) {
+        if (ev.isCritical && ev.newStatus === "DOWN") {
+          const host = hosts.find((h) => h.id === ev.hostId);
+          if (host) onCriticalDown?.(host);
+        }
+      }
     }
-  }, [statusMap, hosts]);
+  }, [statusMap, hosts, onCriticalDown]);
 
   // ─── Summary counters ───
   const summary = useMemo(() => {
@@ -141,13 +152,18 @@ export default function NocConsolePanel({
   const activeEvents = useMemo(() => linkEvents.filter((e) => !e.ended_at), [linkEvents]);
   const closedEvents = useMemo(() => linkEvents.filter((e) => !!e.ended_at).slice(0, 20), [linkEvents]);
 
+  const textScale = warRoom ? "text-base" : "text-[11px]";
+  const counterScale = warRoom ? "text-2xl" : "text-sm";
+  const badgeScale = warRoom ? "text-[10px]" : "text-[8px]";
+  const eventScale = warRoom ? "text-sm" : "text-[10px]";
+
   return (
-    <div className="w-full h-full flex flex-col bg-card/95 backdrop-blur-xl border-l border-border/30 overflow-hidden">
+    <div className={`w-full h-full flex flex-col ${warRoom ? "bg-background/80 backdrop-blur-2xl" : "bg-card/95 backdrop-blur-xl border-l border-border/30"} overflow-hidden`}>
       {/* ── Status Bar ── */}
       <div className="p-3 border-b border-border/30 space-y-2">
         <div className="flex items-center justify-between">
-          <h2 className="font-display text-[11px] font-bold tracking-widest text-foreground flex items-center gap-1.5">
-            <Radio className="w-3.5 h-3.5 text-neon-green" />
+          <h2 className={`font-display ${warRoom ? "text-sm" : "text-[11px]"} font-bold tracking-widest text-foreground flex items-center gap-1.5`}>
+            <Radio className={`${warRoom ? "w-5 h-5" : "w-3.5 h-3.5"} text-neon-green`} />
             CONSOLE NOC
           </h2>
           <span className="text-[8px] font-mono text-muted-foreground">
@@ -157,17 +173,17 @@ export default function NocConsolePanel({
 
         {/* Counters */}
         <div className="grid grid-cols-3 gap-1.5">
-          <div className="rounded-md p-1.5 text-center bg-neon-green/5 border border-neon-green/20">
-            <div className="text-sm font-display font-bold text-neon-green">{summary.up}</div>
-            <div className="text-[8px] font-mono text-neon-green/70 uppercase">UP</div>
+          <div className={`rounded-md ${warRoom ? "p-3" : "p-1.5"} text-center bg-neon-green/5 border border-neon-green/20`}>
+            <div className={`${counterScale} font-display font-bold text-neon-green`}>{summary.up}</div>
+            <div className={`${badgeScale} font-mono text-neon-green/70 uppercase`}>UP</div>
           </div>
-          <div className={`rounded-md p-1.5 text-center border ${summary.down > 0 ? "bg-neon-red/10 border-neon-red/30" : "bg-muted/10 border-border/30"}`}>
-            <div className={`text-sm font-display font-bold ${summary.down > 0 ? "text-neon-red" : "text-muted-foreground"}`}>{summary.down}</div>
-            <div className={`text-[8px] font-mono uppercase ${summary.down > 0 ? "text-neon-red/70" : "text-muted-foreground/50"}`}>DOWN</div>
+          <div className={`rounded-md ${warRoom ? "p-3" : "p-1.5"} text-center border ${summary.down > 0 ? "bg-neon-red/10 border-neon-red/30" : "bg-muted/10 border-border/30"}`}>
+            <div className={`${counterScale} font-display font-bold ${summary.down > 0 ? "text-neon-red" : "text-muted-foreground"}`}>{summary.down}</div>
+            <div className={`${badgeScale} font-mono uppercase ${summary.down > 0 ? "text-neon-red/70" : "text-muted-foreground/50"}`}>DOWN</div>
           </div>
-          <div className="rounded-md p-1.5 text-center bg-muted/10 border border-border/30">
-            <div className="text-sm font-display font-bold text-muted-foreground">{summary.unknown}</div>
-            <div className="text-[8px] font-mono text-muted-foreground/50 uppercase">N/A</div>
+          <div className={`rounded-md ${warRoom ? "p-3" : "p-1.5"} text-center bg-muted/10 border border-border/30`}>
+            <div className={`${counterScale} font-display font-bold text-muted-foreground`}>{summary.unknown}</div>
+            <div className={`${badgeScale} font-mono text-muted-foreground/50 uppercase`}>N/A</div>
           </div>
         </div>
 

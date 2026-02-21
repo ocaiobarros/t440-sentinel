@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2, Radio } from "lucide-react";
+import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2, Radio, Maximize, Minimize, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -19,6 +19,7 @@ import { useZabbixConnections } from "@/hooks/useZabbixConnections";
 import FlowMapCanvas from "@/components/flowmap/FlowMapCanvas";
 import MapBuilderPanel, { type BuilderMode } from "@/components/flowmap/MapBuilderPanel";
 import NocConsolePanel from "@/components/flowmap/NocConsolePanel";
+import { useAudioAlert } from "@/hooks/useAudioAlert";
 
 /* ─────────── MAP LIST ─────────── */
 function MapListView() {
@@ -157,6 +158,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const [showNoc, setShowNoc] = useState(true);
   const [tenantId, setTenantId] = useState<string | null>(null);
   const [focusHost, setFocusHost] = useState<FlowMapHost | null>(null);
+  const [warRoom, setWarRoom] = useState(false);
+  const { muted, toggleMute, playBeep } = useAudioAlert();
 
   useEffect(() => {
     supabase.from("profiles").select("tenant_id").limit(1).single().then(({ data }) => {
@@ -284,8 +287,28 @@ function MapEditorView({ mapId }: { mapId: string }) {
 
   const handleFocusHost = useCallback((host: FlowMapHost) => {
     setFocusHost(host);
-    // Reset after animation
     setTimeout(() => setFocusHost(null), 2000);
+  }, []);
+
+  const handleCriticalDown = useCallback((host: FlowMapHost) => {
+    playBeep(`flowmap-${host.id}`);
+    setFocusHost(host);
+    setTimeout(() => setFocusHost(null), 2000);
+  }, [playBeep]);
+
+  // War Room: toggle fullscreen
+  const toggleWarRoom = useCallback(() => {
+    setWarRoom((prev) => {
+      const next = !prev;
+      if (next) {
+        document.documentElement.requestFullscreen?.().catch(() => {});
+        setShowNoc(true);
+        setShowBuilder(false);
+      } else {
+        document.exitFullscreen?.().catch(() => {});
+      }
+      return next;
+    });
   }, []);
 
   if (isLoading || !data) {
@@ -304,40 +327,60 @@ function MapEditorView({ mapId }: { mapId: string }) {
   });
 
   return (
-    <div className="h-screen flex flex-col bg-background">
-      {/* Top bar */}
-      <div className="h-11 flex items-center justify-between px-3 border-b border-border/30 bg-card/90 backdrop-blur-xl shrink-0 z-20">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate("/flowmap/maps")}>
-            <ArrowLeft className="w-3.5 h-3.5" />
-          </Button>
-          <h1 className="font-display text-xs font-bold text-neon-green tracking-wider">{data.map.name}</h1>
-          <div className="flex items-center gap-1 ml-2">
-            <span className={`w-1.5 h-1.5 rounded-full ${activeConnectionId ? (statusError ? "bg-neon-red" : "bg-neon-green pulse-green") : "bg-muted-foreground/30"}`} />
-            <span className="text-[9px] font-mono text-muted-foreground">
-              {!activeConnectionId ? "Sem Zabbix" : statusError ? "Erro" : statusLoading ? "Polling..." : "Live"}
-            </span>
+    <div className={`h-screen flex flex-col bg-background ${warRoom ? "war-room" : ""}`}>
+      {/* Top bar — hidden in War Room */}
+      {!warRoom && (
+        <div className="h-11 flex items-center justify-between px-3 border-b border-border/30 bg-card/90 backdrop-blur-xl shrink-0 z-20">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate("/flowmap/maps")}>
+              <ArrowLeft className="w-3.5 h-3.5" />
+            </Button>
+            <h1 className="font-display text-xs font-bold text-neon-green tracking-wider">{data.map.name}</h1>
+            <div className="flex items-center gap-1 ml-2">
+              <span className={`w-1.5 h-1.5 rounded-full ${activeConnectionId ? (statusError ? "bg-neon-red" : "bg-neon-green pulse-green") : "bg-muted-foreground/30"}`} />
+              <span className="text-[9px] font-mono text-muted-foreground">
+                {!activeConnectionId ? "Sem Zabbix" : statusError ? "Erro" : statusLoading ? "Polling..." : "Live"}
+              </span>
+            </div>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <Button
+              variant="ghost"
+              size="icon"
+              className={`h-7 w-7 ${muted ? "text-muted-foreground" : "text-neon-amber"}`}
+              onClick={toggleMute}
+              title={muted ? "Ativar som" : "Silenciar"}
+            >
+              {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
+            </Button>
+            <Button
+              variant={showNoc ? "default" : "outline"}
+              size="sm"
+              className={`h-7 text-[10px] gap-1 ${showNoc ? "bg-neon-green/20 text-neon-green border border-neon-green/30" : ""}`}
+              onClick={() => { setShowNoc((p) => !p); if (!showNoc) setShowBuilder(false); }}
+            >
+              <Radio className="w-3 h-3" />NOC
+            </Button>
+            <Button
+              variant={showBuilder ? "default" : "outline"}
+              size="sm"
+              className="h-7 text-[10px] gap-1"
+              onClick={() => { setShowBuilder((p) => !p); if (!showBuilder) setShowNoc(false); }}
+            >
+              <Settings2 className="w-3 h-3" />Builder
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-neon-green"
+              onClick={toggleWarRoom}
+              title="Modo War Room"
+            >
+              <Maximize className="w-3.5 h-3.5" />
+            </Button>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button
-            variant={showNoc ? "default" : "outline"}
-            size="sm"
-            className={`h-7 text-[10px] gap-1 ${showNoc ? "bg-neon-green/20 text-neon-green border border-neon-green/30" : ""}`}
-            onClick={() => { setShowNoc((p) => !p); if (!showNoc) setShowBuilder(false); }}
-          >
-            <Radio className="w-3 h-3" />NOC
-          </Button>
-          <Button
-            variant={showBuilder ? "default" : "outline"}
-            size="sm"
-            className="h-7 text-[10px] gap-1"
-            onClick={() => { setShowBuilder((p) => !p); if (!showBuilder) setShowNoc(false); }}
-          >
-            <Settings2 className="w-3 h-3" />Builder
-          </Button>
-        </div>
-      </div>
+      )}
 
       {/* Body */}
       <div className="flex-1 flex overflow-hidden relative">
@@ -354,6 +397,28 @@ function MapEditorView({ mapId }: { mapId: string }) {
             onMapClick={handleMapClick}
             focusHost={focusHost}
           />
+
+          {/* War Room floating controls */}
+          {warRoom && (
+            <div className="absolute top-3 right-3 z-30 flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="icon"
+                className={`h-8 w-8 bg-background/50 backdrop-blur-xl border border-border/30 ${muted ? "text-muted-foreground" : "text-neon-amber"}`}
+                onClick={toggleMute}
+              >
+                {muted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 bg-background/50 backdrop-blur-xl border border-border/30 text-muted-foreground hover:text-neon-green"
+                onClick={toggleWarRoom}
+              >
+                <Minimize className="w-4 h-4" />
+              </Button>
+            </div>
+          )}
         </div>
 
         <AnimatePresence mode="wait">
@@ -361,7 +426,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             <motion.div
               key="noc"
               initial={{ width: 0, opacity: 0 }}
-              animate={{ width: 280, opacity: 1 }}
+              animate={{ width: warRoom ? 360 : 280, opacity: 1 }}
               exit={{ width: 0, opacity: 0 }}
               transition={{ duration: 0.2 }}
               className="overflow-hidden shrink-0"
@@ -375,6 +440,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 linkStatuses={linkStatuses}
                 linkEvents={linkEvents}
                 onFocusHost={handleFocusHost}
+                onCriticalDown={handleCriticalDown}
+                warRoom={warRoom}
               />
             </motion.div>
           )}
