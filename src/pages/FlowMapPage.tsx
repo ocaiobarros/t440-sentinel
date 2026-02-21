@@ -128,7 +128,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data, isLoading } = useFlowMapDetail(mapId);
-  const { addHost, removeHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem } = useFlowMapMutations();
+  const { addHost, removeHost, updateHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem } = useFlowMapMutations();
 
   const [mode, setMode] = useState<BuilderMode>("idle");
   const [pendingOrigin, setPendingOrigin] = useState<string | null>(null);
@@ -210,7 +210,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
         const destHost = data.hosts.find((h) => h.id === linkData.dest_host_id);
 
         // Try to fetch road route via OSRM
-        let geometry: { type: string; coordinates: [number, number][] } = { type: "LineString", coordinates: [] };
+        let geometry: Record<string, unknown> = { type: "LineString", coordinates: [] };
         if (originHost && destHost) {
           try {
             const { data: routeData, error: routeError } = await supabase.functions.invoke("flowmap-route", {
@@ -222,11 +222,11 @@ function MapEditorView({ mapId }: { mapId: string }) {
               },
             });
             if (!routeError && routeData?.geometry?.coordinates?.length > 0) {
-              geometry = routeData.geometry;
-              toast({ title: routeData.routed ? "Rota rodoviária calculada" : "Sem rota — linha direta" });
+              geometry = { ...routeData.geometry, distance_km: routeData.distance_km, duration_min: routeData.duration_min };
+              toast({ title: routeData.routed ? `Rota calculada (${routeData.distance_km} km)` : "Sem rota — linha direta" });
             }
           } catch {
-            // Fallback: straight line (empty geometry uses host coords in canvas)
+            // Fallback: straight line
           }
         }
 
@@ -235,7 +235,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
           tenant_id: tenantId,
           ...linkData,
           priority: 0,
-          geometry,
+          geometry: geometry as any,
         });
         setPendingOrigin(null);
         setMode("idle");
@@ -266,6 +266,39 @@ function MapEditorView({ mapId }: { mapId: string }) {
     setMode("idle");
     toast({ title: "Rota salva" });
   }, [editingLinkId, routePoints, mapId, updateLink, toast]);
+
+  const handleUpdateHostPosition = useCallback(
+    async (hostId: string, lat: number, lon: number) => {
+      await updateHost.mutateAsync({ id: hostId, map_id: mapId, lat, lon });
+      toast({ title: "Posição atualizada" });
+    },
+    [mapId, updateHost, toast],
+  );
+
+  const handleRecalculateRoute = useCallback(
+    async (linkId: string) => {
+      if (!data) return;
+      const link = data.links.find((l) => l.id === linkId);
+      if (!link) return;
+      const originHost = data.hosts.find((h) => h.id === link.origin_host_id);
+      const destHost = data.hosts.find((h) => h.id === link.dest_host_id);
+      if (!originHost || !destHost) return;
+      try {
+        const { data: routeData, error: routeError } = await supabase.functions.invoke("flowmap-route", {
+          body: { origin_lat: originHost.lat, origin_lon: originHost.lon, dest_lat: destHost.lat, dest_lon: destHost.lon },
+        });
+        if (routeError) throw new Error(String(routeError));
+        const geometry = routeData?.geometry?.coordinates?.length > 0
+          ? { ...routeData.geometry, distance_km: routeData.distance_km, duration_min: routeData.duration_min }
+          : { type: "LineString", coordinates: [[originHost.lon, originHost.lat], [destHost.lon, destHost.lat]] };
+        await updateLink.mutateAsync({ id: linkId, map_id: mapId, geometry: geometry as any });
+        toast({ title: routeData?.routed ? `Rota recalculada (${routeData.distance_km} km)` : "Sem rota — linha direta" });
+      } catch (e: any) {
+        toast({ variant: "destructive", title: "Erro ao recalcular rota", description: e.message });
+      }
+    },
+    [data, mapId, updateLink, toast],
+  );
 
   const handleFocusHost = useCallback((host: FlowMapHost) => {
     setFocusHost(host);
@@ -476,6 +509,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 tenantId={tenantId ?? undefined}
                 onAddHost={handleAddHost}
                 onRemoveHost={(id) => removeHost.mutate({ id, map_id: mapId })}
+                onUpdateHostPosition={handleUpdateHostPosition}
                 pendingOrigin={pendingOrigin}
                 onSelectOrigin={handleHostClick}
                 onCreateLink={handleCreateLink}
@@ -485,6 +519,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 editingLinkId={editingLinkId}
                 onEditRoute={handleEditRoute}
                 onCancelEditRoute={handleSaveRoute}
+                onRecalculateRoute={handleRecalculateRoute}
               />
             </motion.div>
           )}

@@ -40,7 +40,7 @@ function linkTooltipHtml(
   linkId: string,
   linkStatus: { status: string; originHost: string; destHost: string } | undefined,
   activeEvent: { status: string; started_at: string } | undefined,
-  linkMeta?: { link_type: string; is_ring: boolean; priority: number },
+  linkMeta?: { link_type: string; is_ring: boolean; priority: number; distance_km?: number; duration_min?: number },
 ): string {
   const st = linkStatus?.status ?? "UNKNOWN";
   const color = st === "DOWN" ? "#ff1744" : st === "DEGRADED" ? "#ff9100" : st === "UP" ? "#00e676" : "#9e9e9e";
@@ -58,6 +58,17 @@ function linkTooltipHtml(
     durationHtml = `<div style="margin-top:4px;">Duração: <span style="color:#ff9100;font-weight:700;">${dur}</span></div>`;
   }
 
+  let routeHtml = "";
+  if (linkMeta?.distance_km != null && linkMeta.distance_km > 0) {
+    routeHtml += `<div>Distância: <span style="color:#00e5ff;font-weight:700;">${linkMeta.distance_km} km</span></div>`;
+  }
+  if (linkMeta?.duration_min != null && linkMeta.duration_min > 0) {
+    const hrs = Math.floor(linkMeta.duration_min / 60);
+    const mins = Math.round(linkMeta.duration_min % 60);
+    const timeStr = hrs > 0 ? `${hrs}h ${mins}m` : `${mins}m`;
+    routeHtml += `<div>Tempo est.: <span style="color:#00e5ff;">${timeStr}</span></div>`;
+  }
+
   const metaHtml = linkMeta
     ? `<div style="margin-top:4px;color:#888;font-size:9px;">
         Tipo: <span style="color:#e0e0e0;">${linkMeta.link_type}</span>
@@ -72,6 +83,7 @@ function linkTooltipHtml(
       <hr style="border:none;border-top:1px solid #333;margin:4px 0;">
       <div>Link: <span style="color:${color};font-weight:700;">${st}</span></div>
       ${durationHtml}
+      ${routeHtml}
       ${metaHtml}
     </div>
   `;
@@ -257,11 +269,14 @@ export default function FlowMapCanvas({
       });
 
       const activeEvent = activeEventByLink.get(link.id);
+      const geom = link.geometry as any;
       polyline.bindTooltip(
         linkTooltipHtml(link.id, ls, activeEvent, {
           link_type: link.link_type,
           is_ring: link.is_ring,
           priority: link.priority,
+          distance_km: geom?.distance_km,
+          duration_min: geom?.duration_min,
         }),
         { className: "flowmap-tooltip", sticky: true },
       );
