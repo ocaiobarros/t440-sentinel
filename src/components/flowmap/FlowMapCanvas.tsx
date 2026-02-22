@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import L from "leaflet";
+import { supabase } from "@/integrations/supabase/client";
 import "leaflet/dist/leaflet.css";
 import type { FlowMap, FlowMapHost, FlowMapLink, HostStatus, FlowMapCTO, FlowMapCable, FlowMapReserva } from "@/hooks/useFlowMaps";
 import type { LinkTraffic } from "@/hooks/useFlowMapStatus";
@@ -200,6 +201,7 @@ interface Props {
   onHostClick?: (hostId: string) => void;
   onCTOClick?: (ctoId: string) => void;
   onCableMassiva?: (cableId: string, ctoName: string) => void;
+  onWebhookAlert?: (ponIndex: string, hostName: string, severity: string) => void;
   onMapReady?: (map: L.Map) => void;
   focusHost?: FlowMapHost | null;
   className?: string;
@@ -223,6 +225,7 @@ export default function FlowMapCanvas({
   onHostClick,
   onCTOClick,
   onCableMassiva,
+  onWebhookAlert,
   onMapReady,
   focusHost,
   className,
@@ -765,6 +768,53 @@ export default function FlowMapCanvas({
     map.on("zoomend", renderFTTH);
     return () => { map.off("zoomend", renderFTTH); };
   }, [ctos, cables, reservas, ctoTelemetry, onCTOClick, onCableMassiva]);
+
+  /* ─── Realtime: listen for webhook alerts on flowmap:alerts channel ─── */
+  useEffect(() => {
+    const channel = supabase.channel("flowmap:alerts").on(
+      "broadcast",
+      { event: "ZABBIX_WEBHOOK" },
+      (msg) => {
+        const p = msg.payload as { pon_index?: string; host_name?: string; severity?: string; status?: string };
+        if (!p?.pon_index) return;
+        const isProblem = p.status === "1" || p.status?.toUpperCase() === "PROBLEM";
+        if (!isProblem) return;
+
+        // Find CTO matching pon_index
+        const matchedCto = ctos.find(
+          (c) => c.pon_port_index != null && String(c.pon_port_index) === p.pon_index?.split("/").pop(),
+        );
+
+        if (matchedCto && mapRef.current && layersRef.current) {
+          // Flash CTO on map with a pulsing red circle
+          const flashMarker = L.circleMarker([matchedCto.lat, matchedCto.lon], {
+            radius: 30,
+            color: "#ff1744",
+            fillColor: "#ff1744",
+            fillOpacity: 0.4,
+            weight: 3,
+            className: "flowmap-pulse",
+          }).addTo(mapRef.current);
+
+          // Remove flash after 8 seconds
+          setTimeout(() => {
+            flashMarker.remove();
+          }, 8000);
+
+          // Pan to affected CTO
+          mapRef.current.flyTo([matchedCto.lat, matchedCto.lon], Math.max(mapRef.current.getZoom(), 16), {
+            duration: 1,
+          });
+        }
+
+        onWebhookAlert?.(p.pon_index, p.host_name ?? "—", p.severity ?? "5");
+      },
+    ).subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [ctos, onWebhookAlert]);
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className ?? ""}`} style={{ background: "#0a0b10" }} />

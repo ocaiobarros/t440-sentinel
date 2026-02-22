@@ -393,6 +393,15 @@ function MapEditorView({ mapId }: { mapId: string }) {
     console.warn(`[FlowMap] 🔴 Queda Massiva detectada no cabo → CTO: ${ctoName}`);
   }, [playBeep]);
 
+  const handleWebhookAlert = useCallback((ponIndex: string, hostName: string, severity: string) => {
+    playBeep(`webhook-alert-${ponIndex}`);
+    toast({
+      title: "🚨 Alerta Webhook Recebido",
+      description: `Host: ${hostName} | PON: ${ponIndex} | Sev: ${severity}`,
+      variant: "destructive",
+    });
+  }, [playBeep, toast]);
+
   // War Room: toggle fullscreen
   const toggleWarRoom = useCallback(() => {
     setWarRoom((prev) => {
@@ -539,6 +548,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             onMapReady={setLeafletMap}
             focusHost={focusHost}
             onCableMassiva={handleCableMassiva}
+            onWebhookAlert={handleWebhookAlert}
           />
 
           {/* OLT Health Panel — floating overlay */}
