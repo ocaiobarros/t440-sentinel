@@ -1359,6 +1359,79 @@ export type Database = {
           },
         ]
       }
+      telemetry_config: {
+        Row: {
+          config_key: string
+          config_value: string
+          id: string
+          iv: string | null
+          tag: string | null
+          tenant_id: string
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          config_key: string
+          config_value: string
+          id?: string
+          iv?: string | null
+          tag?: string | null
+          tenant_id: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          config_key?: string
+          config_value?: string
+          id?: string
+          iv?: string | null
+          tag?: string | null
+          tenant_id?: string
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telemetry_config_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      telemetry_heartbeat: {
+        Row: {
+          event_count: number
+          last_webhook_at: string | null
+          last_webhook_source: string | null
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          event_count?: number
+          last_webhook_at?: string | null
+          last_webhook_source?: string | null
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          event_count?: number
+          last_webhook_at?: string | null
+          last_webhook_source?: string | null
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "telemetry_heartbeat_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tenants: {
         Row: {
           created_at: string
@@ -1584,6 +1657,10 @@ export type Database = {
           p_to: Database["public"]["Enums"]["alert_status"]
           p_user_id: string
         }
+        Returns: undefined
+      }
+      bump_telemetry_heartbeat: {
+        Args: { p_source?: string; p_tenant_id: string }
         Returns: undefined
       }
       check_viability: {

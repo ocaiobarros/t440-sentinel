@@ -415,6 +415,16 @@ Deno.serve(async (req) => {
       console.error("[zabbix-webhook] broadcast error:", bcastErr);
     }
 
+    // Bump telemetry heartbeat for the tenant
+    try {
+      const heartbeatTenantId = tokenTenantId || (alertResult as any)?.tenant_id;
+      if (heartbeatTenantId) {
+        await supabase.rpc("bump_telemetry_heartbeat", { p_tenant_id: heartbeatTenantId, p_source: "zabbix-webhook" });
+      }
+    } catch (hbErr) {
+      console.error("[zabbix-webhook] heartbeat error:", hbErr);
+    }
+
     console.log(`[zabbix-webhook] Processed event_id=${payload.event_id} host=${payload.host_name} status=${payload.status} alert=${alertResult.action} telegram=${telegramResult.ok}`);
 
     return json({

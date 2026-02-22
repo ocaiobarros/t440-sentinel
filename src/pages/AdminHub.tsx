@@ -53,8 +53,10 @@ import {
   Eye,
   EyeOff,
   Radio,
+  Activity,
 } from "lucide-react";
 import TelemetryWizard from "@/components/admin/TelemetryWizard";
+import TelemetryHealthPanel from "@/components/admin/TelemetryHealthPanel";
 
 interface Profile {
   id: string;
@@ -68,7 +70,7 @@ interface Profile {
 interface UserRole {
   id: string;
   user_id: string;
-  role: "admin" | "editor" | "viewer";
+  role: "admin" | "editor" | "viewer" | "tech" | "sales";
   tenant_id: string;
 }
 
@@ -199,8 +201,10 @@ export default function AdminHub() {
   const getRoleForUser = (userId: string) => tenantRoles.find((r) => r.user_id === userId)?.role ?? "viewer";
 
   const getRoleBadgeVariant = (role: string) => {
-    if (role === "admin") return "default";
-    if (role === "editor") return "secondary";
+    if (role === "admin") return "default" as const;
+    if (role === "editor") return "secondary" as const;
+    if (role === "tech") return "outline" as const;
+    if (role === "sales") return "outline" as const;
     return "outline" as const;
   };
 
@@ -531,6 +535,8 @@ export default function AdminHub() {
                         <SelectItem value="all">Todas Roles</SelectItem>
                         <SelectItem value="admin">Admin</SelectItem>
                         <SelectItem value="editor">Editor</SelectItem>
+                        <SelectItem value="tech">Técnico</SelectItem>
+                        <SelectItem value="sales">Vendedor</SelectItem>
                         <SelectItem value="viewer">Viewer</SelectItem>
                       </SelectContent>
                     </Select>
@@ -583,6 +589,8 @@ export default function AdminHub() {
                                   <SelectContent>
                                     <SelectItem value="admin">Admin</SelectItem>
                                     <SelectItem value="editor">Editor</SelectItem>
+                                    <SelectItem value="tech">Técnico</SelectItem>
+                                    <SelectItem value="sales">Vendedor</SelectItem>
                                     <SelectItem value="viewer">Viewer</SelectItem>
                                   </SelectContent>
                                 </Select>
@@ -732,8 +740,8 @@ export default function AdminHub() {
                 {/* Member breakdown by role */}
                 <div className="mt-8">
                   <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Membros por Role</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {(["admin", "editor", "viewer"] as const).map((r) => {
+                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                    {(["admin", "editor", "tech", "sales", "viewer"] as const).map((r) => {
                       const members = tenantProfiles.filter((p) => getRoleForUser(p.id) === r);
                       return (
                         <div key={r} className="rounded-lg border border-border bg-muted/30 p-4">
@@ -880,7 +888,19 @@ export default function AdminHub() {
             </TabsContent>
 
             {/* ─── TELEMETRY TAB ─── */}
-            <TabsContent value="telemetry">
+            <TabsContent value="telemetry" className="space-y-6">
+              {/* Health Panel */}
+              <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-6 space-y-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Activity className="w-5 h-5 text-primary" />
+                  <h2 className="text-base font-bold font-[Orbitron] tracking-wide text-foreground">
+                    STATUS DO PIPELINE
+                  </h2>
+                </div>
+                <TelemetryHealthPanel />
+              </section>
+
+              {/* Wizard */}
               <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-6 space-y-4">
                 <div className="flex items-center gap-3 mb-2">
                   <Radio className="w-5 h-5 text-primary" />
@@ -1058,6 +1078,8 @@ export default function AdminHub() {
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="tech">Técnico</SelectItem>
+                  <SelectItem value="sales">Vendedor</SelectItem>
                   <SelectItem value="viewer">Viewer</SelectItem>
                 </SelectContent>
               </Select>
