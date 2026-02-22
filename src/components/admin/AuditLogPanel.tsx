@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ import {
   ArrowRight,
   User,
   Clock,
+  CalendarDays,
 } from "lucide-react";
 
 interface AuditLogEntry {
@@ -96,16 +97,30 @@ function timeAgo(dateStr: string): string {
 export default function AuditLogPanel() {
   const [tableFilter, setTableFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
+  const [userFilter, setUserFilter] = useState("all");
+  const [periodFilter, setPeriodFilter] = useState("7d");
   const [searchTerm, setSearchTerm] = useState("");
 
+  const periodStart = useMemo(() => {
+    const now = new Date();
+    switch (periodFilter) {
+      case "1h": return new Date(now.getTime() - 3600_000).toISOString();
+      case "24h": return new Date(now.getTime() - 86400_000).toISOString();
+      case "7d": return new Date(now.getTime() - 7 * 86400_000).toISOString();
+      case "30d": return new Date(now.getTime() - 30 * 86400_000).toISOString();
+      default: return new Date(now.getTime() - 7 * 86400_000).toISOString();
+    }
+  }, [periodFilter]);
+
   const { data: logs, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["audit-logs", tableFilter, actionFilter],
+    queryKey: ["audit-logs", tableFilter, actionFilter, periodFilter],
     queryFn: async () => {
       let query = supabase
         .from("flow_audit_logs")
         .select("*")
+        .gte("created_at", periodStart)
         .order("created_at", { ascending: false })
-        .limit(100);
+        .limit(200);
 
       if (tableFilter !== "all") query = query.eq("table_name", tableFilter);
       if (actionFilter !== "all") query = query.eq("action", actionFilter);
@@ -117,7 +132,14 @@ export default function AuditLogPanel() {
     refetchInterval: 30_000,
   });
 
+  const uniqueUsers = useMemo(() => {
+    const emails = new Set<string>();
+    (logs ?? []).forEach((l) => { if (l.user_email) emails.add(l.user_email); });
+    return Array.from(emails).sort();
+  }, [logs]);
+
   const filtered = (logs ?? []).filter((log) => {
+    if (userFilter !== "all" && log.user_email !== userFilter) return false;
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -161,6 +183,28 @@ export default function AuditLogPanel() {
             <SelectItem value="INSERT">Criação</SelectItem>
             <SelectItem value="UPDATE">Alteração</SelectItem>
             <SelectItem value="DELETE">Remoção</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={userFilter} onValueChange={setUserFilter}>
+          <SelectTrigger className="w-44 h-9 bg-muted/50 border-border text-xs">
+            <SelectValue placeholder="Usuário" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos usuários</SelectItem>
+            {uniqueUsers.map((email) => (
+              <SelectItem key={email} value={email}>{email}</SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={periodFilter} onValueChange={setPeriodFilter}>
+          <SelectTrigger className="w-28 h-9 bg-muted/50 border-border text-xs">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="1h">Última hora</SelectItem>
+            <SelectItem value="24h">24 horas</SelectItem>
+            <SelectItem value="7d">7 dias</SelectItem>
+            <SelectItem value="30d">30 dias</SelectItem>
           </SelectContent>
         </Select>
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => refetch()} disabled={isFetching}>
