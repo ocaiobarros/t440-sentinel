@@ -604,7 +604,7 @@ export default function FlowMapCanvas({
               <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:12px;color:#ff9100;margin-bottom:4px;">📦 ${r.label || "Reserva"}</div>
               <div>Comprimento: <span style="color:#00e5ff;">${r.comprimento_m}m</span></div>
               <div>Tipo: <span style="color:#00e676;">${r.tipo_cabo}</span></div>
-              ${r.description ? `<div style="color:#888;font-size:10px;margin-top:4px;">${r.description}</div>` : ""}
+              ${r.status && r.status !== 'pendente' ? `<div style="color:#888;font-size:10px;margin-top:4px;">Status: ${r.status}</div>` : ""}
             </div>`,
             { className: "flowmap-tooltip", direction: "top", offset: [0, -12] },
           );

@@ -925,6 +925,66 @@ export type Database = {
           },
         ]
       }
+      flow_map_reservas: {
+        Row: {
+          comprimento_m: number | null
+          created_at: string
+          created_by: string | null
+          id: string
+          label: string
+          lat: number
+          lon: number
+          map_id: string
+          status: string
+          tenant_id: string
+          tipo_cabo: string
+          updated_at: string
+        }
+        Insert: {
+          comprimento_m?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          lat: number
+          lon: number
+          map_id: string
+          status?: string
+          tenant_id: string
+          tipo_cabo?: string
+          updated_at?: string
+        }
+        Update: {
+          comprimento_m?: number | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          label?: string
+          lat?: number
+          lon?: number
+          map_id?: string
+          status?: string
+          tenant_id?: string
+          tipo_cabo?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_reserva_map"
+            columns: ["map_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "flow_maps"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "flow_map_reservas_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flow_maps: {
         Row: {
           center_lat: number

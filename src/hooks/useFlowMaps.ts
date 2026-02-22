@@ -108,7 +108,8 @@ export interface FlowMapReserva {
   lon: number;
   comprimento_m: number;
   tipo_cabo: string;
-  description: string;
+  status: string;
+  created_by?: string | null;
   created_at: string;
   updated_at: string;
 }

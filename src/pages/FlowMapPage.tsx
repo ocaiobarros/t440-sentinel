@@ -639,6 +639,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 links={data.links}
                 ctos={data.ctos}
                 cables={data.cables}
+                reservas={data.reservas}
                 mode={mode}
                 onModeChange={setMode}
                 connectionId={activeConnectionId}
@@ -669,6 +670,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 editingCableId={editingCableId}
                 snapToStreet={snapToStreet}
                 onSnapToStreetChange={setSnapToStreet}
+                onAddReserva={(data) => addReserva.mutate(data as any)}
+                onRemoveReserva={(id) => removeReserva.mutate({ id, map_id: mapId })}
               />
             </motion.div>
           )}
