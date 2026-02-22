@@ -451,7 +451,12 @@ export default function FlowMapCanvas({
 
       // Emit host click for link creation
       marker.on("click", (e) => {
-        L.DomEvent.stopPropagation(e);
+        // Stop native DOM event so the map doesn't receive a "click" 
+        // which would trigger Vaul's outside-click and close the Drawer immediately
+        if (e.originalEvent) {
+          e.originalEvent.stopPropagation();
+          e.originalEvent.preventDefault();
+        }
         onHostClick?.(h.id);
         // Dispatch for mobile FieldOverlay
         window.dispatchEvent(new CustomEvent("field-host-tap", { detail: h.id }));
