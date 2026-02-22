@@ -1,8 +1,9 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Crosshair, Camera, Sun, X, Wifi, WifiOff, Clock, MapPin, ImageIcon, Loader2 } from "lucide-react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { FlowMapHost, HostStatus } from "@/hooks/useFlowMaps";
@@ -265,6 +266,12 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
                   style={{ background: stColor, boxShadow: `0 0 8px ${stColor}80` }}
                 />
                 {selectedHost?.host_name || selectedHost?.zabbix_host_id}
+                {photos.length > 0 && (
+                  <Badge className="bg-neon-cyan/20 text-neon-cyan border-neon-cyan/30 text-[9px] px-1.5 py-0 h-4 font-mono gap-1">
+                    <Camera className="w-2.5 h-2.5" />
+                    {photos.length}
+                  </Badge>
+                )}
               </DrawerTitle>
               <DrawerClose asChild>
                 <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -341,8 +348,13 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
                 <div className="flex items-center gap-2 mb-2">
                   <ImageIcon className="w-4 h-4 text-muted-foreground" />
                   <span className="text-xs font-display text-muted-foreground">
-                    Fotos do Equipamento ({photos.length})
+                    Fotos de Manutenção
                   </span>
+                  {photos.length > 0 && (
+                    <Badge className="bg-neon-green/20 text-neon-green border-neon-green/30 text-[9px] px-1.5 py-0 h-4 font-mono ml-auto">
+                      {photos.length} {photos.length === 1 ? "foto" : "fotos"}
+                    </Badge>
+                  )}
                 </div>
                 {loadingPhotos ? (
                   <div className="flex items-center justify-center py-4">
