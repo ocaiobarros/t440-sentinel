@@ -35,3 +35,6 @@ verify_jwt = false
 
 [functions.cto-status-aggregator]
 verify_jwt = false
+
+[functions.zabbix-webhook]
+verify_jwt = false
