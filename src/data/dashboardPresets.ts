@@ -1089,8 +1089,167 @@ const PRESET_IDRAC_T440: DashboardPreset = {
   settings: { cols: 12, rowHeight: 60, category: "servers" },
 };
 
+/* ── OLT Huawei GPON ── */
+const PRESET_OLT_HUAWEI: DashboardPreset = {
+  id: "network-olt-huawei",
+  name: "OLT Huawei GPON",
+  description: "Monitoramento de OLT Huawei: PONs (Tx Power, Laser, Temperatura), Fans, Slots e diagnóstico óptico.",
+  category: "network",
+  icon: "Radio",
+  accent: "#E11D48",
+  widgets: [
+    // Row 0 — Status geral
+    w("status", "Status OLT", 0, 0, 3, 1, {
+      style: { icon: "Radio", glow: "green" },
+      extra: { zabbix_key: "icmpping" },
+    }),
+    w("stat", "Uptime", 3, 0, 3, 1, {
+      style: { icon: "Clock", iconColor: "#06B6D4" },
+      extra: { zabbix_key: "system.uptime" },
+    }),
+    w("stat", "Hostname", 6, 0, 3, 1, {
+      style: { icon: "Tag", iconColor: "#A0A0A0" },
+      extra: { zabbix_key: "system.hostname", static: true },
+    }),
+    w("stat", "SysDescription", 9, 0, 3, 1, {
+      style: { icon: "Info", iconColor: "#A0A0A0" },
+      extra: { zabbix_key: "system.descr", static: true },
+    }),
+
+    // Row 1-2 — PON Tx Power & Laser (discovery-based, user binds after)
+    w("gauge", "PON 1: Tx Power", 0, 1, 3, 2, {
+      style: { glow: "cyan" },
+      extra: { units: "dBm", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Tx Power" },
+    }),
+    w("gauge", "PON 2: Tx Power", 3, 1, 3, 2, {
+      style: { glow: "cyan" },
+      extra: { units: "dBm", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Tx Power" },
+    }),
+    w("gauge", "PON 3: Tx Power", 6, 1, 3, 2, {
+      style: { glow: "cyan" },
+      extra: { units: "dBm", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Tx Power" },
+    }),
+    w("gauge", "PON 4: Tx Power", 9, 1, 3, 2, {
+      style: { glow: "cyan" },
+      extra: { units: "dBm", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Tx Power" },
+    }),
+
+    // Row 3 — PON Temperatura
+    w("stat", "PON 1: Temperatura", 0, 3, 3, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Temperatura" },
+    }),
+    w("stat", "PON 2: Temperatura", 3, 3, 3, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Temperatura" },
+    }),
+    w("stat", "PON 3: Temperatura", 6, 3, 3, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Temperatura" },
+    }),
+    w("stat", "PON 4: Temperatura", 9, 3, 3, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Temperatura" },
+    }),
+
+    // Row 4 — PON Voltagem & Bias
+    w("stat", "PON 1: Voltagem", 0, 4, 3, 1, {
+      style: { icon: "Zap", iconColor: "#FFBF00" },
+      extra: { units: "V", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Voltagem" },
+    }),
+    w("stat", "PON 1: Bias", 3, 4, 3, 1, {
+      style: { icon: "Activity", iconColor: "#8B5CF6" },
+      extra: { units: "mA", zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Bias" },
+    }),
+    w("stat", "PON 1: Laser", 6, 4, 3, 1, {
+      style: { icon: "Lightbulb", iconColor: "#06B6D4" },
+      extra: { zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Laser" },
+    }),
+    w("stat", "PON 1: Tipo Gbic", 9, 4, 3, 1, {
+      style: { icon: "Unplug", iconColor: "#A0A0A0" },
+      extra: { zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Tipo" },
+    }),
+
+    // Row 5-6 — Timeseries PON
+    w("timeseries", "Tx Power Histórico", 0, 5, 6, 2, {
+      extra: { zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Tx Power" },
+    }),
+    w("timeseries", "Temperatura PON Histórico", 6, 5, 6, 2, {
+      extra: { zabbix_discovery: "descoberta.pons.aux.bee", zabbix_tag: "PON Temperatura" },
+    }),
+
+    // Row 7 — Fans
+    w("stat", "Fan 1: Status", 0, 7, 2, 1, {
+      style: { icon: "Fan", iconColor: "#39FF14", glow: "green" },
+      extra: { zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Status" },
+    }),
+    w("stat", "Fan 1: Temperatura", 2, 7, 2, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Temperatura" },
+    }),
+    w("gauge", "Fan 1: Rotação", 4, 7, 2, 2, {
+      style: { glow: "green" },
+      extra: { units: "%", zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Rotacao" },
+    }),
+    w("stat", "Fan 2: Status", 6, 7, 2, 1, {
+      style: { icon: "Fan", iconColor: "#39FF14", glow: "green" },
+      extra: { zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Status" },
+    }),
+    w("stat", "Fan 2: Temperatura", 8, 7, 2, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Temperatura" },
+    }),
+    w("gauge", "Fan 2: Rotação", 10, 7, 2, 2, {
+      style: { glow: "green" },
+      extra: { units: "%", zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Rotacao" },
+    }),
+
+    // Row 8 — Fan continuation
+    w("stat", "Fan 3: Status", 0, 8, 2, 1, {
+      style: { icon: "Fan", iconColor: "#39FF14" },
+      extra: { zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Status" },
+    }),
+    w("stat", "Fan 3: Temperatura", 2, 8, 2, 1, {
+      style: { icon: "Thermometer", iconColor: "#FF4444" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Temperatura" },
+    }),
+
+    // Row 9-10 — Slots
+    w("stat", "Slot 0: Temperatura", 0, 9, 3, 1, {
+      style: { icon: "Cpu", iconColor: "#F97316", glow: "amber" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.slots.aux.bee", zabbix_tag: "Temperatura Slots" },
+    }),
+    w("stat", "Slot 1: Temperatura", 3, 9, 3, 1, {
+      style: { icon: "Cpu", iconColor: "#F97316" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.slots.aux.bee", zabbix_tag: "Temperatura Slots" },
+    }),
+    w("stat", "Slot 2: Temperatura", 6, 9, 3, 1, {
+      style: { icon: "Cpu", iconColor: "#F97316" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.slots.aux.bee", zabbix_tag: "Temperatura Slots" },
+    }),
+    w("stat", "Slot 3: Temperatura", 9, 9, 3, 1, {
+      style: { icon: "Cpu", iconColor: "#F97316" },
+      extra: { units: "°C", zabbix_discovery: "descoberta.slots.aux.bee", zabbix_tag: "Temperatura Slots" },
+    }),
+    w("timeseries", "Temperatura Slots Histórico", 0, 10, 6, 2, {
+      extra: { zabbix_discovery: "descoberta.slots.aux.bee", zabbix_tag: "Temperatura Slots" },
+    }),
+    w("timeseries", "Fan Rotação Histórico", 6, 10, 6, 2, {
+      extra: { zabbix_discovery: "descoberta.fans.aux", zabbix_tag: "Fan Rotacao" },
+    }),
+
+    // Row 12 — Tabela resumo
+    w("table", "Itens PON Detalhados", 0, 12, 12, 3, {
+      style: { icon: "Radio" },
+      extra: { zabbix_discovery: "descoberta.pons.aux.bee" },
+    }),
+  ],
+  settings: { cols: 12, rowHeight: 60, category: "network" },
+};
+
 export const DASHBOARD_PRESETS: DashboardPreset[] = [
   PRESET_IDRAC_T440,
+  PRESET_OLT_HUAWEI,
   PRESET_NETWORK_CORE,
   PRESET_SERVERS,
   PRESET_LINUX,
