@@ -1,12 +1,20 @@
 import { forwardRef } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
-import { Loader2 } from "lucide-react";
+import { useUserRole, type AppRole } from "@/hooks/useUserRole";
+import { Loader2, ShieldAlert } from "lucide-react";
 
-const ProtectedRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>(function ProtectedRoute({ children }, _ref) {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+  /** If set, only these roles (+ super_admin) can access */
+  roles?: AppRole[];
+}
+
+const ProtectedRoute = forwardRef<HTMLDivElement, ProtectedRouteProps>(function ProtectedRoute({ children, roles }, _ref) {
   const { user, loading } = useAuth();
+  const { hasRole, isLoading: roleLoading } = useUserRole();
 
-  if (loading) {
+  if (loading || (user && roleLoading)) {
     return (
       <div className="min-h-screen bg-background flex items-center justify-center">
         <Loader2 className="w-8 h-8 text-primary animate-spin" />
@@ -16,6 +24,16 @@ const ProtectedRoute = forwardRef<HTMLDivElement, { children: React.ReactNode }>
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (roles && !hasRole(...roles)) {
+    return (
+      <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
+        <ShieldAlert className="w-12 h-12 text-destructive" />
+        <h2 className="text-lg font-semibold text-foreground">Acesso Negado</h2>
+        <p className="text-sm text-muted-foreground">Seu perfil não tem permissão para acessar esta página.</p>
+      </div>
+    );
   }
 
   return <>{children}</>;

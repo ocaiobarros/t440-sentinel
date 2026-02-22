@@ -551,6 +551,56 @@ export type Database = {
           },
         ]
       }
+      flow_audit_logs: {
+        Row: {
+          action: string
+          created_at: string
+          id: string
+          ip_address: string | null
+          new_data: Json | null
+          old_data: Json | null
+          record_id: string | null
+          table_name: string
+          tenant_id: string
+          user_email: string | null
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string | null
+          table_name: string
+          tenant_id: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          created_at?: string
+          id?: string
+          ip_address?: string | null
+          new_data?: Json | null
+          old_data?: Json | null
+          record_id?: string | null
+          table_name?: string
+          tenant_id?: string
+          user_email?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_audit_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flow_map_cables: {
         Row: {
           cable_type: Database["public"]["Enums"]["cable_type"]
@@ -1554,6 +1604,14 @@ export type Database = {
         }[]
       }
       get_user_tenant_id: { Args: { p_user_id: string }; Returns: string }
+      has_any_role: {
+        Args: {
+          p_roles: Database["public"]["Enums"]["app_role"][]
+          p_tenant_id: string
+          p_user_id: string
+        }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           p_role: Database["public"]["Enums"]["app_role"]
@@ -1572,7 +1630,7 @@ export type Database = {
     }
     Enums: {
       alert_status: "open" | "ack" | "resolved"
-      app_role: "admin" | "editor" | "viewer"
+      app_role: "admin" | "editor" | "viewer" | "tech" | "sales"
       cable_type: "AS" | "ASU" | "Geleado" | "ADSS" | "Outro"
       cto_capacity: "8" | "16" | "32"
       cto_status: "OK" | "DEGRADED" | "CRITICAL" | "UNKNOWN"
@@ -1714,7 +1772,7 @@ export const Constants = {
   public: {
     Enums: {
       alert_status: ["open", "ack", "resolved"],
-      app_role: ["admin", "editor", "viewer"],
+      app_role: ["admin", "editor", "viewer", "tech", "sales"],
       cable_type: ["AS", "ASU", "Geleado", "ADSS", "Outro"],
       cto_capacity: ["8", "16", "32"],
       cto_status: ["OK", "DEGRADED", "CRITICAL", "UNKNOWN"],

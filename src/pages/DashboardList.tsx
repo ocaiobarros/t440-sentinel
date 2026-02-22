@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Plus, Eye, Pencil, Trash2, Settings, Zap, LayoutDashboard, Server } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import RoleGate from "@/components/auth/RoleGate";
 
 export default function DashboardList() {
   const navigate = useNavigate();
@@ -65,23 +66,27 @@ export default function DashboardList() {
               <Server className="w-3.5 h-3.5" />
               Templates
             </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => navigate("/settings/connections")}
-              className="gap-1.5 text-xs"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              Conexões
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => navigate("/builder")}
-              className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Novo Dashboard
-            </Button>
+            <RoleGate allowed={["admin"]}>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => navigate("/settings/connections")}
+                className="gap-1.5 text-xs"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Conexões
+              </Button>
+            </RoleGate>
+            <RoleGate allowed={["admin", "editor"]}>
+              <Button
+                size="sm"
+                onClick={() => navigate("/builder")}
+                className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo Dashboard
+              </Button>
+            </RoleGate>
           </div>
         </motion.header>
 
@@ -154,23 +159,27 @@ export default function DashboardList() {
                     <Eye className="w-3 h-3" />
                     Visualizar
                   </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate(`/builder/${dash.id}`)}
-                    className="flex-1 gap-1 text-[10px] h-7"
-                  >
-                    <Pencil className="w-3 h-3" />
-                    Editar
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => deleteMutation.mutate(dash.id)}
-                    className="h-7 w-7 text-muted-foreground hover:text-neon-red"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                  </Button>
+                  <RoleGate allowed={["admin", "editor"]}>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => navigate(`/builder/${dash.id}`)}
+                      className="flex-1 gap-1 text-[10px] h-7"
+                    >
+                      <Pencil className="w-3 h-3" />
+                      Editar
+                    </Button>
+                  </RoleGate>
+                  <RoleGate allowed={["admin"]}>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => deleteMutation.mutate(dash.id)}
+                      className="h-7 w-7 text-muted-foreground hover:text-neon-red"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </Button>
+                  </RoleGate>
                 </div>
               </motion.div>
             ))}

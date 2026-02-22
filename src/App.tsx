@@ -54,7 +54,7 @@ const App = () => (
             <Route
               path="/builder"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute roles={["admin", "editor"]}>
                   <DashboardBuilder />
                 </ProtectedRoute>
               }
@@ -62,7 +62,7 @@ const App = () => (
             <Route
               path="/builder/:dashboardId"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute roles={["admin", "editor"]}>
                   <DashboardBuilder />
                 </ProtectedRoute>
               }
@@ -70,7 +70,7 @@ const App = () => (
             <Route
               path="/settings/connections"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute roles={["admin"]}>
                   <ZabbixConnections />
                 </ProtectedRoute>
               }
@@ -78,7 +78,7 @@ const App = () => (
             <Route
               path="/settings/rms-connections"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute roles={["admin"]}>
                   <RMSConnections />
                 </ProtectedRoute>
               }
@@ -142,7 +142,7 @@ const App = () => (
             <Route
               path="/admin"
               element={
-                <ProtectedRoute>
+                <ProtectedRoute roles={["admin"]}>
                   <AdminHub />
                 </ProtectedRoute>
               }
