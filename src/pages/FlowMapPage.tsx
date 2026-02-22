@@ -145,6 +145,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const [leafletMap, setLeafletMap] = useState<any>(null);
   const [editingCableId, setEditingCableId] = useState<string | null>(null);
   const [snapToStreet, setSnapToStreet] = useState(false);
+  const [hideAccessNetwork, setHideAccessNetwork] = useState(false);
   const isMobile = useIsMobile();
   const { muted, toggleMute, playBeep } = useAudioAlert();
 
@@ -458,7 +459,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             hosts={data.hosts}
             links={displayLinks}
             ctos={data.ctos}
-            cables={data.cables}
+            cables={hideAccessNetwork ? data.cables.filter((c) => c.is_backbone) : data.cables}
             statusMap={statusMap}
             linkStatuses={linkStatuses}
             linkEvents={linkEvents}
@@ -491,10 +492,12 @@ function MapEditorView({ mapId }: { mapId: string }) {
             <FieldOverlay
               mapRef={leafletMap}
               hosts={data.hosts}
+              ctos={data.ctos}
               statusMap={statusMap}
               linkStatuses={linkStatuses}
               linkTraffic={linkTraffic}
               mapId={mapId}
+              onUpdateCTO={(id, d) => updateCTO.mutateAsync({ id, map_id: mapId, ...d } as any)}
             />
           )}
 
@@ -552,6 +555,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 onFocusHost={handleFocusHost}
                 onCriticalDown={handleCriticalDown}
                 warRoom={warRoom}
+                hideAccessNetwork={hideAccessNetwork}
+                onHideAccessNetworkChange={setHideAccessNetwork}
               />
             </motion.div>
           )}
@@ -597,6 +602,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 onRemoveCable={(id) => removeCable.mutate({ id, map_id: mapId })}
                 onEditCableVertices={handleEditCableVertices}
                 editingCableId={editingCableId}
+                snapToStreet={snapToStreet}
+                onSnapToStreetChange={setSnapToStreet}
               />
             </motion.div>
           )}

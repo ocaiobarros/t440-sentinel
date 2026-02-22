@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, ArrowDown, ArrowUp, Clock, Radio, ShieldAlert, Activity, ChevronDown, ChevronUp, Locate, Link2 } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Clock, Radio, ShieldAlert, Activity, ChevronDown, ChevronUp, Locate, Link2, Eye, EyeOff } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import type { FlowMapHost, FlowMapLink, HostStatus } from "@/hooks/useFlowMaps";
 import type { LinkEvent } from "@/hooks/useFlowMapStatus";
 
@@ -28,6 +29,8 @@ interface NocConsolePanelProps {
   onFocusHost?: (host: FlowMapHost) => void;
   onCriticalDown?: (host: FlowMapHost) => void;
   warRoom?: boolean;
+  hideAccessNetwork?: boolean;
+  onHideAccessNetworkChange?: (v: boolean) => void;
 }
 
 /* ─── Helpers ─── */
@@ -83,6 +86,8 @@ export default function NocConsolePanel({
   onFocusHost,
   onCriticalDown,
   warRoom = false,
+  hideAccessNetwork = false,
+  onHideAccessNetworkChange,
 }: NocConsolePanelProps) {
   const [events, setEvents] = useState<EventEntry[]>([]);
   const [activeTab, setActiveTab] = useState<"timeline" | "sla">("timeline");
@@ -210,6 +215,17 @@ export default function NocConsolePanel({
           <div className="flex items-center gap-1.5 px-2 py-1.5 rounded-md bg-neon-green/5 border border-neon-green/20">
             <span className="w-2 h-2 rounded-full bg-neon-green" />
             <span className={`${badgeScale} font-display uppercase tracking-wider text-neon-green`}>Network Stable</span>
+          </div>
+        )}
+
+        {/* Backbone filter toggle */}
+        {onHideAccessNetworkChange && (
+          <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/10 border border-border/20">
+            <Switch checked={hideAccessNetwork} onCheckedChange={onHideAccessNetworkChange} className="scale-75" />
+            <span className={`${badgeScale} font-mono text-muted-foreground`}>
+              {hideAccessNetwork ? <EyeOff className="w-3 h-3 inline mr-1" /> : <Eye className="w-3 h-3 inline mr-1" />}
+              Ocultar rede de acesso
+            </span>
           </div>
         )}
       </div>

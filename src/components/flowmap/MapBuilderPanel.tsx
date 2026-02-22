@@ -67,8 +67,9 @@ interface Props {
   onRemoveCable?: (id: string) => void;
   onEditCableVertices?: (cableId: string) => void;
   editingCableId?: string | null;
+  snapToStreet?: boolean;
+  onSnapToStreetChange?: (v: boolean) => void;
 }
-
 export default function MapBuilderPanel({
   hosts, links, ctos = [], cables = [], mode, onModeChange, connectionId, tenantId, mapId,
   onAddHost, onRemoveHost, onUpdateHostPosition,
@@ -77,6 +78,7 @@ export default function MapBuilderPanel({
   editingLinkId, onEditRoute, onCancelEditRoute, onRecalculateRoute, onUpdateLinkCapacity,
   onAddCTO, onRemoveCTO, onUpdateCTO, onAddCable, onRemoveCable,
   onEditCableVertices, editingCableId,
+  snapToStreet = false, onSnapToStreetChange,
 }: Props) {
   const [editingLinkItemsId, setEditingLinkItemsId] = useState<string | null>(null);
   const [editingHostCoords, setEditingHostCoords] = useState<string | null>(null);
@@ -908,6 +910,14 @@ export default function MapBuilderPanel({
               </div>
             ))}
           </div>
+
+          {/* Snap-to-Street toggle */}
+          {editingCableId && (
+            <div className="flex items-center gap-2 p-2 rounded-lg border border-neon-cyan/20 bg-neon-cyan/5">
+              <Switch checked={snapToStreet} onCheckedChange={(v) => onSnapToStreetChange?.(v)} className="scale-75" />
+              <span className="text-[9px] text-neon-cyan font-mono">Snap-to-Street (aderência à rua)</span>
+            </div>
+          )}
         </section>
 
         {/* ── ROUTE EDITOR INFO ── */}

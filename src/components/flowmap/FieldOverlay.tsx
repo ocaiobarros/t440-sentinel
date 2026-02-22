@@ -1,28 +1,32 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { Crosshair, Camera, Sun, X, Wifi, WifiOff, Clock, MapPin, ImageIcon, Loader2 } from "lucide-react";
+import { Crosshair, Camera, Sun, X, Wifi, WifiOff, Clock, MapPin, ImageIcon, Loader2, Navigation } from "lucide-react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import type { FlowMapHost, HostStatus } from "@/hooks/useFlowMaps";
+import type { FlowMapHost, FlowMapCTO, HostStatus } from "@/hooks/useFlowMaps";
 import type { LinkTraffic } from "@/hooks/useFlowMapStatus";
 import type L from "leaflet";
 
 interface Props {
   mapRef: L.Map | null;
   hosts: FlowMapHost[];
+  ctos?: FlowMapCTO[];
   statusMap: Record<string, HostStatus>;
   linkStatuses: Record<string, { status: string; originHost: string; destHost: string }>;
   linkTraffic: Record<string, LinkTraffic>;
   mapId: string;
+  onUpdateCTO?: (id: string, data: Partial<FlowMapCTO>) => void;
 }
 
-export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, linkTraffic, mapId }: Props) {
+export default function FieldOverlay({ mapRef, hosts, ctos = [], statusMap, linkStatuses, linkTraffic, mapId, onUpdateCTO }: Props) {
   const [gpsActive, setGpsActive] = useState(false);
   const [gpsPos, setGpsPos] = useState<{ lat: number; lon: number } | null>(null);
   const [selectedHost, setSelectedHost] = useState<FlowMapHost | null>(null);
+  const [selectedCTO, setSelectedCTO] = useState<FlowMapCTO | null>(null);
+  const [calibrating, setCalibrating] = useState(false);
   const [highContrast, setHighContrast] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [photos, setPhotos] = useState<{ name: string; url: string }[]>([]);
@@ -102,11 +106,42 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
       const hostId = (e as CustomEvent).detail;
       const host = hosts.find((h) => h.id === hostId);
       console.log("[FieldOverlay] field-host-tap received, hostId:", hostId, "found:", !!host);
-      if (host) setSelectedHost(host);
+      if (host) { setSelectedHost(host); setSelectedCTO(null); }
     };
     window.addEventListener("field-host-tap", handler);
     return () => window.removeEventListener("field-host-tap", handler);
   }, [hosts]);
+
+  // ─── CTO tap handler via custom event ───
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const ctoId = (e as CustomEvent).detail;
+      const cto = ctos.find((c) => c.id === ctoId);
+      if (cto) { setSelectedCTO(cto); setSelectedHost(null); }
+    };
+    window.addEventListener("field-cto-tap", handler);
+    return () => window.removeEventListener("field-cto-tap", handler);
+  }, [ctos]);
+
+  // ─── GPS Calibration for CTO ───
+  const handleCalibrateCTO = useCallback(async () => {
+    if (!selectedCTO || !onUpdateCTO) return;
+    setCalibrating(true);
+    try {
+      const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: true, timeout: 15000 });
+      });
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      onUpdateCTO(selectedCTO.id, { lat, lon, map_id: selectedCTO.map_id } as any);
+      setSelectedCTO((prev) => prev ? { ...prev, lat, lon } : null);
+      toast({ title: "📍 Localização calibrada!", description: `${lat.toFixed(6)}, ${lon.toFixed(6)}` });
+    } catch (err) {
+      toast({ title: "Erro GPS", description: (err as GeolocationPositionError).message, variant: "destructive" });
+    } finally {
+      setCalibrating(false);
+    }
+  }, [selectedCTO, onUpdateCTO, toast]);
 
   // ─── Fetch photos from ALL technicians when host is selected ───
   useEffect(() => {
@@ -392,7 +427,77 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
         </DrawerContent>
       </Drawer>
 
-      {/* Hidden file input for camera capture */}
+      {/* ── CTO detail drawer ── */}
+      <Drawer open={!!selectedCTO} onOpenChange={(open) => !open && setSelectedCTO(null)}>
+        <DrawerContent
+          className="bg-card border-t border-border/50 max-h-[70vh]"
+          style={{ zIndex: 9999 }}
+        >
+          <DrawerHeader className="pb-2">
+            <div className="flex items-center justify-between">
+              <DrawerTitle className="text-sm font-display flex items-center gap-2">
+                <span className="w-3 h-3 rounded-full inline-block bg-neon-cyan" style={{ boxShadow: "0 0 8px #00e5ff80" }} />
+                {selectedCTO?.name || "CTO"}
+              </DrawerTitle>
+              <DrawerClose asChild>
+                <Button variant="ghost" size="icon" className="h-7 w-7">
+                  <X className="w-4 h-4" />
+                </Button>
+              </DrawerClose>
+            </div>
+          </DrawerHeader>
+
+          <ScrollArea className="px-4 pb-4 max-h-[55vh]">
+            <div className="space-y-3">
+              {/* CTO info */}
+              <div className="rounded-lg bg-background/50 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Capacidade</span>
+                  <span className="text-sm font-mono text-neon-cyan">{selectedCTO?.occupied_ports}/{selectedCTO?.capacity} portas</span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  <span className={`text-sm font-bold ${selectedCTO?.status_calculated === "OK" ? "text-neon-green" : selectedCTO?.status_calculated === "CRITICAL" ? "text-neon-red" : "text-muted-foreground"}`}>
+                    {selectedCTO?.status_calculated || "UNKNOWN"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Coordenadas</span>
+                  <span className="text-xs font-mono">{selectedCTO?.lat.toFixed(5)}, {selectedCTO?.lon.toFixed(5)}</span>
+                </div>
+                {selectedCTO?.description && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Descrição</span>
+                    <span className="text-xs font-mono truncate max-w-[160px]">{selectedCTO.description}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* GPS Calibration button */}
+              {onUpdateCTO && (
+                <button
+                  onClick={handleCalibrateCTO}
+                  disabled={calibrating}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-neon-cyan/10 border border-neon-cyan/30 text-neon-cyan text-sm font-display hover:bg-neon-cyan/20 transition-colors disabled:opacity-50"
+                >
+                  <Navigation className="w-5 h-5" />
+                  {calibrating ? "Obtendo GPS..." : "Calibrar Localização (GPS)"}
+                </button>
+              )}
+
+              {/* Distance to CTO */}
+              {gpsPos && selectedCTO && (
+                <div className="text-center text-xs text-muted-foreground">
+                  📍 Distância estimada: <span className="font-bold text-foreground">
+                    {calcDistance(gpsPos.lat, gpsPos.lon, selectedCTO.lat, selectedCTO.lon).toFixed(1)} km
+                  </span>
+                </div>
+              )}
+            </div>
+          </ScrollArea>
+        </DrawerContent>
+      </Drawer>
+
       <input
         ref={fileInputRef}
         type="file"
