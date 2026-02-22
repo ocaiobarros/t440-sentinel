@@ -734,6 +734,13 @@ export type Database = {
             referencedColumns: ["id", "tenant_id"]
           },
           {
+            foreignKeyName: "fk_cto_olt_secure"
+            columns: ["olt_host_id", "map_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "flow_map_hosts"
+            referencedColumns: ["id", "map_id", "tenant_id"]
+          },
+          {
             foreignKeyName: "flow_map_ctos_olt_host_id_fkey"
             columns: ["olt_host_id"]
             isOneToOne: false
