@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import L from "leaflet";
 import "leaflet/dist/leaflet.css";
-import type { FlowMap, FlowMapHost, FlowMapLink, HostStatus } from "@/hooks/useFlowMaps";
+import type { FlowMap, FlowMapHost, FlowMapLink, HostStatus, FlowMapCTO, FlowMapCable } from "@/hooks/useFlowMaps";
 import type { LinkTraffic } from "@/hooks/useFlowMapStatus";
 
 /* ── Icon factories ── */
@@ -170,6 +170,8 @@ interface Props {
   flowMap: FlowMap;
   hosts: FlowMapHost[];
   links: FlowMapLink[];
+  ctos?: FlowMapCTO[];
+  cables?: FlowMapCable[];
   statusMap: Record<string, HostStatus>;
   linkStatuses?: Record<string, LinkStatusInfo>;
   linkEvents?: LinkEventInfo[];
@@ -178,6 +180,7 @@ interface Props {
   isolatedNodeIds?: string[];
   onMapClick?: (lat: number, lon: number) => void;
   onHostClick?: (hostId: string) => void;
+  onCTOClick?: (ctoId: string) => void;
   onMapReady?: (map: L.Map) => void;
   focusHost?: FlowMapHost | null;
   className?: string;
@@ -187,6 +190,8 @@ export default function FlowMapCanvas({
   flowMap,
   hosts,
   links,
+  ctos = [],
+  cables = [],
   statusMap,
   linkStatuses = {},
   linkEvents = [],
@@ -195,13 +200,14 @@ export default function FlowMapCanvas({
   isolatedNodeIds = [],
   onMapClick,
   onHostClick,
+  onCTOClick,
   onMapReady,
   focusHost,
   className,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
-  const layersRef = useRef<{ markers: L.LayerGroup; lines: L.LayerGroup; labels: L.LayerGroup } | null>(null);
+  const layersRef = useRef<{ markers: L.LayerGroup; lines: L.LayerGroup; labels: L.LayerGroup; ctoLayer: L.LayerGroup; cableLayer: L.LayerGroup } | null>(null);
 
   /* Init map once */
   useEffect(() => {
@@ -225,7 +231,9 @@ export default function FlowMapCanvas({
     const markers = L.layerGroup().addTo(map);
     const lines = L.layerGroup().addTo(map);
     const labels = L.layerGroup().addTo(map);
-    layersRef.current = { markers, lines, labels };
+    const ctoLayer = L.layerGroup().addTo(map);
+    const cableLayer = L.layerGroup().addTo(map);
+    layersRef.current = { markers, lines, labels, ctoLayer, cableLayer };
     mapRef.current = map;
     onMapReady?.(map);
 
@@ -475,6 +483,96 @@ export default function FlowMapCanvas({
       marker.addTo(markers);
     });
   }, [hosts, links, statusMap, linkStatuses, linkEvents, linkTraffic, impactedLinkIds, isolatedNodeIds, onHostClick]);
+
+  /* ── CTO & Cable rendering with Level of Detail ── */
+  useEffect(() => {
+    if (!layersRef.current || !mapRef.current) return;
+    const { ctoLayer, cableLayer } = layersRef.current;
+    const map = mapRef.current;
+
+    function renderFTTH() {
+      ctoLayer.clearLayers();
+      cableLayer.clearLayers();
+      const zoom = map.getZoom();
+      if (zoom < 15) return; // LoD: only show FTTH at zoom >= 15
+
+      // Render cables first (below CTOs)
+      cables.forEach((cable) => {
+        const coords = cable.geometry?.coordinates?.length >= 2
+          ? cable.geometry.coordinates.map(([lon, lat]) => [lat, lon] as [number, number])
+          : [];
+        if (coords.length < 2) return;
+
+        const cableColor = cable.color_override || "#00e5ff";
+        const glow = L.polyline(coords, { color: cableColor, weight: 6, opacity: 0.15 });
+        glow.addTo(cableLayer);
+
+        const line = L.polyline(coords, {
+          color: cableColor,
+          weight: 2,
+          opacity: 0.8,
+          dashArray: "4, 8",
+          className: "fm-traffic-glow",
+        });
+        line.bindTooltip(
+          `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;">
+            <div style="font-weight:700;color:#e0e0e0;">${cable.label || "Cabo"}</div>
+            <div>Tipo: <span style="color:#00e5ff;">${cable.cable_type}</span></div>
+            <div>Fibras: <span style="color:#00e676;">${cable.fiber_count}</span></div>
+            ${cable.distance_km ? `<div>Distância: <span style="color:#ff9100;">${cable.distance_km} km</span></div>` : ""}
+          </div>`,
+          { className: "flowmap-tooltip", sticky: true },
+        );
+        line.addTo(cableLayer);
+      });
+
+      // Render CTOs
+      ctos.forEach((cto) => {
+        const statusColor = cto.status_calculated === "OK" ? "#00e676"
+          : cto.status_calculated === "CRITICAL" ? "#ff1744"
+          : cto.status_calculated === "DEGRADED" ? "#ff9100"
+          : "#9e9e9e";
+
+        const icon = L.divIcon({
+          className: "",
+          iconSize: [28, 28],
+          iconAnchor: [14, 14],
+          html: `<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;">
+            <div style="width:18px;height:18px;border-radius:3px;background:${statusColor};box-shadow:0 0 10px ${statusColor}80;border:2px solid #0a0b10;display:flex;align-items:center;justify-content:center;">
+              <span style="font-size:8px;font-weight:900;color:#0a0b10;">C</span>
+            </div>
+          </div>`,
+        });
+
+        const marker = L.marker([cto.lat, cto.lon], { icon });
+        marker.bindTooltip(
+          `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;min-width:160px;">
+            <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:12px;color:#e0e0e0;margin-bottom:4px;">${cto.name || "CTO"}</div>
+            <div>Status: <span style="color:${statusColor};font-weight:700;">${cto.status_calculated}</span></div>
+            <div>Capacidade: <span style="color:#00e5ff;">${cto.capacity} portas</span></div>
+            ${cto.pon_port_index ? `<div>Porta PON: <span style="color:#ff9100;">${cto.pon_port_index}</span></div>` : ""}
+            ${cto.description ? `<div style="color:#888;font-size:10px;margin-top:4px;">${cto.description}</div>` : ""}
+          </div>`,
+          { className: "flowmap-tooltip", direction: "top", offset: [0, -14] },
+        );
+
+        marker.on("click", (e) => {
+          if (e.originalEvent) {
+            e.originalEvent.stopPropagation();
+            e.originalEvent.preventDefault();
+          }
+          onCTOClick?.(cto.id);
+          window.dispatchEvent(new CustomEvent("field-cto-tap", { detail: cto.id }));
+        });
+
+        marker.addTo(ctoLayer);
+      });
+    }
+
+    renderFTTH();
+    map.on("zoomend", renderFTTH);
+    return () => { map.off("zoomend", renderFTTH); };
+  }, [ctos, cables, onCTOClick]);
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className ?? ""}`} style={{ background: "#0a0b10" }} />

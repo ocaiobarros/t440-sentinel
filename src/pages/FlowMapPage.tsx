@@ -130,7 +130,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { data, isLoading } = useFlowMapDetail(mapId);
-  const { addHost, removeHost, updateHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem } = useFlowMapMutations();
+  const { addHost, removeHost, updateHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem, addCTO, updateCTO, removeCTO, addCable, updateCable, removeCable } = useFlowMapMutations();
 
   const [mode, setMode] = useState<BuilderMode>("idle");
   const [pendingOrigin, setPendingOrigin] = useState<string | null>(null);
@@ -439,6 +439,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
             flowMap={data.map}
             hosts={data.hosts}
             links={displayLinks}
+            ctos={data.ctos}
+            cables={data.cables}
             statusMap={statusMap}
             linkStatuses={linkStatuses}
             linkEvents={linkEvents}
@@ -532,10 +534,13 @@ function MapEditorView({ mapId }: { mapId: string }) {
               <MapBuilderPanel
                 hosts={data.hosts}
                 links={data.links}
+                ctos={data.ctos}
+                cables={data.cables}
                 mode={mode}
                 onModeChange={setMode}
                 connectionId={activeConnectionId}
                 tenantId={tenantId ?? undefined}
+                mapId={mapId}
                 onAddHost={handleAddHost}
                 onRemoveHost={(id) => removeHost.mutate({ id, map_id: mapId })}
                 onUpdateHostPosition={handleUpdateHostPosition}
@@ -553,6 +558,10 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 onEditRoute={handleEditRoute}
                 onCancelEditRoute={handleSaveRoute}
                 onRecalculateRoute={handleRecalculateRoute}
+                onAddCTO={(data) => addCTO.mutate(data as any)}
+                onRemoveCTO={(id) => removeCTO.mutate({ id, map_id: mapId })}
+                onAddCable={(data) => addCable.mutate(data as any)}
+                onRemoveCable={(id) => removeCable.mutate({ id, map_id: mapId })}
               />
             </motion.div>
           )}

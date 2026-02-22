@@ -3,14 +3,14 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus, Trash2, MapPin, Link2, AlertTriangle, Save, X, Pencil,
   Navigation, Network, Server, ChevronRight, ChevronLeft,
-  Loader2, Search, Cable, RotateCcw,
+  Loader2, Search, Cable, RotateCcw, Box,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import type { FlowMapHost, FlowMapLink, FlowMapLinkItem } from "@/hooks/useFlowMaps";
+import type { FlowMapHost, FlowMapLink, FlowMapLinkItem, FlowMapCTO, FlowMapCable } from "@/hooks/useFlowMaps";
 import LinkItemsEditor from "./LinkItemsEditor";
 
 export type BuilderMode = "idle" | "place-host" | "connect-origin" | "connect-dest" | "draw-route";
@@ -34,10 +34,13 @@ type HostAddStep = "idle" | "groups" | "hosts" | "placing";
 interface Props {
   hosts: FlowMapHost[];
   links: FlowMapLink[];
+  ctos?: FlowMapCTO[];
+  cables?: FlowMapCable[];
   mode: BuilderMode;
   onModeChange: (m: BuilderMode) => void;
   connectionId?: string;
   tenantId?: string;
+  mapId: string;
   /* Host actions */
   onAddHost: (data: { zabbix_host_id: string; host_name: string; host_group: string; icon_type: string; is_critical: boolean; lat: number; lon: number }) => void;
   onRemoveHost: (id: string) => void;
@@ -56,14 +59,21 @@ interface Props {
   onEditRoute: (linkId: string) => void;
   onCancelEditRoute: () => void;
   onRecalculateRoute?: (linkId: string) => Promise<void>;
+  /* CTO/Cable actions */
+  onAddCTO?: (data: Omit<FlowMapCTO, "id" | "created_at" | "updated_at" | "status_calculated">) => void;
+  onRemoveCTO?: (id: string) => void;
+  onUpdateCTO?: (id: string, data: Partial<FlowMapCTO>) => void;
+  onAddCable?: (data: Omit<FlowMapCable, "id" | "created_at" | "updated_at">) => void;
+  onRemoveCable?: (id: string) => void;
 }
 
 export default function MapBuilderPanel({
-  hosts, links, mode, onModeChange, connectionId, tenantId,
+  hosts, links, ctos = [], cables = [], mode, onModeChange, connectionId, tenantId, mapId,
   onAddHost, onRemoveHost, onUpdateHostPosition,
   pendingOrigin, onSelectOrigin, onCreateLink, onRemoveLink,
   onAddLinkItem, onRemoveLinkItem,
   editingLinkId, onEditRoute, onCancelEditRoute, onRecalculateRoute, onUpdateLinkCapacity,
+  onAddCTO, onRemoveCTO, onUpdateCTO, onAddCable, onRemoveCable,
 }: Props) {
   const [editingLinkItemsId, setEditingLinkItemsId] = useState<string | null>(null);
   const [editingHostCoords, setEditingHostCoords] = useState<string | null>(null);
@@ -82,6 +92,12 @@ export default function MapBuilderPanel({
   /* ── Link form ── */
   const [linkForm, setLinkForm] = useState({ link_type: "fiber", is_ring: false, capacity_mbps: 1000 });
   const [recalculating, setRecalculating] = useState<string | null>(null);
+
+  /* ── CTO form ── */
+  const [ctoAdding, setCtoAdding] = useState(false);
+  const [ctoForm, setCtoForm] = useState({ name: "", capacity: "16" as "8" | "16" | "32", pon_port_index: 0, description: "" });
+  const [ctoPlacing, setCtoPlacing] = useState(false);
+  const [ctoOltId, setCtoOltId] = useState<string | null>(null);
 
   /* ── Fetch groups ── */
   const fetchGroups = async () => {
@@ -177,6 +193,34 @@ export default function MapBuilderPanel({
     window.addEventListener("flowmap-place-host", handler);
     return () => window.removeEventListener("flowmap-place-host", handler);
   }, [mode, selectedZbxHost, selectedGroup, hostForm, onAddHost, onModeChange]);
+
+  /* Listen for map click when placing CTO */
+  useEffect(() => {
+    if (!ctoPlacing || !tenantId || !onAddCTO) return;
+    const handler = (e: Event) => {
+      const { lat, lon } = (e as CustomEvent).detail;
+      onAddCTO({
+        tenant_id: tenantId,
+        map_id: mapId,
+        name: ctoForm.name || `CTO-${ctos.length + 1}`,
+        description: ctoForm.description,
+        olt_host_id: ctoOltId,
+        pon_port_index: ctoForm.pon_port_index,
+        lat,
+        lon,
+        capacity: ctoForm.capacity,
+        metadata: {},
+        zabbix_host_ids: [],
+      });
+      setCtoPlacing(false);
+      setCtoAdding(false);
+      setCtoForm({ name: "", capacity: "16", pon_port_index: 0, description: "" });
+      setCtoOltId(null);
+      onModeChange("idle");
+    };
+    window.addEventListener("flowmap-place-host", handler);
+    return () => window.removeEventListener("flowmap-place-host", handler);
+  }, [ctoPlacing, ctoForm, ctoOltId, tenantId, mapId, ctos.length, onAddCTO, onModeChange]);
 
   const filteredGroups = search
     ? groups.filter((g) => g.name.toLowerCase().includes(search.toLowerCase()))
@@ -587,6 +631,98 @@ export default function MapBuilderPanel({
                       </motion.div>
                     )}
                   </AnimatePresence>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        {/* ── FTTH / CTOs SECTION ── */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-display uppercase text-muted-foreground tracking-wider">
+              CTOs ({ctos.length})
+            </span>
+            {!ctoAdding ? (
+              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => { setCtoAdding(true); }} disabled={!onAddCTO}>
+                <Plus className="w-3 h-3" /> Adicionar CTO
+              </Button>
+            ) : (
+              <Button size="sm" variant="default" className="h-6 text-[10px] gap-1" onClick={() => { setCtoAdding(false); setCtoPlacing(false); onModeChange("idle"); }}>
+                <X className="w-3 h-3" /> Cancelar
+              </Button>
+            )}
+          </div>
+
+          <AnimatePresence>
+            {ctoAdding && !ctoPlacing && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="space-y-2 p-2 rounded-lg border border-neon-cyan/20 bg-neon-cyan/5">
+                  <p className="text-[10px] text-neon-cyan font-mono">Nova CTO</p>
+                  <Input placeholder="Nome da CTO" value={ctoForm.name} onChange={(e) => setCtoForm((p) => ({ ...p, name: e.target.value }))} className="h-7 text-xs" />
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[8px] text-muted-foreground">Capacidade</label>
+                      <Select value={ctoForm.capacity} onValueChange={(v) => setCtoForm((p) => ({ ...p, capacity: v as "8" | "16" | "32" }))}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="8" className="text-xs">8 portas</SelectItem>
+                          <SelectItem value="16" className="text-xs">16 portas</SelectItem>
+                          <SelectItem value="32" className="text-xs">32 portas</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[8px] text-muted-foreground">Porta PON</label>
+                      <Input type="number" value={ctoForm.pon_port_index} onChange={(e) => setCtoForm((p) => ({ ...p, pon_port_index: parseInt(e.target.value) || 0 }))} className="h-7 text-xs font-mono" />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="text-[8px] text-muted-foreground">OLT (Host Pai)</label>
+                    <Select value={ctoOltId || ""} onValueChange={(v) => setCtoOltId(v || null)}>
+                      <SelectTrigger className="h-7 text-xs"><SelectValue placeholder="Nenhuma" /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="" className="text-xs">Nenhuma</SelectItem>
+                        {hosts.map((h) => (
+                          <SelectItem key={h.id} value={h.id} className="text-xs">{h.host_name || h.zabbix_host_id}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Input placeholder="Descrição (opcional)" value={ctoForm.description} onChange={(e) => setCtoForm((p) => ({ ...p, description: e.target.value }))} className="h-7 text-xs" />
+                  <Button size="sm" className="w-full h-7 text-[10px] gap-1 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30" onClick={() => { setCtoPlacing(true); onModeChange("place-host"); }}>
+                    <MapPin className="w-3 h-3" /> Clicar no mapa para posicionar
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+            {ctoPlacing && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="p-2 rounded-lg border border-neon-amber/30 bg-neon-amber/5">
+                  <p className="text-[10px] text-neon-amber font-display uppercase tracking-wider">Clique no mapa para posicionar a CTO</p>
+                  <p className="text-[9px] text-muted-foreground font-mono mt-1">{ctoForm.name || "CTO"} • {ctoForm.capacity} portas</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* CTO list */}
+          <div className="space-y-1 max-h-40 overflow-y-auto">
+            {ctos.map((c) => {
+              const statusColor = c.status_calculated === "OK" ? "text-neon-green" : c.status_calculated === "CRITICAL" ? "text-neon-red" : c.status_calculated === "DEGRADED" ? "text-neon-amber" : "text-muted-foreground";
+              return (
+                <div key={c.id} className="flex items-center justify-between p-1.5 rounded bg-muted/20 text-[10px]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Box className="w-3 h-3 text-neon-cyan shrink-0" />
+                    <span className="font-mono text-foreground truncate">{c.name || "CTO"}</span>
+                    <span className={`text-[8px] font-bold ${statusColor}`}>{c.status_calculated}</span>
+                    <span className="text-[8px] text-muted-foreground/60">{c.capacity}p</span>
+                  </div>
+                  {onRemoveCTO && (
+                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onRemoveCTO(c.id)}>
+                      <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
+                    </Button>
+                  )}
                 </div>
               );
             })}

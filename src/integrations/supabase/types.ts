@@ -551,6 +551,151 @@ export type Database = {
           },
         ]
       }
+      flow_map_cables: {
+        Row: {
+          cable_type: Database["public"]["Enums"]["cable_type"]
+          color_override: string | null
+          created_at: string
+          distance_km: number | null
+          fiber_count: number
+          geometry: Json
+          id: string
+          label: string
+          map_id: string
+          source_node_id: string
+          source_node_type: string
+          target_node_id: string
+          target_node_type: string
+          tenant_id: string
+          updated_at: string
+        }
+        Insert: {
+          cable_type?: Database["public"]["Enums"]["cable_type"]
+          color_override?: string | null
+          created_at?: string
+          distance_km?: number | null
+          fiber_count?: number
+          geometry?: Json
+          id?: string
+          label?: string
+          map_id: string
+          source_node_id: string
+          source_node_type?: string
+          target_node_id: string
+          target_node_type?: string
+          tenant_id: string
+          updated_at?: string
+        }
+        Update: {
+          cable_type?: Database["public"]["Enums"]["cable_type"]
+          color_override?: string | null
+          created_at?: string
+          distance_km?: number | null
+          fiber_count?: number
+          geometry?: Json
+          id?: string
+          label?: string
+          map_id?: string
+          source_node_id?: string
+          source_node_type?: string
+          target_node_id?: string
+          target_node_type?: string
+          tenant_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_cable_map"
+            columns: ["map_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "flow_maps"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "flow_map_cables_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      flow_map_ctos: {
+        Row: {
+          capacity: Database["public"]["Enums"]["cto_capacity"]
+          created_at: string
+          description: string | null
+          id: string
+          lat: number
+          lon: number
+          map_id: string
+          metadata: Json
+          name: string
+          olt_host_id: string | null
+          pon_port_index: number | null
+          status_calculated: Database["public"]["Enums"]["cto_status"]
+          tenant_id: string
+          updated_at: string
+          zabbix_host_ids: string[] | null
+        }
+        Insert: {
+          capacity?: Database["public"]["Enums"]["cto_capacity"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          lat: number
+          lon: number
+          map_id: string
+          metadata?: Json
+          name?: string
+          olt_host_id?: string | null
+          pon_port_index?: number | null
+          status_calculated?: Database["public"]["Enums"]["cto_status"]
+          tenant_id: string
+          updated_at?: string
+          zabbix_host_ids?: string[] | null
+        }
+        Update: {
+          capacity?: Database["public"]["Enums"]["cto_capacity"]
+          created_at?: string
+          description?: string | null
+          id?: string
+          lat?: number
+          lon?: number
+          map_id?: string
+          metadata?: Json
+          name?: string
+          olt_host_id?: string | null
+          pon_port_index?: number | null
+          status_calculated?: Database["public"]["Enums"]["cto_status"]
+          tenant_id?: string
+          updated_at?: string
+          zabbix_host_ids?: string[] | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fk_cto_map"
+            columns: ["map_id", "tenant_id"]
+            isOneToOne: false
+            referencedRelation: "flow_maps"
+            referencedColumns: ["id", "tenant_id"]
+          },
+          {
+            foreignKeyName: "flow_map_ctos_olt_host_id_fkey"
+            columns: ["olt_host_id"]
+            isOneToOne: false
+            referencedRelation: "flow_map_hosts"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_map_ctos_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flow_map_hosts: {
         Row: {
           created_at: string
@@ -1306,6 +1451,9 @@ export type Database = {
     Enums: {
       alert_status: "open" | "ack" | "resolved"
       app_role: "admin" | "editor" | "viewer"
+      cable_type: "AS" | "ASU" | "Geleado" | "ADSS" | "Outro"
+      cto_capacity: "8" | "16" | "32"
+      cto_status: "OK" | "DEGRADED" | "CRITICAL" | "UNKNOWN"
       maintenance_scope_type:
         | "tenant_all"
         | "zabbix_connection"
@@ -1445,6 +1593,9 @@ export const Constants = {
     Enums: {
       alert_status: ["open", "ack", "resolved"],
       app_role: ["admin", "editor", "viewer"],
+      cable_type: ["AS", "ASU", "Geleado", "ADSS", "Outro"],
+      cto_capacity: ["8", "16", "32"],
+      cto_status: ["OK", "DEGRADED", "CRITICAL", "UNKNOWN"],
       maintenance_scope_type: [
         "tenant_all",
         "zabbix_connection",

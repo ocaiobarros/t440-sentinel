@@ -47,6 +47,42 @@ export interface FlowMapLink {
   last_status_change: string | null;
 }
 
+export interface FlowMapCTO {
+  id: string;
+  tenant_id: string;
+  map_id: string;
+  name: string;
+  description: string;
+  olt_host_id: string | null;
+  pon_port_index: number;
+  lat: number;
+  lon: number;
+  capacity: "8" | "16" | "32";
+  status_calculated: "OK" | "DEGRADED" | "CRITICAL" | "UNKNOWN";
+  metadata: Record<string, unknown>;
+  zabbix_host_ids: string[];
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FlowMapCable {
+  id: string;
+  tenant_id: string;
+  map_id: string;
+  label: string;
+  geometry: { type: string; coordinates: [number, number][] };
+  source_node_type: "host" | "cto";
+  source_node_id: string;
+  target_node_type: "host" | "cto";
+  target_node_id: string;
+  fiber_count: number;
+  cable_type: "AS" | "ASU" | "Geleado" | "ADSS" | "Outro";
+  distance_km: number;
+  color_override: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface FlowMapLinkItem {
   id: string;
   tenant_id: string;
@@ -83,22 +119,26 @@ export function useFlowMapList() {
   });
 }
 
-/* ── Single map with hosts & links ── */
+/* ── Single map with hosts, links, CTOs & cables ── */
 export function useFlowMapDetail(mapId: string | undefined) {
   return useQuery({
     queryKey: ["flow-map", mapId],
     enabled: !!mapId,
     queryFn: async () => {
-      const [mapRes, hostsRes, linksRes] = await Promise.all([
+      const [mapRes, hostsRes, linksRes, ctosRes, cablesRes] = await Promise.all([
         supabase.from("flow_maps").select("*").eq("id", mapId!).single(),
         supabase.from("flow_map_hosts").select("*").eq("map_id", mapId!),
         supabase.from("flow_map_links").select("*").eq("map_id", mapId!),
+        supabase.from("flow_map_ctos" as any).select("*").eq("map_id", mapId!),
+        supabase.from("flow_map_cables" as any).select("*").eq("map_id", mapId!),
       ]);
       if (mapRes.error) throw mapRes.error;
       return {
         map: mapRes.data as FlowMap,
         hosts: (hostsRes.data ?? []) as FlowMapHost[],
         links: (linksRes.data ?? []) as unknown as FlowMapLink[],
+        ctos: (ctosRes.data ?? []) as unknown as FlowMapCTO[],
+        cables: (cablesRes.data ?? []) as unknown as FlowMapCable[],
       };
     },
   });
@@ -242,5 +282,70 @@ export function useFlowMapMutations() {
     },
   });
 
-  return { createMap, updateMap, deleteMap, addHost, updateHost, removeHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem };
+  /* ── CTO mutations ── */
+  const addCTO = useMutation({
+    mutationFn: async (input: Omit<FlowMapCTO, "id" | "created_at" | "updated_at" | "status_calculated">) => {
+      const { data, error } = await supabase.from("flow_map_ctos" as any).insert(input as any).select().single();
+      if (error) throw error;
+      return data as unknown as FlowMapCTO;
+    },
+    onSuccess: (_, v) => qc.invalidateQueries({ queryKey: ["flow-map", v.map_id] }),
+    onError: (e) => toast({ variant: "destructive", title: "Erro ao criar CTO", description: String(e) }),
+  });
+
+  const updateCTO = useMutation({
+    mutationFn: async ({ id, map_id, ...rest }: Partial<FlowMapCTO> & { id: string; map_id: string }) => {
+      const { error } = await supabase.from("flow_map_ctos" as any).update(rest as any).eq("id", id);
+      if (error) throw error;
+      return map_id;
+    },
+    onSuccess: (mapId) => qc.invalidateQueries({ queryKey: ["flow-map", mapId] }),
+  });
+
+  const removeCTO = useMutation({
+    mutationFn: async ({ id, map_id }: { id: string; map_id: string }) => {
+      const { error } = await supabase.from("flow_map_ctos" as any).delete().eq("id", id);
+      if (error) throw error;
+      return map_id;
+    },
+    onSuccess: (mapId) => qc.invalidateQueries({ queryKey: ["flow-map", mapId] }),
+  });
+
+  /* ── Cable mutations ── */
+  const addCable = useMutation({
+    mutationFn: async (input: Omit<FlowMapCable, "id" | "created_at" | "updated_at">) => {
+      const { data, error } = await supabase.from("flow_map_cables" as any).insert(input as any).select().single();
+      if (error) throw error;
+      return data as unknown as FlowMapCable;
+    },
+    onSuccess: (_, v) => qc.invalidateQueries({ queryKey: ["flow-map", v.map_id] }),
+    onError: (e) => toast({ variant: "destructive", title: "Erro ao criar cabo", description: String(e) }),
+  });
+
+  const updateCable = useMutation({
+    mutationFn: async ({ id, map_id, ...rest }: Partial<FlowMapCable> & { id: string; map_id: string }) => {
+      const { error } = await supabase.from("flow_map_cables" as any).update(rest as any).eq("id", id);
+      if (error) throw error;
+      return map_id;
+    },
+    onSuccess: (mapId) => qc.invalidateQueries({ queryKey: ["flow-map", mapId] }),
+  });
+
+  const removeCable = useMutation({
+    mutationFn: async ({ id, map_id }: { id: string; map_id: string }) => {
+      const { error } = await supabase.from("flow_map_cables" as any).delete().eq("id", id);
+      if (error) throw error;
+      return map_id;
+    },
+    onSuccess: (mapId) => qc.invalidateQueries({ queryKey: ["flow-map", mapId] }),
+  });
+
+  return {
+    createMap, updateMap, deleteMap,
+    addHost, updateHost, removeHost,
+    addLink, updateLink, removeLink,
+    addLinkItem, removeLinkItem,
+    addCTO, updateCTO, removeCTO,
+    addCable, updateCable, removeCable,
+  };
 }
