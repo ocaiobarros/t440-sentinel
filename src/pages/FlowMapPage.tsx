@@ -189,20 +189,32 @@ function MapEditorView({ mapId }: { mapId: string }) {
     [mode, tenantId, editingLinkId, viabilityPicking],
   );
 
+  // CTO telemetry state from aggregator
+  const [ctoTelemetry, setCtoTelemetry] = useState<Record<string, {
+    status: string; healthRatio: number; onuOnline: number; onuOffline: number;
+    onuAuthorized: number; ponLinkStatus: string; trafficIn: number | null;
+    trafficOut: number | null; temperature: number | null; fanStatus: string | null;
+  }>>({});
+
   // CTO status aggregator polling
   useEffect(() => {
     if (!activeConnectionId || !data?.ctos?.length) return;
     const poll = async () => {
       try {
-        await supabase.functions.invoke("cto-status-aggregator", {
+        const { data: result } = await supabase.functions.invoke("cto-status-aggregator", {
           body: { map_id: mapId, connection_id: activeConnectionId },
         });
+        if (result?.ctos) {
+          const telMap: typeof ctoTelemetry = {};
+          for (const c of result.ctos) telMap[c.id] = c;
+          setCtoTelemetry(telMap);
+        }
       } catch (e) {
         console.warn("[CTO aggregator] error:", e);
       }
     };
     poll();
-    const interval = setInterval(poll, 60_000); // every 60s
+    const interval = setInterval(poll, 60_000);
     return () => clearInterval(interval);
   }, [mapId, activeConnectionId, data?.ctos?.length]);
 
@@ -501,6 +513,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             linkTraffic={linkTraffic}
             impactedLinkIds={impactedLinks}
             isolatedNodeIds={isolatedNodes}
+            ctoTelemetry={ctoTelemetry}
             onMapClick={handleMapClick}
             onHostClick={handleHostClick}
             onMapReady={setLeafletMap}
