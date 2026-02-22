@@ -1,9 +1,23 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, ArrowDown, ArrowUp, Clock, Radio, ShieldAlert, Activity, ChevronDown, ChevronUp, Locate, Link2, Eye, EyeOff } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Clock, Radio, ShieldAlert, Activity, ChevronDown, ChevronUp, Locate, Link2, Eye, EyeOff, Bell } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { supabase } from "@/integrations/supabase/client";
 import type { FlowMapHost, FlowMapLink, HostStatus } from "@/hooks/useFlowMaps";
 import type { LinkEvent } from "@/hooks/useFlowMapStatus";
+
+/* ─── Webhook Alert Entry ─── */
+interface WebhookAlertEntry {
+  id: string;
+  event_id: string;
+  event_name: string;
+  host_name: string;
+  pon_index?: string;
+  severity: string;
+  status: string;
+  ts: string;
+  receivedAt: number;
+}
 
 /* ─── Types ─── */
 interface EventEntry {
@@ -31,6 +45,14 @@ interface NocConsolePanelProps {
   warRoom?: boolean;
   hideAccessNetwork?: boolean;
   onHideAccessNetworkChange?: (v: boolean) => void;
+}
+
+function severityLabel(sev: string): string {
+  const map: Record<string, string> = {
+    "0": "Info", "1": "Info", "2": "Warning", "3": "Average", "4": "High", "5": "Disaster",
+    info: "Info", warning: "Warning", average: "Average", high: "High", disaster: "Disaster",
+  };
+  return map[(sev ?? "").toLowerCase()] ?? sev ?? "—";
 }
 
 /* ─── Helpers ─── */
@@ -90,9 +112,37 @@ export default function NocConsolePanel({
   onHideAccessNetworkChange,
 }: NocConsolePanelProps) {
   const [events, setEvents] = useState<EventEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<"timeline" | "sla">("timeline");
+  const [activeTab, setActiveTab] = useState<"timeline" | "sla" | "alerts">("timeline");
   const prevStatusRef = useRef<Record<string, string>>({});
   const maxEvents = 50;
+
+  // ─── Webhook alert history via Supabase Realtime ───
+  const [webhookAlerts, setWebhookAlerts] = useState<WebhookAlertEntry[]>([]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel("flowmap:alerts")
+      .on("broadcast", { event: "ZABBIX_WEBHOOK" }, (msg) => {
+        const p = msg.payload as Record<string, unknown>;
+        const entry: WebhookAlertEntry = {
+          id: `wh-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          event_id: String(p.event_id ?? ""),
+          event_name: String(p.event_name ?? ""),
+          host_name: String(p.host_name ?? ""),
+          pon_index: p.pon_index ? String(p.pon_index) : undefined,
+          severity: String(p.severity ?? ""),
+          status: String(p.status ?? ""),
+          ts: String(p.ts ?? new Date().toISOString()),
+          receivedAt: Date.now(),
+        };
+        setWebhookAlerts((prev) => [entry, ...prev].slice(0, 50));
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
 
   // ─── Detect status transitions ───
   useEffect(() => {
@@ -282,6 +332,15 @@ export default function NocConsolePanel({
           <Link2 className="w-3 h-3" />
           SLA ({activeEvents.length})
         </button>
+        <button
+          onClick={() => setActiveTab("alerts")}
+          className={`flex-1 flex items-center justify-center gap-1 p-2 text-[9px] font-display uppercase tracking-wider transition-colors ${
+            activeTab === "alerts" ? "text-neon-amber border-b-2 border-neon-amber" : "text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Bell className="w-3 h-3" />
+          Alertas ({webhookAlerts.length})
+        </button>
       </div>
 
       {/* ── Tab Content ── */}
@@ -328,7 +387,7 @@ export default function NocConsolePanel({
               ))}
             </div>
           )
-        ) : (
+        ) : activeTab === "sla" ? (
           /* ── SLA Events Panel ── */
           <div className="p-1.5 space-y-2">
             {/* Active events */}
@@ -417,6 +476,61 @@ export default function NocConsolePanel({
               </div>
             )}
           </div>
+        ) : (
+          /* ── Webhook Alerts Panel ── */
+          webhookAlerts.length === 0 ? (
+            <div className="p-4 text-center">
+              <Bell className="w-6 h-6 text-muted-foreground/30 mx-auto mb-2" />
+              <p className="text-[10px] text-muted-foreground/50 font-mono">Aguardando alertas via webhook...</p>
+              <p className="text-[8px] text-muted-foreground/30 font-mono mt-1">Alertas aparecem em tempo real</p>
+            </div>
+          ) : (
+            <div className="p-1.5 space-y-1">
+              {webhookAlerts.map((alert, i) => {
+                const isProblem = alert.status === "1" || alert.status.toUpperCase() === "PROBLEM";
+                const sevColors: Record<string, string> = {
+                  "5": "text-neon-red bg-neon-red/10 border-neon-red/30",
+                  "4": "text-neon-red bg-neon-red/10 border-neon-red/30",
+                  "3": "text-neon-amber bg-neon-amber/10 border-neon-amber/30",
+                  "2": "text-neon-amber bg-neon-amber/10 border-neon-amber/30",
+                  disaster: "text-neon-red bg-neon-red/10 border-neon-red/30",
+                  high: "text-neon-red bg-neon-red/10 border-neon-red/30",
+                  average: "text-neon-amber bg-neon-amber/10 border-neon-amber/30",
+                  warning: "text-neon-amber bg-neon-amber/10 border-neon-amber/30",
+                };
+                const colors = isProblem
+                  ? (sevColors[alert.severity.toLowerCase()] ?? "text-neon-red bg-neon-red/10 border-neon-red/30")
+                  : "text-neon-green bg-neon-green/10 border-neon-green/30";
+
+                return (
+                  <motion.div
+                    key={alert.id}
+                    initial={i === 0 ? { opacity: 0, x: 10 } : false}
+                    animate={{ opacity: 1, x: 0 }}
+                    className={`p-2 rounded border text-[10px] ${colors}`}
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className={`text-[10px] ${isProblem ? "" : ""}`}>{isProblem ? "🚨" : "✅"}</span>
+                        <span className="font-mono font-bold text-foreground truncate text-[10px]">
+                          {alert.host_name || "—"}
+                        </span>
+                      </div>
+                      <span className="text-[8px] font-mono text-muted-foreground/60">
+                        {timeAgo(alert.receivedAt)}
+                      </span>
+                    </div>
+                    <p className="text-[9px] font-mono text-muted-foreground truncate">{alert.event_name}</p>
+                    <div className="flex items-center gap-2 mt-1 text-[8px] font-mono text-muted-foreground/70">
+                      {alert.pon_index && <span>PON: {alert.pon_index}</span>}
+                      <span className="uppercase">{isProblem ? "PROBLEM" : "OK"}</span>
+                      <span>{severityLabel(alert.severity)}</span>
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </div>
+          )
         )}
       </div>
     </div>
