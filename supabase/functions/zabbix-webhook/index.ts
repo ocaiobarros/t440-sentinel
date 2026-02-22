@@ -118,6 +118,19 @@ Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
   if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
+  // ── Token authentication ──
+  const webhookToken = Deno.env.get("FLOWPULSE_WEBHOOK_TOKEN");
+  if (webhookToken) {
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return json({ error: "Missing Authorization header. Use: Bearer <token>" }, 401);
+    }
+    const providedToken = authHeader.replace("Bearer ", "").trim();
+    if (providedToken !== webhookToken) {
+      return json({ error: "Invalid token" }, 403);
+    }
+  }
+
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
   const telegramBotToken = Deno.env.get("TELEGRAM_BOT_TOKEN");
