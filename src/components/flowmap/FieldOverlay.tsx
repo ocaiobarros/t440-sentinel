@@ -108,7 +108,7 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
     return () => window.removeEventListener("field-host-tap", handler);
   }, [hosts]);
 
-  // ─── Fetch photos when host is selected ───
+  // ─── Fetch photos from ALL technicians when host is selected ───
   useEffect(() => {
     if (!selectedHost) {
       setPhotos([]);
@@ -119,44 +119,37 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
     const fetchPhotos = async () => {
       setLoadingPhotos(true);
       try {
-        // List all files in any user folder for this map+host
-        const prefix = "";
-        const { data: userFolders, error: listErr } = await supabase.storage
+        // List top-level user folders in the bucket
+        const { data: topFolders, error: topErr } = await supabase.storage
           .from("flowmap-attachments")
-          .list(prefix, { limit: 100 });
+          .list("", { limit: 200 });
 
-        if (listErr) throw listErr;
+        if (topErr) throw topErr;
 
-        // We need to search across user folders: {userId}/{mapId}/{hostId}/
         const allPhotos: { name: string; url: string }[] = [];
 
-        // Try listing directly with a known pattern
-        // Since we don't know all user IDs, list top-level folders then drill down
-        for (const folder of userFolders || []) {
-          if (!folder.id) continue; // it's a folder
-          // Skip files at root level
-        }
+        // For each user folder, try listing mapId/hostId path
+        const userFolders = (topFolders || []).filter((f) => !f.metadata); // folders have no metadata
+        const hostPath = (userId: string) => `${userId}/${mapId}/${selectedHost.id}`;
 
-        // Alternative approach: list from the map/host path for all users
-        const { data: session } = await supabase.auth.getSession();
-        if (session?.session) {
-          const userId = session.session.user.id;
-          const hostPath = `${userId}/${mapId}/${selectedHost.id}`;
-          const { data: hostFiles, error: hostErr } = await supabase.storage
-            .from("flowmap-attachments")
-            .list(hostPath, { limit: 50, sortBy: { column: "created_at", order: "desc" } });
+        await Promise.all(
+          userFolders.map(async (folder) => {
+            const path = hostPath(folder.name);
+            const { data: files, error } = await supabase.storage
+              .from("flowmap-attachments")
+              .list(path, { limit: 50, sortBy: { column: "created_at", order: "desc" } });
 
-          if (!hostErr && hostFiles) {
-            for (const file of hostFiles) {
-              if (file.name && !file.id?.includes("/")) {
+            if (error || !files) return;
+            for (const file of files) {
+              if (file.name && file.metadata) {
                 const { data: urlData } = supabase.storage
                   .from("flowmap-attachments")
-                  .getPublicUrl(`${hostPath}/${file.name}`);
+                  .getPublicUrl(`${path}/${file.name}`);
                 allPhotos.push({ name: file.name, url: urlData.publicUrl });
               }
             }
-          }
-        }
+          }),
+        );
 
         if (!cancelled) setPhotos(allPhotos);
       } catch (err) {
