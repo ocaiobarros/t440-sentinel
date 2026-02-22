@@ -817,7 +817,7 @@ export type Database = {
           id: string
           link_id: string
           started_at: string
-          status: string
+          status: Database["public"]["Enums"]["link_status"]
           tenant_id: string
         }
         Insert: {
@@ -827,7 +827,7 @@ export type Database = {
           id?: string
           link_id: string
           started_at?: string
-          status: string
+          status?: Database["public"]["Enums"]["link_status"]
           tenant_id: string
         }
         Update: {
@@ -837,7 +837,7 @@ export type Database = {
           id?: string
           link_id?: string
           started_at?: string
-          status?: string
+          status?: Database["public"]["Enums"]["link_status"]
           tenant_id?: string
         }
         Relationships: [
@@ -904,7 +904,7 @@ export type Database = {
         Row: {
           capacity_mbps: number
           created_at: string
-          current_status: string
+          current_status: Database["public"]["Enums"]["link_status"]
           dest_host_id: string
           dest_role: string
           geometry: Json
@@ -923,7 +923,7 @@ export type Database = {
         Insert: {
           capacity_mbps?: number
           created_at?: string
-          current_status?: string
+          current_status?: Database["public"]["Enums"]["link_status"]
           dest_host_id: string
           dest_role?: string
           geometry?: Json
@@ -942,7 +942,7 @@ export type Database = {
         Update: {
           capacity_mbps?: number
           created_at?: string
-          current_status?: string
+          current_status?: Database["public"]["Enums"]["link_status"]
           dest_host_id?: string
           dest_role?: string
           geometry?: Json
@@ -1718,6 +1718,7 @@ export type Database = {
       cable_type: "AS" | "ASU" | "Geleado" | "ADSS" | "Outro"
       cto_capacity: "8" | "16" | "32"
       cto_status: "OK" | "DEGRADED" | "CRITICAL" | "UNKNOWN"
+      link_status: "UP" | "DOWN" | "DEGRADED" | "UNKNOWN"
       maintenance_scope_type:
         | "tenant_all"
         | "zabbix_connection"
@@ -1860,6 +1861,7 @@ export const Constants = {
       cable_type: ["AS", "ASU", "Geleado", "ADSS", "Outro"],
       cto_capacity: ["8", "16", "32"],
       cto_status: ["OK", "DEGRADED", "CRITICAL", "UNKNOWN"],
+      link_status: ["UP", "DOWN", "DEGRADED", "UNKNOWN"],
       maintenance_scope_type: [
         "tenant_all",
         "zabbix_connection",
