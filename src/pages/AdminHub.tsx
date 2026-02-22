@@ -54,9 +54,12 @@ import {
   EyeOff,
   Radio,
   Activity,
+  TrendingUp,
 } from "lucide-react";
 import TelemetryWizard from "@/components/admin/TelemetryWizard";
 import TelemetryHealthPanel from "@/components/admin/TelemetryHealthPanel";
+import AuditLogPanel from "@/components/admin/AuditLogPanel";
+import ReservationFunnelPanel from "@/components/admin/ReservationFunnelPanel";
 
 interface Profile {
   id: string;
@@ -499,6 +502,9 @@ export default function AdminHub() {
               <TabsTrigger value="telemetry" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                 <Radio className="w-4 h-4 mr-2" /> Telemetria
               </TabsTrigger>
+              <TabsTrigger value="intelligence" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+                <Activity className="w-4 h-4 mr-2" /> Intelligence Ops
+              </TabsTrigger>
             </TabsList>
 
             {/* ─── USERS TAB ─── */}
@@ -912,6 +918,37 @@ export default function AdminHub() {
                   Configure o pipeline de alertas: Zabbix Webhook → FlowPulse → Telegram. Siga os 3 passos abaixo.
                 </p>
                 <TelemetryWizard />
+              </section>
+            </TabsContent>
+
+            {/* ─── INTELLIGENCE OPS TAB ─── */}
+            <TabsContent value="intelligence" className="space-y-6">
+              {/* Reservation Funnel */}
+              <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-6 space-y-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <TrendingUp className="w-5 h-5 text-primary" />
+                  <h2 className="text-base font-bold font-[Orbitron] tracking-wide text-foreground">
+                    FUNIL DE VENDAS & ATIVAÇÃO
+                  </h2>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Métricas de reservas: SLA de ativação, taxa de conversão e pipeline operacional.
+                </p>
+                <ReservationFunnelPanel />
+              </section>
+
+              {/* Audit Log */}
+              <section className="rounded-xl border border-border bg-card/60 backdrop-blur-sm p-6 space-y-4">
+                <div className="flex items-center gap-3 mb-2">
+                  <Shield className="w-5 h-5 text-primary" />
+                  <h2 className="text-base font-bold font-[Orbitron] tracking-wide text-foreground">
+                    TRILHA DE AUDITORIA
+                  </h2>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Registro em tempo real de todas as mutações no FlowMap — quem, o quê e o impacto.
+                </p>
+                <AuditLogPanel />
               </section>
             </TabsContent>
           </Tabs>
