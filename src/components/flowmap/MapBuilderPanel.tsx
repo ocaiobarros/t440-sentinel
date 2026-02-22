@@ -10,7 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { supabase } from "@/integrations/supabase/client";
-import type { FlowMapHost, FlowMapLink, FlowMapLinkItem, FlowMapCTO, FlowMapCable } from "@/hooks/useFlowMaps";
+import type { FlowMapHost, FlowMapLink, FlowMapLinkItem, FlowMapCTO, FlowMapCable, FlowMapReserva } from "@/hooks/useFlowMaps";
 import LinkItemsEditor from "./LinkItemsEditor";
 
 export type BuilderMode = "idle" | "place-host" | "connect-origin" | "connect-dest" | "draw-route";
@@ -36,6 +36,7 @@ interface Props {
   links: FlowMapLink[];
   ctos?: FlowMapCTO[];
   cables?: FlowMapCable[];
+  reservas?: FlowMapReserva[];
   mode: BuilderMode;
   onModeChange: (m: BuilderMode) => void;
   connectionId?: string;
@@ -69,9 +70,12 @@ interface Props {
   editingCableId?: string | null;
   snapToStreet?: boolean;
   onSnapToStreetChange?: (v: boolean) => void;
+  /* Reserva actions */
+  onAddReserva?: (data: Omit<FlowMapReserva, "id" | "created_at" | "updated_at">) => void;
+  onRemoveReserva?: (id: string) => void;
 }
 export default function MapBuilderPanel({
-  hosts, links, ctos = [], cables = [], mode, onModeChange, connectionId, tenantId, mapId,
+  hosts, links, ctos = [], cables = [], reservas = [], mode, onModeChange, connectionId, tenantId, mapId,
   onAddHost, onRemoveHost, onUpdateHostPosition,
   pendingOrigin, onSelectOrigin, onCreateLink, onRemoveLink,
   onAddLinkItem, onRemoveLinkItem,
@@ -79,6 +83,7 @@ export default function MapBuilderPanel({
   onAddCTO, onRemoveCTO, onUpdateCTO, onAddCable, onRemoveCable,
   onEditCableVertices, editingCableId,
   snapToStreet = false, onSnapToStreetChange,
+  onAddReserva, onRemoveReserva,
 }: Props) {
   const [editingLinkItemsId, setEditingLinkItemsId] = useState<string | null>(null);
   const [editingHostCoords, setEditingHostCoords] = useState<string | null>(null);
@@ -111,6 +116,11 @@ export default function MapBuilderPanel({
   const [cableSourceId, setCableSourceId] = useState("");
   const [cableTargetType, setCableTargetType] = useState<"host" | "cto">("cto");
   const [cableTargetId, setCableTargetId] = useState("");
+
+  /* ── Reserva form ── */
+  const [reservaAdding, setReservaAdding] = useState(false);
+  const [reservaForm, setReservaForm] = useState({ label: "", comprimento_m: "0", tipo_cabo: "ASU" });
+  const [reservaPlacing, setReservaPlacing] = useState(false);
 
   /* ── Fetch groups ── */
   const fetchGroups = async () => {
@@ -235,6 +245,30 @@ export default function MapBuilderPanel({
     window.addEventListener("flowmap-place-host", handler);
     return () => window.removeEventListener("flowmap-place-host", handler);
   }, [ctoPlacing, ctoForm, ctoOltId, tenantId, mapId, ctos.length, onAddCTO, onModeChange]);
+
+  /* Listen for map click when placing Reserva */
+  useEffect(() => {
+    if (!reservaPlacing || !tenantId || !onAddReserva) return;
+    const handler = (e: Event) => {
+      const { lat, lon } = (e as CustomEvent).detail;
+      onAddReserva({
+        tenant_id: tenantId,
+        map_id: mapId,
+        label: reservaForm.label || `Reserva-${reservas.length + 1}`,
+        comprimento_m: parseFloat(reservaForm.comprimento_m) || 0,
+        tipo_cabo: reservaForm.tipo_cabo,
+        status: "pendente",
+        lat,
+        lon,
+      });
+      setReservaPlacing(false);
+      setReservaAdding(false);
+      setReservaForm({ label: "", comprimento_m: "0", tipo_cabo: "ASU" });
+      onModeChange("idle");
+    };
+    window.addEventListener("flowmap-place-host", handler);
+    return () => window.removeEventListener("flowmap-place-host", handler);
+  }, [reservaPlacing, reservaForm, tenantId, mapId, reservas.length, onAddReserva, onModeChange]);
 
   const filteredGroups = search
     ? groups.filter((g) => g.name.toLowerCase().includes(search.toLowerCase()))
@@ -919,6 +953,115 @@ export default function MapBuilderPanel({
             </div>
           )}
         </section>
+
+        {/* ── RESERVAS SECTION ── */}
+        {onAddReserva && (
+          <section className="space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-display uppercase text-muted-foreground tracking-wider">Reservas ({reservas.length})</span>
+              <Button
+                size="sm"
+                variant={reservaAdding ? "default" : "outline"}
+                className="h-6 text-[10px] gap-1"
+                onClick={() => {
+                  if (reservaAdding) {
+                    setReservaAdding(false);
+                    setReservaPlacing(false);
+                    onModeChange("idle");
+                  } else {
+                    setReservaAdding(true);
+                  }
+                }}
+              >
+                {reservaAdding ? <X className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                {reservaAdding ? "Cancelar" : "Adicionar"}
+              </Button>
+            </div>
+
+            <AnimatePresence>
+              {reservaAdding && (
+                <motion.div
+                  initial={{ height: 0, opacity: 0 }}
+                  animate={{ height: "auto", opacity: 1 }}
+                  exit={{ height: 0, opacity: 0 }}
+                  className="overflow-hidden"
+                >
+                  <div className="space-y-2 p-2 rounded-lg border border-neon-amber/20 bg-neon-amber/5">
+                    <p className="text-[10px] text-neon-amber font-mono">Nova Reserva</p>
+                    <div className="space-y-1.5">
+                      <div>
+                        <label className="text-[8px] text-muted-foreground">Label</label>
+                        <Input
+                          value={reservaForm.label}
+                          onChange={(e) => setReservaForm((p) => ({ ...p, label: e.target.value }))}
+                          placeholder="Ex: Reserva Rua X"
+                          className="h-6 text-[10px]"
+                        />
+                      </div>
+                      <div className="flex gap-1.5">
+                        <div className="flex-1">
+                          <label className="text-[8px] text-muted-foreground">Comprimento (m)</label>
+                          <Input
+                            type="number"
+                            value={reservaForm.comprimento_m}
+                            onChange={(e) => setReservaForm((p) => ({ ...p, comprimento_m: e.target.value }))}
+                            placeholder="0"
+                            className="h-6 text-[10px] font-mono"
+                          />
+                        </div>
+                        <div className="flex-1">
+                          <label className="text-[8px] text-muted-foreground">Tipo Cabo</label>
+                          <Select value={reservaForm.tipo_cabo} onValueChange={(v) => setReservaForm((p) => ({ ...p, tipo_cabo: v }))}>
+                            <SelectTrigger className="h-6 text-[10px]"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {["AS", "ASU", "Geleado", "ADSS", "Outro"].map((t) => (
+                                <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                    {reservaPlacing ? (
+                      <div className="p-2 rounded border border-neon-amber/30 bg-neon-amber/10 text-center">
+                        <p className="text-[10px] text-neon-amber font-display uppercase tracking-wider">Clique no mapa para posicionar</p>
+                      </div>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="w-full h-6 text-[10px] gap-1 bg-neon-amber/10 text-neon-amber border border-neon-amber/30"
+                        onClick={() => {
+                          setReservaPlacing(true);
+                          onModeChange("place-host");
+                        }}
+                      >
+                        <MapPin className="w-3 h-3" /> Selecionar ponto no mapa
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Reserva list */}
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {reservas.map((r) => (
+                <div key={r.id} className="flex items-center justify-between p-1.5 rounded bg-muted/20 text-[10px]">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Box className="w-3 h-3 text-neon-amber shrink-0" />
+                    <span className="font-mono text-foreground truncate">{r.label || "Reserva"}</span>
+                    <span className="text-[8px] text-muted-foreground">{r.comprimento_m}m • {r.tipo_cabo}</span>
+                  </div>
+                  {onRemoveReserva && (
+                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onRemoveReserva(r.id)}>
+                      <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* ── ROUTE EDITOR INFO ── */}
         <AnimatePresence>
