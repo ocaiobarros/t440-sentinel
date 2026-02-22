@@ -65,6 +65,8 @@ interface Props {
   onUpdateCTO?: (id: string, data: Partial<FlowMapCTO>) => void;
   onAddCable?: (data: Omit<FlowMapCable, "id" | "created_at" | "updated_at">) => void;
   onRemoveCable?: (id: string) => void;
+  onEditCableVertices?: (cableId: string) => void;
+  editingCableId?: string | null;
 }
 
 export default function MapBuilderPanel({
@@ -74,6 +76,7 @@ export default function MapBuilderPanel({
   onAddLinkItem, onRemoveLinkItem,
   editingLinkId, onEditRoute, onCancelEditRoute, onRecalculateRoute, onUpdateLinkCapacity,
   onAddCTO, onRemoveCTO, onUpdateCTO, onAddCable, onRemoveCable,
+  onEditCableVertices, editingCableId,
 }: Props) {
   const [editingLinkItemsId, setEditingLinkItemsId] = useState<string | null>(null);
   const [editingHostCoords, setEditingHostCoords] = useState<string | null>(null);
@@ -98,6 +101,14 @@ export default function MapBuilderPanel({
   const [ctoForm, setCtoForm] = useState({ name: "", capacity: "16" as "8" | "16" | "32", pon_port_index: 0, description: "" });
   const [ctoPlacing, setCtoPlacing] = useState(false);
   const [ctoOltId, setCtoOltId] = useState<string | null>(null);
+
+  /* ── Cable form ── */
+  const [cableAdding, setCableAdding] = useState(false);
+  const [cableForm, setCableForm] = useState({ label: "", cable_type: "ASU" as "AS" | "ASU" | "Geleado" | "ADSS" | "Outro", fiber_count: 12, is_backbone: false });
+  const [cableSourceType, setCableSourceType] = useState<"host" | "cto">("host");
+  const [cableSourceId, setCableSourceId] = useState("");
+  const [cableTargetType, setCableTargetType] = useState<"host" | "cto">("cto");
+  const [cableTargetId, setCableTargetId] = useState("");
 
   /* ── Fetch groups ── */
   const fetchGroups = async () => {
@@ -727,6 +738,175 @@ export default function MapBuilderPanel({
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* ── CABLES SECTION ── */}
+        <section className="space-y-2">
+          <div className="flex items-center justify-between">
+            <span className="text-[10px] font-display uppercase text-muted-foreground tracking-wider">
+              Cabos ({cables.length})
+            </span>
+            {!cableAdding ? (
+              <Button size="sm" variant="outline" className="h-6 text-[10px] gap-1" onClick={() => setCableAdding(true)} disabled={!onAddCable}>
+                <Plus className="w-3 h-3" /> Novo Cabo
+              </Button>
+            ) : (
+              <Button size="sm" variant="default" className="h-6 text-[10px] gap-1" onClick={() => setCableAdding(false)}>
+                <X className="w-3 h-3" /> Cancelar
+              </Button>
+            )}
+          </div>
+
+          <AnimatePresence>
+            {cableAdding && (
+              <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} className="overflow-hidden">
+                <div className="space-y-2 p-2 rounded-lg border border-neon-cyan/20 bg-neon-cyan/5">
+                  <p className="text-[10px] text-neon-cyan font-mono">Novo Cabo de Fibra</p>
+                  <Input placeholder="Label do Cabo" value={cableForm.label} onChange={(e) => setCableForm((p) => ({ ...p, label: e.target.value }))} className="h-7 text-xs" />
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[8px] text-muted-foreground">Tipo</label>
+                      <Select value={cableForm.cable_type} onValueChange={(v: any) => setCableForm((p) => ({ ...p, cable_type: v }))}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {["AS", "ASU", "Geleado", "ADSS", "Outro"].map((t) => (
+                            <SelectItem key={t} value={t} className="text-xs">{t}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[8px] text-muted-foreground">Fibras</label>
+                      <Input type="number" value={cableForm.fiber_count} onChange={(e) => setCableForm((p) => ({ ...p, fiber_count: parseInt(e.target.value) || 12 }))} className="h-7 text-xs font-mono" />
+                    </div>
+                  </div>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <label className="text-[8px] text-muted-foreground">Origem</label>
+                      <Select value={cableSourceType} onValueChange={(v: any) => { setCableSourceType(v); setCableSourceId(""); }}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="host" className="text-xs">Host</SelectItem>
+                          <SelectItem value="cto" className="text-xs">CTO</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={cableSourceId} onValueChange={setCableSourceId}>
+                        <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {(cableSourceType === "host" ? hosts : ctos).map((n: any) => (
+                            <SelectItem key={n.id} value={n.id} className="text-xs">{n.host_name || n.name || n.id.slice(0, 8)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-[8px] text-muted-foreground">Destino</label>
+                      <Select value={cableTargetType} onValueChange={(v: any) => { setCableTargetType(v); setCableTargetId(""); }}>
+                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="host" className="text-xs">Host</SelectItem>
+                          <SelectItem value="cto" className="text-xs">CTO</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <Select value={cableTargetId} onValueChange={setCableTargetId}>
+                        <SelectTrigger className="h-7 text-xs mt-1"><SelectValue placeholder="Selecionar..." /></SelectTrigger>
+                        <SelectContent>
+                          {(cableTargetType === "host" ? hosts : ctos).map((n: any) => (
+                            <SelectItem key={n.id} value={n.id} className="text-xs">{n.host_name || n.name || n.id.slice(0, 8)}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch checked={cableForm.is_backbone} onCheckedChange={(v) => setCableForm((p) => ({ ...p, is_backbone: v }))} />
+                    <span className="text-[9px] text-muted-foreground">Backbone (visível em zoom baixo)</span>
+                  </div>
+                  <Button
+                    size="sm"
+                    className="w-full h-7 text-[10px] gap-1 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30"
+                    disabled={!cableSourceId || !cableTargetId || !tenantId}
+                    onClick={async () => {
+                      if (!tenantId || !onAddCable) return;
+                      // Get source/dest coords for initial geometry
+                      const srcNode = cableSourceType === "host" ? hosts.find((h) => h.id === cableSourceId) : ctos.find((c) => c.id === cableSourceId);
+                      const tgtNode = cableTargetType === "host" ? hosts.find((h) => h.id === cableTargetId) : ctos.find((c) => c.id === cableTargetId);
+                      if (!srcNode || !tgtNode) return;
+                      const srcCoord: [number, number] = [(srcNode as any).lon, (srcNode as any).lat];
+                      const tgtCoord: [number, number] = [(tgtNode as any).lon, (tgtNode as any).lat];
+
+                      // Try OSRM route
+                      let coords: [number, number][] = [srcCoord, tgtCoord];
+                      let distKm = 0;
+                      try {
+                        const { data: routeData } = await supabase.functions.invoke("flowmap-route", {
+                          body: { origin_lat: srcCoord[1], origin_lon: srcCoord[0], dest_lat: tgtCoord[1], dest_lon: tgtCoord[0] },
+                        });
+                        if (routeData?.geometry?.coordinates?.length > 0) {
+                          coords = routeData.geometry.coordinates;
+                          distKm = routeData.distance_km || 0;
+                        }
+                      } catch { /* fallback */ }
+
+                      onAddCable({
+                        tenant_id: tenantId,
+                        map_id: mapId,
+                        label: cableForm.label || `Cabo-${cables.length + 1}`,
+                        geometry: { type: "LineString", coordinates: coords } as any,
+                        source_node_type: cableSourceType,
+                        source_node_id: cableSourceId,
+                        target_node_type: cableTargetType,
+                        target_node_id: cableTargetId,
+                        fiber_count: cableForm.fiber_count,
+                        cable_type: cableForm.cable_type,
+                        distance_km: distKm,
+                        is_backbone: cableForm.is_backbone,
+                        color_override: null,
+                      });
+                      setCableAdding(false);
+                      setCableForm({ label: "", cable_type: "ASU", fiber_count: 12, is_backbone: false });
+                      setCableSourceId("");
+                      setCableTargetId("");
+                    }}
+                  >
+                    <Cable className="w-3 h-3" /> Criar Cabo (com rota OSRM)
+                  </Button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          {/* Cable list */}
+          <div className="space-y-1 max-h-40 overflow-y-auto">
+            {cables.map((c) => (
+              <div key={c.id} className={`flex items-center justify-between p-1.5 rounded text-[10px] ${editingCableId === c.id ? "bg-neon-cyan/15 border border-neon-cyan/30" : "bg-muted/20"}`}>
+                <div className="flex items-center gap-1.5 min-w-0">
+                  <Cable className="w-3 h-3 text-neon-cyan shrink-0" />
+                  <span className="font-mono text-foreground truncate">{c.label || "Cabo"}</span>
+                  <span className="text-[8px] text-muted-foreground/60">{c.cable_type} • {c.fiber_count}f</span>
+                  {c.is_backbone && <span className="text-[7px] px-1 py-0 rounded bg-neon-amber/15 text-neon-amber border border-neon-amber/20">BB</span>}
+                </div>
+                <div className="flex items-center gap-0.5">
+                  {onEditCableVertices && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className={`h-5 w-5 ${editingCableId === c.id ? "text-neon-cyan" : ""}`}
+                      onClick={() => onEditCableVertices(c.id)}
+                      title="Editar vértices"
+                    >
+                      <Pencil className="w-3 h-3" />
+                    </Button>
+                  )}
+                  {onRemoveCable && (
+                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => onRemoveCable(c.id)}>
+                      <Trash2 className="w-3 h-3 text-muted-foreground hover:text-neon-red" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+            ))}
           </div>
         </section>
 

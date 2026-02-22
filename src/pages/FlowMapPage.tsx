@@ -19,6 +19,7 @@ import { useZabbixConnections } from "@/hooks/useZabbixConnections";
 import FlowMapCanvas from "@/components/flowmap/FlowMapCanvas";
 import MapBuilderPanel, { type BuilderMode } from "@/components/flowmap/MapBuilderPanel";
 import NocConsolePanel from "@/components/flowmap/NocConsolePanel";
+import CableVertexEditor from "@/components/flowmap/CableVertexEditor";
 import { useAudioAlert } from "@/hooks/useAudioAlert";
 import { useIsMobile } from "@/hooks/use-mobile";
 import FieldOverlay from "@/components/flowmap/FieldOverlay";
@@ -142,6 +143,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
   const [focusHost, setFocusHost] = useState<FlowMapHost | null>(null);
   const [warRoom, setWarRoom] = useState(false);
   const [leafletMap, setLeafletMap] = useState<any>(null);
+  const [editingCableId, setEditingCableId] = useState<string | null>(null);
+  const [snapToStreet, setSnapToStreet] = useState(false);
   const isMobile = useIsMobile();
   const { muted, toggleMute, playBeep } = useAudioAlert();
 
@@ -305,6 +308,21 @@ function MapEditorView({ mapId }: { mapId: string }) {
     [data, mapId, updateLink, toast],
   );
 
+  const handleCableGeometryUpdate = useCallback(
+    async (cableId: string, geometry: { type: string; coordinates: [number, number][] }) => {
+      await updateCable.mutateAsync({
+        id: cableId,
+        map_id: mapId,
+        geometry: geometry as any,
+      });
+    },
+    [mapId, updateCable],
+  );
+
+  const handleEditCableVertices = useCallback((cableId: string) => {
+    setEditingCableId((prev) => (prev === cableId ? null : cableId));
+  }, []);
+
   const handleFocusHost = useCallback((host: FlowMapHost) => {
     setFocusHost(host);
     setTimeout(() => setFocusHost(null), 2000);
@@ -453,6 +471,21 @@ function MapEditorView({ mapId }: { mapId: string }) {
             focusHost={focusHost}
           />
 
+          {/* Cable Vertex Editor */}
+          {editingCableId && leafletMap && data.cables && (() => {
+            const cable = data.cables.find((c) => c.id === editingCableId);
+            return cable ? (
+              <CableVertexEditor
+                map={leafletMap}
+                cable={cable}
+                mapId={mapId}
+                onUpdate={handleCableGeometryUpdate}
+                snapToStreet={snapToStreet}
+                onClose={() => setEditingCableId(null)}
+              />
+            ) : null;
+          })()}
+
           {/* Field-NOC overlay — mobile only */}
           {isMobile && (
             <FieldOverlay
@@ -562,6 +595,8 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 onRemoveCTO={(id) => removeCTO.mutate({ id, map_id: mapId })}
                 onAddCable={(data) => addCable.mutate(data as any)}
                 onRemoveCable={(id) => removeCable.mutate({ id, map_id: mapId })}
+                onEditCableVertices={handleEditCableVertices}
+                editingCableId={editingCableId}
               />
             </motion.div>
           )}
