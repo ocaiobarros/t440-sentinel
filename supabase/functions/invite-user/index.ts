@@ -106,6 +106,7 @@ Deno.serve(async (req) => {
         password: userPassword,
         email_confirm: true,
         user_metadata: { display_name: display_name || email.split("@")[0] },
+        app_metadata: { tenant_id: callerTenant },
       });
       if (createError || !newUser.user) {
         return new Response(JSON.stringify({ error: createError?.message || "Failed to create user" }), {
@@ -125,6 +126,11 @@ Deno.serve(async (req) => {
         tenant_id: callerTenant,
         display_name: display_name || email.split("@")[0],
       }).eq("id", userId);
+
+      // Update app_metadata so JWT carries the correct tenant_id
+      await adminClient.auth.admin.updateUser(userId, {
+        app_metadata: { tenant_id: callerTenant },
+      });
 
       // Delete auto-created role
       await adminClient.from("user_roles").delete().eq("user_id", userId).eq("tenant_id", autoTenantId);
