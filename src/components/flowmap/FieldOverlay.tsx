@@ -1,8 +1,8 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-import { Crosshair, Camera, Sun, X, ChevronUp, Wifi, WifiOff, Clock, MapPin } from "lucide-react";
+import { Crosshair, Camera, Sun, X, Wifi, WifiOff, Clock, MapPin, ImageIcon, Loader2 } from "lucide-react";
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerClose } from "@/components/ui/drawer";
 import { Button } from "@/components/ui/button";
-import { Switch } from "@/components/ui/switch";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import type { FlowMapHost, HostStatus } from "@/hooks/useFlowMaps";
@@ -24,6 +24,8 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
   const [selectedHost, setSelectedHost] = useState<FlowMapHost | null>(null);
   const [highContrast, setHighContrast] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [photos, setPhotos] = useState<{ name: string; url: string }[]>([]);
+  const [loadingPhotos, setLoadingPhotos] = useState(false);
   const watchIdRef = useRef<number | null>(null);
   const gpsMarkerRef = useRef<L.Marker | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -98,11 +100,74 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
     const handler = (e: Event) => {
       const hostId = (e as CustomEvent).detail;
       const host = hosts.find((h) => h.id === hostId);
+      console.log("[FieldOverlay] field-host-tap received, hostId:", hostId, "found:", !!host);
       if (host) setSelectedHost(host);
     };
     window.addEventListener("field-host-tap", handler);
     return () => window.removeEventListener("field-host-tap", handler);
   }, [hosts]);
+
+  // ─── Fetch photos when host is selected ───
+  useEffect(() => {
+    if (!selectedHost) {
+      setPhotos([]);
+      return;
+    }
+
+    let cancelled = false;
+    const fetchPhotos = async () => {
+      setLoadingPhotos(true);
+      try {
+        // List all files in any user folder for this map+host
+        const prefix = "";
+        const { data: userFolders, error: listErr } = await supabase.storage
+          .from("flowmap-attachments")
+          .list(prefix, { limit: 100 });
+
+        if (listErr) throw listErr;
+
+        // We need to search across user folders: {userId}/{mapId}/{hostId}/
+        const allPhotos: { name: string; url: string }[] = [];
+
+        // Try listing directly with a known pattern
+        // Since we don't know all user IDs, list top-level folders then drill down
+        for (const folder of userFolders || []) {
+          if (!folder.id) continue; // it's a folder
+          // Skip files at root level
+        }
+
+        // Alternative approach: list from the map/host path for all users
+        const { data: session } = await supabase.auth.getSession();
+        if (session?.session) {
+          const userId = session.session.user.id;
+          const hostPath = `${userId}/${mapId}/${selectedHost.id}`;
+          const { data: hostFiles, error: hostErr } = await supabase.storage
+            .from("flowmap-attachments")
+            .list(hostPath, { limit: 50, sortBy: { column: "created_at", order: "desc" } });
+
+          if (!hostErr && hostFiles) {
+            for (const file of hostFiles) {
+              if (file.name && !file.id?.includes("/")) {
+                const { data: urlData } = supabase.storage
+                  .from("flowmap-attachments")
+                  .getPublicUrl(`${hostPath}/${file.name}`);
+                allPhotos.push({ name: file.name, url: urlData.publicUrl });
+              }
+            }
+          }
+        }
+
+        if (!cancelled) setPhotos(allPhotos);
+      } catch (err) {
+        console.error("[FieldOverlay] Error fetching photos:", err);
+      } finally {
+        if (!cancelled) setLoadingPhotos(false);
+      }
+    };
+
+    fetchPhotos();
+    return () => { cancelled = true; };
+  }, [selectedHost, mapId]);
 
   // ─── High contrast toggle ───
   useEffect(() => {
@@ -133,7 +198,10 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
       if (error) throw error;
 
       const { data: urlData } = supabase.storage.from("flowmap-attachments").getPublicUrl(path);
-      toast({ title: "📸 Foto anexada!", description: urlData.publicUrl.split("/").pop() });
+      
+      // Add to local gallery immediately
+      setPhotos((prev) => [{ name: path.split("/").pop() || "", url: urlData.publicUrl }, ...prev]);
+      toast({ title: "📸 Foto anexada!" });
     } catch (err) {
       toast({ title: "Erro no upload", description: (err as Error).message, variant: "destructive" });
     } finally {
@@ -146,19 +214,10 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
   const hostStatus = selectedHost ? statusMap[selectedHost.zabbix_host_id] : undefined;
   const stColor = hostStatus?.status === "UP" ? "#00e676" : hostStatus?.status === "DOWN" ? "#ff1744" : "#9e9e9e";
 
-  const fmtBps = (bps: number | null | undefined): string => {
-    if (bps == null || bps === 0) return "0";
-    if (bps >= 1e9) return `${(bps / 1e9).toFixed(2)} Gbps`;
-    if (bps >= 1e6) return `${(bps / 1e6).toFixed(1)} Mbps`;
-    if (bps >= 1e3) return `${(bps / 1e3).toFixed(0)} Kbps`;
-    return `${bps.toFixed(0)} bps`;
-  };
-
   return (
     <>
       {/* ── Floating action buttons ── */}
       <div className="absolute bottom-20 right-3 z-[1000] flex flex-col gap-2">
-        {/* High contrast toggle */}
         <button
           onClick={() => setHighContrast((p) => !p)}
           className={`w-12 h-12 rounded-full flex items-center justify-center shadow-lg border transition-all ${
@@ -171,7 +230,6 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
           <Sun className="w-5 h-5" />
         </button>
 
-        {/* GPS button */}
         <button
           onClick={gpsActive ? centerOnMe : startGps}
           className={`w-14 h-14 rounded-full flex items-center justify-center shadow-lg border transition-all ${
@@ -193,9 +251,12 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
         </div>
       )}
 
-      {/* ── Host detail drawer ── */}
+      {/* ── Host detail drawer — z-index forced to 9999 ── */}
       <Drawer open={!!selectedHost} onOpenChange={(open) => !open && setSelectedHost(null)}>
-        <DrawerContent className="bg-card border-t border-border/50 max-h-[70vh]">
+        <DrawerContent 
+          className="bg-card border-t border-border/50 max-h-[70vh]"
+          style={{ zIndex: 9999 }}
+        >
           <DrawerHeader className="pb-2">
             <div className="flex items-center justify-between">
               <DrawerTitle className="text-sm font-display flex items-center gap-2">
@@ -213,76 +274,116 @@ export default function FieldOverlay({ mapRef, hosts, statusMap, linkStatuses, l
             </div>
           </DrawerHeader>
 
-          <div className="px-4 pb-4 space-y-3 overflow-y-auto">
-            {/* Status card */}
-            <div className="rounded-lg bg-background/50 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Status</span>
-                <span className="text-sm font-bold" style={{ color: stColor }}>
-                  {hostStatus?.status === "UP" ? (
-                    <span className="flex items-center gap-1"><Wifi className="w-4 h-4" /> UP</span>
-                  ) : hostStatus?.status === "DOWN" ? (
-                    <span className="flex items-center gap-1"><WifiOff className="w-4 h-4" /> DOWN</span>
-                  ) : "UNKNOWN"}
-                </span>
+          <ScrollArea className="px-4 pb-4 max-h-[55vh]">
+            <div className="space-y-3">
+              {/* Status card */}
+              <div className="rounded-lg bg-background/50 p-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">Status</span>
+                  <span className="text-sm font-bold" style={{ color: stColor }}>
+                    {hostStatus?.status === "UP" ? (
+                      <span className="flex items-center gap-1"><Wifi className="w-4 h-4" /> UP</span>
+                    ) : hostStatus?.status === "DOWN" ? (
+                      <span className="flex items-center gap-1"><WifiOff className="w-4 h-4" /> DOWN</span>
+                    ) : "UNKNOWN"}
+                  </span>
+                </div>
+                {hostStatus?.latency != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Latência</span>
+                    <span className="text-sm font-mono text-neon-cyan">{hostStatus.latency}ms</span>
+                  </div>
+                )}
+                {hostStatus?.availability24h != null && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Disp. 24h</span>
+                    <span className="text-sm font-mono text-neon-green">{hostStatus.availability24h.toFixed(1)}%</span>
+                  </div>
+                )}
+                {hostStatus?.lastCheck && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> Último check</span>
+                    <span className="text-xs font-mono text-muted-foreground">{new Date(hostStatus.lastCheck).toLocaleTimeString("pt-BR")}</span>
+                  </div>
+                )}
               </div>
-              {hostStatus?.latency != null && (
+
+              {/* Host info */}
+              <div className="rounded-lg bg-background/50 p-3 space-y-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Latência</span>
-                  <span className="text-sm font-mono text-neon-cyan">{hostStatus.latency}ms</span>
+                  <span className="text-xs text-muted-foreground">Grupo</span>
+                  <span className="text-xs font-mono">{selectedHost?.host_group || "—"}</span>
                 </div>
-              )}
-              {hostStatus?.availability24h != null && (
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Disp. 24h</span>
-                  <span className="text-sm font-mono text-neon-green">{hostStatus.availability24h.toFixed(1)}%</span>
+                  <span className="text-xs text-muted-foreground">Coordenadas</span>
+                  <span className="text-xs font-mono">{selectedHost?.lat.toFixed(5)}, {selectedHost?.lon.toFixed(5)}</span>
                 </div>
-              )}
-              {hostStatus?.lastCheck && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground flex items-center gap-1"><Clock className="w-3 h-3" /> Último check</span>
-                  <span className="text-xs font-mono text-muted-foreground">{new Date(hostStatus.lastCheck).toLocaleTimeString("pt-BR")}</span>
+                {selectedHost?.is_critical && (
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Criticidade</span>
+                    <span className="text-xs font-bold text-neon-red">CRÍTICO</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Photo capture */}
+              <button
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-neon-green/10 border border-neon-green/30 text-neon-green text-sm font-display hover:bg-neon-green/20 transition-colors disabled:opacity-50"
+              >
+                <Camera className="w-5 h-5" />
+                {uploading ? "Enviando..." : "Tirar Foto do Equipamento"}
+              </button>
+
+              {/* ── Photo Gallery ── */}
+              <div className="rounded-lg bg-background/50 p-3">
+                <div className="flex items-center gap-2 mb-2">
+                  <ImageIcon className="w-4 h-4 text-muted-foreground" />
+                  <span className="text-xs font-display text-muted-foreground">
+                    Fotos do Equipamento ({photos.length})
+                  </span>
+                </div>
+                {loadingPhotos ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : photos.length === 0 ? (
+                  <p className="text-[10px] text-muted-foreground text-center py-3">
+                    Nenhuma foto registrada para este equipamento.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {photos.map((photo, idx) => (
+                      <a
+                        key={idx}
+                        href={photo.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="aspect-square rounded-md overflow-hidden border border-border/30 hover:border-neon-green/50 transition-colors"
+                      >
+                        <img
+                          src={photo.url}
+                          alt={photo.name}
+                          className="w-full h-full object-cover"
+                          loading="lazy"
+                        />
+                      </a>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Distance to host */}
+              {gpsPos && selectedHost && (
+                <div className="text-center text-xs text-muted-foreground">
+                  📍 Distância estimada: <span className="font-bold text-foreground">
+                    {calcDistance(gpsPos.lat, gpsPos.lon, selectedHost.lat, selectedHost.lon).toFixed(1)} km
+                  </span>
                 </div>
               )}
             </div>
-
-            {/* Host info */}
-            <div className="rounded-lg bg-background/50 p-3 space-y-1">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Grupo</span>
-                <span className="text-xs font-mono">{selectedHost?.host_group || "—"}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground">Coordenadas</span>
-                <span className="text-xs font-mono">{selectedHost?.lat.toFixed(5)}, {selectedHost?.lon.toFixed(5)}</span>
-              </div>
-              {selectedHost?.is_critical && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted-foreground">Criticidade</span>
-                  <span className="text-xs font-bold text-neon-red">CRÍTICO</span>
-                </div>
-              )}
-            </div>
-
-            {/* Photo capture */}
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              className="w-full flex items-center justify-center gap-2 py-3 rounded-lg bg-neon-green/10 border border-neon-green/30 text-neon-green text-sm font-display hover:bg-neon-green/20 transition-colors disabled:opacity-50"
-            >
-              <Camera className="w-5 h-5" />
-              {uploading ? "Enviando..." : "Tirar Foto do Equipamento"}
-            </button>
-
-            {/* Distance to host */}
-            {gpsPos && selectedHost && (
-              <div className="text-center text-xs text-muted-foreground">
-                📍 Distância estimada: <span className="font-bold text-foreground">
-                  {calcDistance(gpsPos.lat, gpsPos.lon, selectedHost.lat, selectedHost.lon).toFixed(1)} km
-                </span>
-              </div>
-            )}
-          </div>
+          </ScrollArea>
         </DrawerContent>
       </Drawer>
 

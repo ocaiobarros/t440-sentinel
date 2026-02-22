@@ -449,18 +449,28 @@ export default function FlowMapCanvas({
         offset: [0, -12],
       });
 
-      // Emit host click for link creation
-      marker.on("click", (e) => {
+      // Emit host click for link creation + mobile field overlay
+      const emitHostClick = (e: any) => {
         // Stop native DOM event so the map doesn't receive a "click" 
         // which would trigger Vaul's outside-click and close the Drawer immediately
         if (e.originalEvent) {
           e.originalEvent.stopPropagation();
           e.originalEvent.preventDefault();
         }
+        console.log("[FlowMapCanvas] host click/tap:", h.id, h.host_name);
         onHostClick?.(h.id);
         // Dispatch for mobile FieldOverlay
         window.dispatchEvent(new CustomEvent("field-host-tap", { detail: h.id }));
-      });
+      };
+      marker.on("click", emitHostClick);
+      // Also listen for touch to ensure mobile works
+      marker.getElement()?.addEventListener("touchend", (te) => {
+        te.stopPropagation();
+        te.preventDefault();
+        console.log("[FlowMapCanvas] touchend on host:", h.id);
+        onHostClick?.(h.id);
+        window.dispatchEvent(new CustomEvent("field-host-tap", { detail: h.id }));
+      }, { passive: false });
 
       marker.addTo(markers);
     });
