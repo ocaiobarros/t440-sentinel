@@ -166,6 +166,12 @@ export interface LinkEventInfo {
   ended_at: string | null;
 }
 
+export interface CTOTelemetryData {
+  status: string; healthRatio: number; onuOnline: number; onuOffline: number;
+  onuAuthorized: number; ponLinkStatus: string; trafficIn: number | null;
+  trafficOut: number | null; temperature: number | null; fanStatus: string | null;
+}
+
 interface Props {
   flowMap: FlowMap;
   hosts: FlowMapHost[];
@@ -179,6 +185,7 @@ interface Props {
   linkTraffic?: Record<string, LinkTraffic>;
   impactedLinkIds?: string[];
   isolatedNodeIds?: string[];
+  ctoTelemetry?: Record<string, CTOTelemetryData>;
   onMapClick?: (lat: number, lon: number) => void;
   onHostClick?: (hostId: string) => void;
   onCTOClick?: (ctoId: string) => void;
@@ -200,6 +207,7 @@ export default function FlowMapCanvas({
   linkTraffic = {},
   impactedLinkIds = [],
   isolatedNodeIds = [],
+  ctoTelemetry = {},
   onMapClick,
   onHostClick,
   onCTOClick,
@@ -560,10 +568,14 @@ export default function FlowMapCanvas({
 
       // Render CTOs
       ctos.forEach((cto) => {
-        const statusColor = cto.status_calculated === "OK" ? "#00e676"
-          : cto.status_calculated === "CRITICAL" ? "#ff1744"
-          : cto.status_calculated === "DEGRADED" ? "#ff9100"
+        const tel = ctoTelemetry[cto.id];
+        const effectiveStatus = tel?.status ?? cto.status_calculated;
+        const statusColor = effectiveStatus === "OK" ? "#00e676"
+          : effectiveStatus === "CRITICAL" ? "#ff1744"
+          : effectiveStatus === "DEGRADED" ? "#ff9100"
           : "#9e9e9e";
+
+        const healthPct = tel ? `${tel.healthRatio}%` : null;
 
         const icon = L.divIcon({
           className: "",
@@ -576,17 +588,47 @@ export default function FlowMapCanvas({
           </div>`,
         });
 
+        const fmtBpsCto = (bps: number | null): string => {
+          if (bps == null || bps === 0) return "0";
+          if (bps >= 1e9) return `${(bps / 1e9).toFixed(2)} Gbps`;
+          if (bps >= 1e6) return `${(bps / 1e6).toFixed(1)} Mbps`;
+          if (bps >= 1e3) return `${(bps / 1e3).toFixed(0)} Kbps`;
+          return `${bps.toFixed(0)} bps`;
+        };
+
+        // Build rich tooltip
+        let tooltipHtml = `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;min-width:200px;line-height:1.6;">
+          <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:12px;color:#e0e0e0;margin-bottom:4px;">${cto.name || "CTO"}</div>
+          <div>Status: <span style="color:${statusColor};font-weight:700;">${effectiveStatus}</span>${healthPct ? ` <span style="color:#888;font-size:10px;">(${healthPct})</span>` : ""}</div>
+          <div>Capacidade: <span style="color:#00e5ff;">${cto.occupied_ports}/${cto.capacity} portas</span></div>`;
+
+        if (tel) {
+          const ponColor = tel.ponLinkStatus === "UP" ? "#00e676" : tel.ponLinkStatus === "DOWN" ? "#ff1744" : "#9e9e9e";
+          tooltipHtml += `<hr style="border:none;border-top:1px solid #333;margin:6px 0;">
+            <div style="font-weight:700;color:#e0e0e0;margin-bottom:2px;">📡 PON Telemetria</div>
+            <div>Link: <span style="color:${ponColor};font-weight:700;">${tel.ponLinkStatus}</span></div>
+            <div>ONUs: <span style="color:#00e676;">▲ ${tel.onuOnline} ON</span> • <span style="color:#ff4444;">${tel.onuOffline} OFF</span> • <span style="color:#3B82F6;">Σ ${tel.onuAuthorized}</span></div>`;
+
+          if (tel.trafficIn != null || tel.trafficOut != null) {
+            tooltipHtml += `<div style="margin-top:4px;">📊 <span style="color:#ff9100;">▲ ${fmtBpsCto(tel.trafficOut)}</span> <span style="color:#00e5ff;">▼ ${fmtBpsCto(tel.trafficIn)}</span></div>`;
+          }
+
+          if (tel.temperature != null) {
+            const tempColor = tel.temperature >= 60 ? "#ff1744" : tel.temperature >= 45 ? "#ff9100" : "#00e676";
+            tooltipHtml += `<div>🌡 Temp: <span style="color:${tempColor};font-weight:700;">${tel.temperature}°C</span></div>`;
+          }
+          if (tel.fanStatus) {
+            const fanColor = tel.fanStatus === "ACTIVE" ? "#00e676" : "#ff1744";
+            tooltipHtml += `<div>🌀 Fan: <span style="color:${fanColor};font-weight:700;">${tel.fanStatus}</span></div>`;
+          }
+        }
+
+        if (cto.pon_port_index) tooltipHtml += `<div style="color:#888;font-size:10px;">Porta PON: ${cto.pon_port_index}</div>`;
+        if (cto.description) tooltipHtml += `<div style="color:#888;font-size:10px;margin-top:4px;">${cto.description}</div>`;
+        tooltipHtml += `</div>`;
+
         const marker = L.marker([cto.lat, cto.lon], { icon });
-        marker.bindTooltip(
-          `<div style="font-family:'JetBrains Mono',monospace;font-size:11px;min-width:160px;">
-            <div style="font-family:'Orbitron',sans-serif;font-weight:700;font-size:12px;color:#e0e0e0;margin-bottom:4px;">${cto.name || "CTO"}</div>
-            <div>Status: <span style="color:${statusColor};font-weight:700;">${cto.status_calculated}</span></div>
-            <div>Capacidade: <span style="color:#00e5ff;">${cto.occupied_ports}/${cto.capacity} portas</span></div>
-            ${cto.pon_port_index ? `<div>Porta PON: <span style="color:#ff9100;">${cto.pon_port_index}</span></div>` : ""}
-            ${cto.description ? `<div style="color:#888;font-size:10px;margin-top:4px;">${cto.description}</div>` : ""}
-          </div>`,
-          { className: "flowmap-tooltip", direction: "top", offset: [0, -14] },
-        );
+        marker.bindTooltip(tooltipHtml, { className: "flowmap-tooltip", direction: "top", offset: [0, -14] });
 
         marker.on("click", (e) => {
           if (e.originalEvent) {
@@ -604,7 +646,7 @@ export default function FlowMapCanvas({
     renderFTTH();
     map.on("zoomend", renderFTTH);
     return () => { map.off("zoomend", renderFTTH); };
-  }, [ctos, cables, reservas, onCTOClick]);
+  }, [ctos, cables, reservas, ctoTelemetry, onCTOClick]);
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className ?? ""}`} style={{ background: "#0a0b10" }} />
