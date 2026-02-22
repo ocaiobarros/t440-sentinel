@@ -388,6 +388,11 @@ function MapEditorView({ mapId }: { mapId: string }) {
     setTimeout(() => setFocusHost(null), 2000);
   }, [playBeep]);
 
+  const handleCableMassiva = useCallback((cableId: string, ctoName: string) => {
+    playBeep(`cable-massiva-${cableId}`);
+    console.warn(`[FlowMap] 🔴 Queda Massiva detectada no cabo → CTO: ${ctoName}`);
+  }, [playBeep]);
+
   // War Room: toggle fullscreen
   const toggleWarRoom = useCallback(() => {
     setWarRoom((prev) => {
@@ -533,6 +538,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             onHostClick={handleHostClick}
             onMapReady={setLeafletMap}
             focusHost={focusHost}
+            onCableMassiva={handleCableMassiva}
           />
 
           {/* OLT Health Panel — floating overlay */}

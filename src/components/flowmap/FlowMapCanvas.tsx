@@ -199,6 +199,7 @@ interface Props {
   onMapClick?: (lat: number, lon: number) => void;
   onHostClick?: (hostId: string) => void;
   onCTOClick?: (ctoId: string) => void;
+  onCableMassiva?: (cableId: string, ctoName: string) => void;
   onMapReady?: (map: L.Map) => void;
   focusHost?: FlowMapHost | null;
   className?: string;
@@ -221,6 +222,7 @@ export default function FlowMapCanvas({
   onMapClick,
   onHostClick,
   onCTOClick,
+  onCableMassiva,
   onMapReady,
   focusHost,
   className,
@@ -228,6 +230,7 @@ export default function FlowMapCanvas({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<L.Map | null>(null);
   const layersRef = useRef<{ markers: L.LayerGroup; lines: L.LayerGroup; labels: L.LayerGroup; ctoLayer: L.LayerGroup; cableLayer: L.LayerGroup; reservaLayer: L.LayerGroup } | null>(null);
+  const massivaAlertedRef = useRef<Set<string>>(new Set());
 
   /* Init map once */
   useEffect(() => {
@@ -582,6 +585,19 @@ export default function FlowMapCanvas({
           { className: "flowmap-tooltip", sticky: true },
         );
         line.addTo(cableLayer);
+
+        // Fire audio alert for massiva detection (cable turned red)
+        if (isCritical && onCableMassiva) {
+          const targetCto = cable.target_node_type === "cto" ? ctoById.get(cable.target_node_id) : null;
+          const alertKey = `cable-${cable.id}`;
+          if (!massivaAlertedRef.current.has(alertKey)) {
+            massivaAlertedRef.current.add(alertKey);
+            onCableMassiva(cable.id, targetCto?.name || cable.label || "Cabo");
+          }
+        } else {
+          // Cable recovered — allow re-alert next time
+          massivaAlertedRef.current.delete(`cable-${cable.id}`);
+        }
       });
 
       // Render reservas at zoom >= 16
@@ -748,7 +764,7 @@ export default function FlowMapCanvas({
     renderFTTH();
     map.on("zoomend", renderFTTH);
     return () => { map.off("zoomend", renderFTTH); };
-  }, [ctos, cables, reservas, ctoTelemetry, onCTOClick]);
+  }, [ctos, cables, reservas, ctoTelemetry, onCTOClick, onCableMassiva]);
 
   return (
     <div ref={containerRef} className={`w-full h-full ${className ?? ""}`} style={{ background: "#0a0b10" }} />
