@@ -1,11 +1,12 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Server, Terminal, CheckCircle, ChevronRight, ChevronLeft,
   Settings2, Network, Globe, ArrowDownToLine, ArrowUpFromLine,
   BarChart3, Filter, Activity, Eye, EyeOff, Lock, User,
   RefreshCw, Wifi, WifiOff, TrendingUp, TrendingDown, Minus,
-  Zap, ArrowRight, Layers,
+  Zap, ArrowRight, Layers, ArrowLeft,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { supabase } from "@/integrations/supabase/client";
@@ -818,6 +819,9 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
+          <button onClick={() => window.history.back()} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+            <ArrowLeft className="w-3.5 h-3.5" /> Voltar
+          </button>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-cyan-500/10 border border-cyan-400/20">
               <Network className="w-5 h-5 text-cyan-400" />
@@ -870,6 +874,10 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
               {connected ? "ONLINE" : "AGUARDANDO"}
             </span>
           </div>
+
+          <button onClick={onReconfigure} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+            <Settings2 className="w-3 h-3" /> Reconfigurar
+          </button>
         </div>
       </div>
 

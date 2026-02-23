@@ -1,8 +1,9 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, Settings2, Server, Cpu, MemoryStick, HardDrive, Network,
-  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock,
+  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock, ArrowLeft,
 } from "lucide-react";
 import { useIdracLive } from "@/hooks/useIdracLive";
 import { extractVirtData } from "@/hooks/useVirtExtractors";
@@ -300,6 +301,7 @@ function StatusPill({ label, value, isOk }: { label: string; value: string; isOk
    ═══════════════════════════════════════════════════ */
 
 export default function VirtualizationMonitor() {
+  const navigate = useNavigate();
   const [config, setConfig] = useState<IdracConfig | null>(loadConfig);
   const [showSetup, setShowSetup] = useState(!config);
   const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
@@ -392,7 +394,10 @@ export default function VirtualizationMonitor() {
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
+            <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+              <ArrowLeft className="w-3 h-3" /> Voltar
+            </button>
             {data && (
               <button onClick={refresh} className="text-[9px] font-mono text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border/20 hover:border-border/40">
                 ↻ Refresh
