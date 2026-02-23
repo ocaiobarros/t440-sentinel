@@ -26,6 +26,7 @@ import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 import FlowMapPage from "./pages/FlowMapPage";
 import StubPage from "./pages/stubs/StubPage";
 import SLAGovernance from "./pages/SLAGovernance";
+import ViabilityPage from "./pages/ViabilityPage";
 import IncidentsPage from "./pages/IncidentsPage";
 import ServerMonitorList from "./pages/monitoring/ServerMonitorList";
 import VirtualizationList from "./pages/monitoring/VirtualizationList";
@@ -67,7 +68,7 @@ const App = () => (
 
                       {/* Engineering */}
                       <Route path="engineering/inventory" element={<StubPage />} />
-                      <Route path="engineering/viability" element={<StubPage />} />
+                      <Route path="engineering/viability" element={<ViabilityPage />} />
                       <Route path="engineering/capacity" element={<StubPage />} />
 
                       {/* Monitoring */}
