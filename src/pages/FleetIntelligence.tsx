@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useRMSFueling } from "@/hooks/useRMSFueling";
+import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import { useRMSConnections } from "@/hooks/useRMSConnections";
 import { processFleetData, formatNumber, formatDecimal, formatCurrency, DriverStats, FleetSummary } from "@/lib/fleet-intelligence-utils";
 import DriverDetailDrawer from "@/components/fleet/DriverDetailDrawer";
@@ -44,6 +45,7 @@ import {
   ChevronLeft,
   DollarSign,
   Cable,
+  Save,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
@@ -115,6 +117,14 @@ export default function FleetIntelligence() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modelFilter, setModelFilter] = useState<string>("all");
   const [selectedDriver, setSelectedDriver] = useState<DriverStats | null>(null);
+  const { save: saveDashboard, saving } = useDashboardPersist<{ startDate: string; endDate: string }>({
+    category: 'fleet',
+    listPath: '/app/monitoring/fleet',
+  });
+
+  const handleSave = useCallback(() => {
+    saveDashboard('Fleet Intelligence', { startDate, endDate });
+  }, [saveDashboard, startDate, endDate]);
 
   const { connections: rmsConnections, isLoading: rmsConnLoading } = useRMSConnections();
   const hasActiveConnection = rmsConnections.some((c) => c.is_active);
@@ -185,6 +195,14 @@ export default function FleetIntelligence() {
               className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
             >
               <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1 text-[10px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50 px-2 py-1 rounded border border-neon-green/20"
+            >
+              <Save className="w-3 h-3" />
+              {saving ? 'Salvando…' : 'Salvar'}
             </button>
             <div>
               <h1 className="font-['Orbitron'] text-xl font-bold tracking-wider text-glow-cyan" style={{ color: "hsl(186 100% 50%)" }}>

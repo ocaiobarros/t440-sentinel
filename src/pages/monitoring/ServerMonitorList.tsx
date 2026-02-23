@@ -9,6 +9,7 @@ export default function ServerMonitorList() {
       description="Painéis de monitoramento de servidores"
       icon={<Server className="w-6 h-6 text-neon-green" />}
       createPath="/app/monitoring/server/new"
+      viewBasePath="/app/monitoring/server"
     />
   );
 }

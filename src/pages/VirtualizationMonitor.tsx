@@ -3,8 +3,9 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, Settings2, Server, Cpu, MemoryStick, HardDrive, Network,
-  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock, ArrowLeft,
+  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock, ArrowLeft, Save,
 } from "lucide-react";
+import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import { useIdracLive } from "@/hooks/useIdracLive";
 import { extractVirtData } from "@/hooks/useVirtExtractors";
 import type { VirtData, VirtDatastore } from "@/hooks/useVirtExtractors";
@@ -305,6 +306,22 @@ export default function VirtualizationMonitor() {
   const [config, setConfig] = useState<IdracConfig | null>(loadConfig);
   const [showSetup, setShowSetup] = useState(!config);
   const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
+  const { save: saveDashboard, saving, loadedConfig } = useDashboardPersist<IdracConfig>({
+    category: 'virtualization',
+    listPath: '/app/monitoring/virtualization',
+  });
+
+  useEffect(() => {
+    if (loadedConfig && !config) {
+      setConfig(loadedConfig);
+      setShowSetup(false);
+    }
+  }, [loadedConfig]);
+
+  const handleSave = useCallback(() => {
+    if (!config) return;
+    saveDashboard(config.hostName || 'Virtualização', config);
+  }, [config, saveDashboard]);
 
   useEffect(() => {
     if (config && !data && !dataLoading) {
@@ -395,7 +412,7 @@ export default function VirtualizationMonitor() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+            <button onClick={() => navigate('/app/monitoring/virtualization')} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
               <ArrowLeft className="w-3 h-3" /> Voltar
             </button>
             {data && (
@@ -403,6 +420,9 @@ export default function VirtualizationMonitor() {
                 ↻ Refresh
               </button>
             )}
+            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 text-[9px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50">
+              <Save className="w-3 h-3" /> {saving ? 'Salvando…' : 'Salvar'}
+            </button>
             <button onClick={handleReconfigure} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
               <Settings2 className="w-3 h-3" /> Reconfigurar
             </button>
