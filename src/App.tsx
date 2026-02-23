@@ -27,6 +27,7 @@ import FlowMapPage from "./pages/FlowMapPage";
 import StubPage from "./pages/stubs/StubPage";
 import InventoryPage from "./pages/InventoryPage";
 import TimelinePage from "./pages/TimelinePage";
+import TenantsPage from "./pages/TenantsPage";
 import SLAGovernance from "./pages/SLAGovernance";
 import ViabilityPage from "./pages/ViabilityPage";
 import IncidentsPage from "./pages/IncidentsPage";
@@ -106,7 +107,7 @@ const App = () => (
                         <ProtectedRoute roles={["admin"]}><AdminHub /></ProtectedRoute>
                       } />
                       <Route path="settings/tenants" element={
-                        <ProtectedRoute roles={["admin"]}><StubPage /></ProtectedRoute>
+                        <ProtectedRoute roles={["admin"]}><TenantsPage /></ProtectedRoute>
                       } />
 
                       <Route path="*" element={<NotFound />} />
