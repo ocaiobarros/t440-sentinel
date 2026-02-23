@@ -12,9 +12,12 @@ interface ModuleDashboardListProps {
   title: string;
   description: string;
   icon: React.ReactNode;
+  /** Path for the "New Panel" button. Defaults to /builder?category={category} */
+  createPath?: string;
 }
 
-export default function ModuleDashboardList({ category, title, description, icon }: ModuleDashboardListProps) {
+export default function ModuleDashboardList({ category, title, description, icon, createPath }: ModuleDashboardListProps) {
+  const defaultCreatePath = createPath || `/builder?category=${category}`;
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -65,7 +68,7 @@ export default function ModuleDashboardList({ category, title, description, icon
           <RoleGate allowed={["admin", "editor"]}>
             <Button
               size="sm"
-              onClick={() => navigate(`/builder?category=${category}`)}
+              onClick={() => navigate(defaultCreatePath)}
               className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -93,7 +96,7 @@ export default function ModuleDashboardList({ category, title, description, icon
             </p>
             <RoleGate allowed={["admin", "editor"]}>
               <Button
-                onClick={() => navigate(`/builder?category=${category}`)}
+                onClick={() => navigate(defaultCreatePath)}
                 className="gap-2 bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
               >
                 <Plus className="w-4 h-4" />

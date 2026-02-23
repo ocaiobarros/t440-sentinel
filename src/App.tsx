@@ -71,10 +71,15 @@ const App = () => (
                       {/* Monitoring */}
                       <Route path="monitoring/dashboards" element={<DashboardsList />} />
                       <Route path="monitoring/server" element={<ServerMonitorList />} />
+                      <Route path="monitoring/server/new" element={<Index />} />
                       <Route path="monitoring/virtualization" element={<VirtualizationList />} />
+                      <Route path="monitoring/virtualization/new" element={<VirtualizationMonitor />} />
                       <Route path="monitoring/virtual-machines" element={<VirtualMachinesList />} />
+                      <Route path="monitoring/virtual-machines/new" element={<VirtualMachinesMonitor />} />
                       <Route path="monitoring/bgp" element={<BgpFlowList />} />
+                      <Route path="monitoring/bgp/new" element={<BgpFlowMonitor />} />
                       <Route path="monitoring/fleet" element={<FleetIntelligenceList />} />
+                      <Route path="monitoring/fleet/new" element={<FleetIntelligence />} />
 
                       {/* Governance */}
                       <Route path="governance/sla" element={<StubPage />} />

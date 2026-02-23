@@ -8,6 +8,7 @@ export default function VirtualMachinesList() {
       title="Máquinas Virtuais"
       description="Painéis de monitoramento de VMs"
       icon={<MonitorCheck className="w-6 h-6 text-neon-green" />}
+      createPath="/app/monitoring/virtual-machines/new"
     />
   );
 }
