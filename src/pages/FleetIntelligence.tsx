@@ -117,12 +117,13 @@ export default function FleetIntelligence() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modelFilter, setModelFilter] = useState<string>("all");
   const [selectedDriver, setSelectedDriver] = useState<DriverStats | null>(null);
-  const { save: saveDashboard, saving, dashboardId, loadedConfig } = useDashboardPersist<{ startDate: string; endDate: string }>({
+  const { save: saveDashboard, saving, dashboardId, loadedConfig, loading: persistLoading } = useDashboardPersist<{ startDate: string; endDate: string }>({
     category: 'fleet',
     listPath: '/app/monitoring/fleet',
   });
-  // On /new route (no dashboardId), don't auto-load — user sees fresh dashboard
-  const [isNew] = useState(() => !dashboardId);
+
+  // Setup wizard: show when on /new route (no dashboardId)
+  const [showSetup, setShowSetup] = useState(() => !dashboardId);
 
   // Load saved dates when editing an existing dashboard
   useEffect(() => {
@@ -184,6 +185,91 @@ export default function FleetIntelligence() {
     }));
   }, [summary]);
 
+  // ── Setup Wizard ──
+  if (showSetup) {
+    return (
+      <div
+        className="min-h-screen flex items-center justify-center p-6"
+        style={{ background: "linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%)" }}
+      >
+        <div className="w-full max-w-lg space-y-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="flex items-center justify-center gap-3 mb-3">
+              <Fuel className="w-8 h-8 text-neon-green" />
+              <h1 className="font-display text-2xl font-bold tracking-wider">
+                <span className="text-neon-green text-glow-green">FLOWPULSE</span>
+                <span className="text-muted-foreground mx-2">|</span>
+                <span className="text-foreground">Fleet Intelligence</span>
+              </h1>
+            </div>
+            <p className="text-xs text-muted-foreground font-mono">Diesel Performance Analytics • Conexão RMS</p>
+          </div>
+
+          <div className="glass-card rounded-2xl p-6 space-y-6 border border-border/30">
+            {/* RMS Connection Status */}
+            <div>
+              <label className="text-xs uppercase text-muted-foreground font-mono tracking-wider mb-2 block">Conexão RMS</label>
+              {rmsConnLoading ? (
+                <Skeleton className="h-10 w-full" />
+              ) : hasActiveConnection ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-neon-green/10 border border-neon-green/20">
+                  <div className="w-2 h-2 rounded-full bg-neon-green animate-pulse" />
+                  <span className="text-sm text-neon-green font-mono">Conexão RMS ativa encontrada</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-destructive/10 border border-destructive/20">
+                  <AlertTriangle className="w-4 h-4 text-destructive" />
+                  <span className="text-sm text-destructive font-mono">Nenhuma conexão RMS ativa</span>
+                </div>
+              )}
+            </div>
+
+            {/* Date Range */}
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="text-xs uppercase text-muted-foreground font-mono tracking-wider mb-2 block">Data Início</label>
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="w-full glass-card rounded-lg px-3 py-2 text-sm font-mono text-foreground bg-transparent border border-border/30 outline-none focus:border-neon-green/50"
+                />
+              </div>
+              <div>
+                <label className="text-xs uppercase text-muted-foreground font-mono tracking-wider mb-2 block">Data Fim</label>
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="w-full glass-card rounded-lg px-3 py-2 text-sm font-mono text-foreground bg-transparent border border-border/30 outline-none focus:border-neon-green/50"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="flex gap-3 pt-2">
+              <button
+                onClick={() => navigate("/app/monitoring/fleet")}
+                className="flex-1 px-4 py-2.5 rounded-lg border border-border/30 text-sm font-mono text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4 inline mr-1" />
+                Voltar
+              </button>
+              <button
+                onClick={() => setShowSetup(false)}
+                disabled={!hasActiveConnection}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-neon-green/20 border border-neon-green/30 text-sm font-mono text-neon-green hover:bg-neon-green/30 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Carregar Dados
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div
       className="min-h-screen"
@@ -205,6 +291,12 @@ export default function FleetIntelligence() {
               className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
             >
               <ChevronLeft className="w-5 h-5 text-muted-foreground" />
+            </button>
+            <button
+              onClick={() => setShowSetup(true)}
+              className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border/30"
+            >
+              Reconfigurar
             </button>
             <button
               onClick={handleSave}
