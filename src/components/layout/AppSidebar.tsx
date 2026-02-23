@@ -36,7 +36,8 @@ const governanceItems = [
 ];
 
 const settingsItems = [
-  { title: "Conectores", url: "/app/settings/connections", icon: Settings },
+  { title: "Conectores Zabbix", url: "/app/settings/connections", icon: Settings },
+  { title: "Conectores RMS", url: "/app/settings/rms-connections", icon: Zap },
   { title: "Usuários", url: "/app/settings/users", icon: Users },
   { title: "Tenants", url: "/app/settings/tenants", icon: Building2 },
 ];

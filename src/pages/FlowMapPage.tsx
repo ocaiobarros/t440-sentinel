@@ -534,7 +534,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             hosts={data.hosts}
             links={displayLinks}
             ctos={data.ctos}
-            cables={hideAccessNetwork ? data.cables.filter((c) => c.is_backbone) : data.cables}
+            cables={hideAccessNetwork ? data.cables.filter((c) => c.cable_type !== "ASU") : data.cables}
             reservas={data.reservas}
             statusMap={statusMap}
             linkStatuses={linkStatuses}

@@ -52,16 +52,16 @@ export interface FlowMapCTO {
   tenant_id: string;
   map_id: string;
   name: string;
-  description: string;
+  description: string | null;
   olt_host_id: string | null;
-  pon_port_index: number;
+  pon_port_index: number | null;
   lat: number;
   lon: number;
   capacity: "8" | "16" | "32";
   occupied_ports: number;
   status_calculated: "OK" | "DEGRADED" | "CRITICAL" | "UNKNOWN";
   metadata: Record<string, unknown>;
-  zabbix_host_ids: string[];
+  zabbix_host_ids: string[] | null;
   created_at: string;
   updated_at: string;
 }
@@ -78,8 +78,7 @@ export interface FlowMapCable {
   target_node_id: string;
   fiber_count: number;
   cable_type: "AS" | "ASU" | "Geleado" | "ADSS" | "Outro";
-  distance_km: number;
-  is_backbone: boolean;
+  distance_km: number | null;
   color_override: string | null;
   created_at: string;
   updated_at: string;

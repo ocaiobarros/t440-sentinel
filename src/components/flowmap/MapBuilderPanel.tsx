@@ -111,7 +111,7 @@ export default function MapBuilderPanel({
 
   /* ── Cable form ── */
   const [cableAdding, setCableAdding] = useState(false);
-  const [cableForm, setCableForm] = useState({ label: "", cable_type: "ASU" as "AS" | "ASU" | "Geleado" | "ADSS" | "Outro", fiber_count: 12, is_backbone: false });
+  const [cableForm, setCableForm] = useState({ label: "", cable_type: "ASU" as "AS" | "ASU" | "Geleado" | "ADSS" | "Outro", fiber_count: 12 });
   const [cableSourceType, setCableSourceType] = useState<"host" | "cto">("host");
   const [cableSourceId, setCableSourceId] = useState("");
   const [cableTargetType, setCableTargetType] = useState<"host" | "cto">("cto");
@@ -855,10 +855,7 @@ export default function MapBuilderPanel({
                       </Select>
                     </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Switch checked={cableForm.is_backbone} onCheckedChange={(v) => setCableForm((p) => ({ ...p, is_backbone: v }))} />
-                    <span className="text-[9px] text-muted-foreground">Backbone (visível em zoom baixo)</span>
-                  </div>
+                   {/* is_backbone removed - use cable_type for filtering */}
                   <Button
                     size="sm"
                     className="w-full h-7 text-[10px] gap-1 bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/30"
@@ -897,11 +894,10 @@ export default function MapBuilderPanel({
                         fiber_count: cableForm.fiber_count,
                         cable_type: cableForm.cable_type,
                         distance_km: distKm,
-                        is_backbone: cableForm.is_backbone,
                         color_override: null,
                       });
                       setCableAdding(false);
-                      setCableForm({ label: "", cable_type: "ASU", fiber_count: 12, is_backbone: false });
+                      setCableForm({ label: "", cable_type: "ASU", fiber_count: 12 });
                       setCableSourceId("");
                       setCableTargetId("");
                     }}
@@ -921,7 +917,7 @@ export default function MapBuilderPanel({
                   <Cable className="w-3 h-3 text-neon-cyan shrink-0" />
                   <span className="font-mono text-foreground truncate">{c.label || "Cabo"}</span>
                   <span className="text-[8px] text-muted-foreground/60">{c.cable_type} • {c.fiber_count}f</span>
-                  {c.is_backbone && <span className="text-[7px] px-1 py-0 rounded bg-neon-amber/15 text-neon-amber border border-neon-amber/20">BB</span>}
+                  {c.cable_type !== "ASU" && <span className="text-[7px] px-1 py-0 rounded bg-neon-amber/15 text-neon-amber border border-neon-amber/20">BB</span>}
                 </div>
                 <div className="flex items-center gap-0.5">
                   {onEditCableVertices && (
