@@ -36,6 +36,9 @@ const BROADCAST_CHANNEL_NAME = "flowmap-status-poll";
 const LEADER_HEARTBEAT_MS = 5_000;
 const LEADER_TIMEOUT_MS = 8_000;
 
+/** Windowed recompute: coalesce multiple events within this window */
+const RECOMPUTE_WINDOW_MS = 800;
+
 interface UseFlowMapStatusOptions {
   mapId: string | undefined;
   hosts: FlowMapHost[];
@@ -48,7 +51,13 @@ interface UseFlowMapStatusOptions {
  * Polls the flowmap-status edge function for real Zabbix host status.
  * After each poll, calls the get_map_effective_status RPC to compute
  * propagation (ISOLATED nodes). Also subscribes to Realtime changes
- * on flow_map_hosts to trigger recomputation with debounce.
+ * on flow_map_hosts to trigger recomputation with windowed debounce.
+ *
+ * 🅱️ Robustness:
+ * - Single-flight RPC guard per map (prevents concurrent recomputes)
+ * - Windowed recompute (coalesces burst events into single RPC call)
+ * - Stale fallback: on RPC failure, keeps last valid effectiveStatuses
+ *   and sets engineStale flag for UI badge
  */
 export function useFlowMapStatus({
   mapId,
@@ -66,6 +75,8 @@ export function useFlowMapStatus({
   const [effectiveStatuses, setEffectiveStatuses] = useState<EffectiveHostStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** 🅱️ Stale indicator: true when RPC failed but we have cached data */
+  const [engineStale, setEngineStale] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevStatusRef = useRef<string>("");
@@ -76,43 +87,71 @@ export function useFlowMapStatus({
   const tabIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
-  // Debounce timer for realtime-triggered RPC calls
-  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  // Single-flight guard for RPC calls
+  // 🅱️ Windowed recompute timer (replaces simple debounce)
+  const recomputeWindowRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const recomputePendingRef = useRef(0); // count of coalesced events
+  // 🅱️ Single-flight guard for RPC calls
   const rpcInflightRef = useRef(false);
 
   const canPoll = enabled && !!mapId && !!connectionId && hosts.length > 0;
 
-  // ─── Propagation Engine RPC (single-flight) ───
+  // ─── Propagation Engine RPC (single-flight + metrics) ───
   const fetchEffectiveStatus = useCallback(async () => {
     if (!mapId) return;
-    // Single-flight: skip if already in-flight
+    // 🅱️ Single-flight: skip if already in-flight
     if (rpcInflightRef.current) {
       console.log("[FlowMapStatus] RPC skipped (in-flight)");
       return;
     }
     rpcInflightRef.current = true;
+    const t0 = performance.now();
     try {
       const { data, error: rpcErr } = await supabase.rpc("get_map_effective_status", {
         p_map_id: mapId,
       });
+      const durationMs = Math.round(performance.now() - t0);
+
       if (rpcErr) {
-        console.warn("[FlowMapStatus] RPC error:", rpcErr.message);
+        console.warn(`[FlowMapStatus] RPC error (${durationMs}ms):`, rpcErr.message);
+        // 🅱️ Fallback: keep last valid data, mark stale
+        setEngineStale(true);
         return;
       }
       if (data) {
-        setEffectiveStatuses(data as EffectiveHostStatus[]);
-        const isolated = (data as EffectiveHostStatus[])
+        const typed = data as EffectiveHostStatus[];
+        setEffectiveStatuses(typed);
+        const isolated = typed
           .filter((h) => h.effective_status === "ISOLATED")
           .map((h) => h.host_id);
         setIsolatedNodes(isolated);
+        setEngineStale(false);
+
+        // 🅲 Log RPC metrics for performance monitoring
+        const maxDepth = typed.reduce((m, h) => Math.max(m, h.depth), 0);
+        console.log(
+          `[FlowMapStatus] RPC OK: ${durationMs}ms, ${typed.length} hosts, maxDepth=${maxDepth}${durationMs > 150 ? " ⚠ SLOW" : ""}`
+        );
       }
     } catch (err: any) {
       console.warn("[FlowMapStatus] RPC fetch error:", err.message);
+      setEngineStale(true);
     } finally {
       rpcInflightRef.current = false;
     }
   }, [mapId]);
+
+  // 🅱️ Windowed recompute: coalesces burst events
+  const scheduleRecompute = useCallback(() => {
+    recomputePendingRef.current += 1;
+    if (recomputeWindowRef.current) return; // window already open
+    recomputeWindowRef.current = setTimeout(() => {
+      const count = recomputePendingRef.current;
+      recomputePendingRef.current = 0;
+      recomputeWindowRef.current = null;
+      console.log(`[FlowMapStatus] Windowed recompute: ${count} events coalesced`);
+      fetchEffectiveStatus();
+    }, RECOMPUTE_WINDOW_MS);
+  }, [fetchEffectiveStatus]);
 
   const fetchStatus = useCallback(async () => {
     if (!mapId || !connectionId) return;
@@ -214,21 +253,17 @@ export function useFlowMapStatus({
           filter: `map_id=eq.${mapId}`,
         },
         () => {
-          // Debounce: avoid rapid recompute on burst updates
-          if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
-          realtimeDebounceRef.current = setTimeout(() => {
-            console.log("[FlowMapStatus] Realtime trigger → recompute effective status");
-            fetchEffectiveStatus();
-          }, 500);
+          // 🅱️ Windowed recompute instead of simple debounce
+          scheduleRecompute();
         },
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
-      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+      if (recomputeWindowRef.current) clearTimeout(recomputeWindowRef.current);
     };
-  }, [mapId, enabled, fetchEffectiveStatus]);
+  }, [mapId, enabled, scheduleRecompute]);
 
   // ─── BroadcastChannel leader election ───
   useEffect(() => {
@@ -275,8 +310,8 @@ export function useFlowMapStatus({
           setLinkEvents(msg.payload.linkEvents ?? []);
           setLinkTraffic(msg.payload.linkTraffic ?? {});
         }
-        // Passive tabs also fetch effective status
-        fetchEffectiveStatus();
+        // Passive tabs also recompute via windowed schedule
+        scheduleRecompute();
       }
     };
 
@@ -311,7 +346,7 @@ export function useFlowMapStatus({
       try { bc.close(); } catch { /* ignore */ }
       channelRef.current = null;
     };
-  }, [canPoll, startPolling, stopPolling, fetchEffectiveStatus]);
+  }, [canPoll, startPolling, stopPolling, scheduleRecompute]);
 
   // ─── Visibility change: pause/resume polling ───
   useEffect(() => {
@@ -338,6 +373,8 @@ export function useFlowMapStatus({
     effectiveStatuses,
     loading,
     error,
+    /** 🅱️ True when propagation engine failed but showing stale data */
+    engineStale,
     refetch: fetchStatus,
     refetchEffective: fetchEffectiveStatus,
   };

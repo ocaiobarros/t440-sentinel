@@ -166,7 +166,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
     [connections],
   );
 
-  const { statusMap, impactedLinks, isolatedNodes, linkStatuses, linkEvents, linkTraffic, effectiveStatuses, loading: statusLoading, error: statusError } = useFlowMapStatus({
+  const { statusMap, impactedLinks, isolatedNodes, linkStatuses, linkEvents, linkTraffic, effectiveStatuses, engineStale, loading: statusLoading, error: statusError } = useFlowMapStatus({
     mapId,
     hosts: data?.hosts ?? [],
     connectionId: activeConnectionId,
@@ -635,6 +635,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 linkStatuses={linkStatuses}
                 linkEvents={linkEvents}
                 effectiveStatuses={effectiveStatuses}
+                engineStale={engineStale}
                 onFocusHost={handleFocusHost}
                 onCriticalDown={handleCriticalDown}
                 warRoom={warRoom}

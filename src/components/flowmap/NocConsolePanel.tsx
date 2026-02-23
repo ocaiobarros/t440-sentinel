@@ -41,6 +41,8 @@ interface NocConsolePanelProps {
   linkStatuses: Record<string, { status: string; originHost: string; destHost: string }>;
   linkEvents: LinkEvent[];
   effectiveStatuses?: EffectiveHostStatus[];
+  /** 🅱️ True when propagation engine is stale (RPC failed) */
+  engineStale?: boolean;
   onFocusHost?: (host: FlowMapHost) => void;
   onCriticalDown?: (host: FlowMapHost) => void;
   warRoom?: boolean;
@@ -107,6 +109,7 @@ export default function NocConsolePanel({
   linkStatuses,
   linkEvents,
   effectiveStatuses = [],
+  engineStale = false,
   onFocusHost,
   onCriticalDown,
   warRoom = false,
@@ -226,6 +229,16 @@ export default function NocConsolePanel({
     return hosts.filter((h) => isoIds.has(h.id));
   }, [effectiveStatuses, hosts]);
 
+  // 🅰️ Impact radius: max depth + segment count for selected root cause
+  const impactSummary = useMemo(() => {
+    const isolatedCount = effectiveStatuses.filter((e) => e.effective_status === "ISOLATED").length;
+    const maxDepth = effectiveStatuses.reduce((m, e) => Math.max(m, e.depth), 0);
+    const affectedGroups = new Set(
+      impactHosts.map((h) => h.host_group).filter(Boolean)
+    );
+    return { isolatedCount, maxDepth, segmentCount: affectedGroups.size };
+  }, [effectiveStatuses, impactHosts]);
+
   const textScale = warRoom ? "text-base" : "text-[11px]";
   const counterScale = warRoom ? "text-2xl" : "text-sm";
   const badgeScale = warRoom ? "text-[10px]" : "text-[8px]";
@@ -262,8 +275,13 @@ export default function NocConsolePanel({
         </div>
 
         {/* Badges */}
-        {(impactedLinks.length > 0 || isolatedNodes.length > 0 || activeEvents.length > 0) ? (
+        {(impactedLinks.length > 0 || isolatedNodes.length > 0 || activeEvents.length > 0 || engineStale) ? (
           <div className="flex flex-wrap gap-1">
+            {engineStale && (
+              <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-amber/10 text-neon-amber border border-neon-amber/20 font-display animate-pulse">
+                ⚠ ENGINE DELAY
+              </span>
+            )}
             {impactedLinks.length > 0 && (
               <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-red/10 text-neon-red border border-neon-red/20 font-display">
                 {impactedLinks.length} LINK{impactedLinks.length > 1 ? "S" : ""} IMPACTADO{impactedLinks.length > 1 ? "S" : ""}
@@ -573,34 +591,64 @@ export default function NocConsolePanel({
             </div>
           )
         ) : activeTab === "rootcause" ? (
-          /* ── Root Cause Panel ── */
+          /* ── Root Cause & Impact Radius Panel ── */
           <div className="p-1.5 space-y-1">
             <div className="text-[9px] font-display uppercase tracking-wider text-neon-red px-1 flex items-center gap-1 mb-2">
               <Target className="w-3 h-3" />
               FALHAS FÍSICAS (ROOT CAUSE)
             </div>
+            {/* 🅰️ Impact Radius Summary */}
+            {rootCauseHosts.length > 0 && impactSummary.isolatedCount > 0 && (
+              <div className="px-2 py-2 mb-2 rounded-md bg-neon-red/5 border border-neon-red/20 space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-[9px] font-display text-neon-red uppercase">Raio de Impacto</span>
+                </div>
+                <div className="grid grid-cols-3 gap-1.5 text-center">
+                  <div>
+                    <div className="text-sm font-display font-bold text-neon-red">{impactSummary.isolatedCount}</div>
+                    <div className="text-[7px] font-mono text-muted-foreground">ISOLADOS</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-display font-bold text-neon-amber">{impactSummary.maxDepth}</div>
+                    <div className="text-[7px] font-mono text-muted-foreground">SALTOS</div>
+                  </div>
+                  <div>
+                    <div className="text-sm font-display font-bold text-neon-cyan">{impactSummary.segmentCount}</div>
+                    <div className="text-[7px] font-mono text-muted-foreground">REGIÕES</div>
+                  </div>
+                </div>
+              </div>
+            )}
+            {/* 🅰️ Grouped incidents: one card per root cause with impact count */}
             {rootCauseHosts.length === 0 ? (
               <div className="p-4 text-center">
                 <p className="text-[10px] text-muted-foreground/50 font-mono">Nenhuma falha raiz detectada</p>
               </div>
             ) : (
-              rootCauseHosts.map((h) => (
-                <button
-                  key={h.id}
-                  onClick={() => onFocusHost?.(h)}
-                  className="w-full flex items-center gap-2 p-2 rounded border border-neon-red/20 bg-neon-red/5 text-left hover:bg-neon-red/10 transition-colors group"
-                >
-                  <span className="w-2 h-2 rounded-full bg-neon-red animate-pulse shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[10px] font-mono font-bold text-neon-red truncate block">
-                      {h.host_name || h.zabbix_host_id}
-                    </span>
-                    <span className="text-[8px] font-mono text-muted-foreground">{h.host_group || "—"}</span>
-                  </div>
-                  {h.is_critical && <AlertTriangle className="w-3 h-3 text-neon-red shrink-0" />}
-                  <Locate className="w-3 h-3 text-neon-red/50 group-hover:text-neon-red transition-colors shrink-0" />
-                </button>
-              ))
+              rootCauseHosts.map((h) => {
+                // Count isolated nodes downstream from this root cause
+                const downstreamCount = impactHosts.length; // simplified: all isolated are downstream
+                return (
+                  <button
+                    key={h.id}
+                    onClick={() => onFocusHost?.(h)}
+                    className="w-full flex items-center gap-2 p-2 rounded border border-neon-red/20 bg-neon-red/5 text-left hover:bg-neon-red/10 transition-colors group"
+                  >
+                    <span className="w-2 h-2 rounded-full bg-neon-red animate-pulse shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <span className="text-[10px] font-mono font-bold text-neon-red truncate block">
+                        {h.host_name || h.zabbix_host_id}
+                      </span>
+                      <span className="text-[8px] font-mono text-muted-foreground">
+                        {h.host_group || "—"}
+                        {downstreamCount > 0 && ` • +${downstreamCount} isolados`}
+                      </span>
+                    </div>
+                    {h.is_critical && <AlertTriangle className="w-3 h-3 text-neon-red shrink-0" />}
+                    <Locate className="w-3 h-3 text-neon-red/50 group-hover:text-neon-red transition-colors shrink-0" />
+                  </button>
+                );
+              })
             )}
           </div>
         ) : activeTab === "impact" ? (

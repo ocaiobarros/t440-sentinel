@@ -6,11 +6,13 @@ import type { FlowMap, FlowMapHost, FlowMapLink, HostStatus, FlowMapCTO, FlowMap
 import type { LinkTraffic, EffectiveHostStatus } from "@/hooks/useFlowMapStatus";
 
 /* ── Icon factories ── */
-function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean, isIsolated: boolean): L.DivIcon {
+function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean, isIsolated: boolean, depth?: number): L.DivIcon {
   const color = isIsolated ? "#9e9e9e" : status === "UP" ? "#00e676" : status === "DOWN" ? "#ff1744" : "#9e9e9e";
   const size = isCritical && status === "DOWN" ? 20 : 14;
   const pulse = status === "DOWN" ? `animation: fmPulse ${isCritical ? "0.8s" : "1.4s"} ease-in-out infinite;` : "";
-  const opacity = isIsolated ? "opacity:0.45;" : "";
+  // 🅰️ Depth heatmap: deeper isolated nodes are more transparent (0.25 to 0.55)
+  const isolatedOpacity = isIsolated ? Math.max(0.25, 0.55 - (depth ?? 0) * 0.05) : 1;
+  const opacity = isIsolated ? `opacity:${isolatedOpacity};` : "";
 
   return L.divIcon({
     className: "",
@@ -475,11 +477,17 @@ export default function FlowMapCanvas({
 
     // Hosts — clickable markers
     const isolatedSet = new Set(isolatedNodeIds);
+    // 🅰️ Build depth lookup from effectiveStatuses for heatmap
+    const depthByHostId = new Map<string, number>();
+    for (const es of effectiveStatuses) {
+      depthByHostId.set(es.host_id, es.depth);
+    }
     hosts.forEach((h) => {
       const st = hostStatusById[h.id];
       const isIsolated = isolatedSet.has(h.id);
+      const depth = depthByHostId.get(h.id) ?? 0;
       const marker = L.marker([h.lat, h.lon], {
-        icon: hostIcon(st?.status ?? "UNKNOWN", h.is_critical, isIsolated),
+        icon: hostIcon(st?.status ?? "UNKNOWN", h.is_critical, isIsolated, depth),
       });
       marker.bindTooltip(hostTooltipHtml(h, st), {
         className: "flowmap-tooltip",
@@ -512,7 +520,7 @@ export default function FlowMapCanvas({
 
       marker.addTo(markers);
     });
-  }, [hosts, links, statusMap, linkStatuses, linkEvents, linkTraffic, impactedLinkIds, isolatedNodeIds, onHostClick]);
+  }, [hosts, links, statusMap, linkStatuses, linkEvents, linkTraffic, impactedLinkIds, isolatedNodeIds, effectiveStatuses, onHostClick]);
 
   /* ── CTO & Cable rendering with Level of Detail ── */
   useEffect(() => {
