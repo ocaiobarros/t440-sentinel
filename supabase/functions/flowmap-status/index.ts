@@ -596,7 +596,7 @@ Deno.serve(async (req) => {
       linkTraffic,
     };
 
-    // Store in cache
+    // Store in memory cache
     statusCache.set(cacheKey, { data: responseData, expiresAt: now + CACHE_TTL_MS });
 
     // Evict old entries
@@ -605,6 +605,35 @@ Deno.serve(async (req) => {
         if (v.expiresAt < now) statusCache.delete(k);
       }
     }
+
+    // 🅲 Write effective status cache to DB (fire-and-forget)
+    // This allows future reads to skip the heavy RPC on the frontend
+    const rpcT0 = Date.now();
+    serviceClient.rpc("get_map_effective_status", { p_map_id: map_id })
+      .then(({ data: effData, error: effErr }) => {
+        const rpcDuration = Date.now() - rpcT0;
+        if (effErr) {
+          console.error("[flowmap-status] effective cache RPC error:", effErr.message);
+          return;
+        }
+        const hostCount = Array.isArray(effData) ? effData.length : 0;
+        const maxDepth = Array.isArray(effData) ? effData.reduce((m: number, e: any) => Math.max(m, e.depth ?? 0), 0) : 0;
+        console.log(`[flowmap-status] 🅲 RPC get_map_effective_status: ${rpcDuration}ms, ${hostCount} hosts, maxDepth=${maxDepth}${rpcDuration > 150 ? " ⚠ SLOW" : ""}`);
+
+        // Upsert cache row
+        serviceClient.from("flow_map_effective_cache").upsert({
+          map_id,
+          tenant_id: tenantId as string,
+          payload: effData ?? [],
+          computed_at: new Date().toISOString(),
+          rpc_duration_ms: rpcDuration,
+          host_count: hostCount,
+          max_depth: maxDepth,
+        }, { onConflict: "map_id" }).then(({ error: upsertErr }) => {
+          if (upsertErr) console.warn("[flowmap-status] cache upsert error:", upsertErr.message);
+        });
+      })
+      .catch((err) => console.error("[flowmap-status] effective cache error:", err));
 
     return json(responseData);
   } catch (err) {

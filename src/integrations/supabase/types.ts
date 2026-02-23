@@ -756,6 +756,51 @@ export type Database = {
           },
         ]
       }
+      flow_map_effective_cache: {
+        Row: {
+          computed_at: string
+          host_count: number | null
+          map_id: string
+          max_depth: number | null
+          payload: Json
+          rpc_duration_ms: number | null
+          tenant_id: string
+        }
+        Insert: {
+          computed_at?: string
+          host_count?: number | null
+          map_id: string
+          max_depth?: number | null
+          payload?: Json
+          rpc_duration_ms?: number | null
+          tenant_id: string
+        }
+        Update: {
+          computed_at?: string
+          host_count?: number | null
+          map_id?: string
+          max_depth?: number | null
+          payload?: Json
+          rpc_duration_ms?: number | null
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "flow_map_effective_cache_map_id_fkey"
+            columns: ["map_id"]
+            isOneToOne: true
+            referencedRelation: "flow_maps"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "flow_map_effective_cache_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       flow_map_hosts: {
         Row: {
           created_at: string
