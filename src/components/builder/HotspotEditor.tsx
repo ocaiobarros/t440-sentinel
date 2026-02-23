@@ -98,8 +98,9 @@ export default function HotspotEditor({ imageUrl, hotspots, onChange }: Props) {
         ref={imgRef}
         onClick={handleImageClick}
         className={`relative rounded-md overflow-hidden border ${isPlacing ? "border-primary cursor-crosshair" : "border-border/50"}`}
+        style={{ lineHeight: 0 }}
       >
-        <img src={imageUrl} alt="Device" className="w-full h-auto" draggable={false} />
+        <img src={imageUrl} alt="Device" className="block w-full h-auto" draggable={false} />
         {hotspots.map((h) => (
           <div
             key={h.id}

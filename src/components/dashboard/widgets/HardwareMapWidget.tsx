@@ -34,7 +34,7 @@ export default function HardwareMapWidget({ imageUrl, hotspots, cache, title }: 
       <div className="px-3 pt-2 pb-1">
         <span className="text-[10px] font-display uppercase tracking-wider text-muted-foreground">{title}</span>
       </div>
-      <div className="flex-1 relative overflow-hidden flex items-center justify-center">
+      <div className="flex-1 relative overflow-hidden flex items-start justify-center">
         <HardwareMapInner imageUrl={imageUrl} title={title} hotspotStates={hotspotStates} />
       </div>
     </div>
@@ -43,7 +43,7 @@ export default function HardwareMapWidget({ imageUrl, hotspots, cache, title }: 
 
 function HardwareMapInner({ imageUrl, title, hotspotStates }: { imageUrl: string; title: string; hotspotStates: any[] }) {
   return (
-    <div className="relative w-full h-full">
+    <div className="relative w-full" style={{ lineHeight: 0 }}>
       <img
         src={imageUrl}
         alt={title}
@@ -51,7 +51,7 @@ function HardwareMapInner({ imageUrl, title, hotspotStates }: { imageUrl: string
         style={{ margin: 0, padding: 0, border: "none" }}
         draggable={false}
       />
-      {/* LED overlay – same size as the img via inset:0 */}
+      {/* LED overlay – exactly same size as the img via inset:0 + lineHeight:0 on parent */}
       <div className="absolute inset-0">
         {hotspotStates.map((h) => {
           const size = h.size || 12;
