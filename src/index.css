@@ -6,38 +6,38 @@
 
 @layer base {
   :root {
-    /* Core dark theme — extracted from Flowbix prints */
-    --background: 228 30% 4%;
-    --foreground: 200 15% 90%;
+    /* ── Deep Space core ── */
+    --background: 220 40% 3.5%;
+    --foreground: 210 20% 92%;
 
-    --card: 225 25% 7%;
-    --card-foreground: 200 15% 90%;
+    --card: 220 35% 6%;
+    --card-foreground: 210 20% 92%;
 
-    --popover: 225 25% 7%;
-    --popover-foreground: 200 15% 90%;
+    --popover: 220 35% 6%;
+    --popover-foreground: 210 20% 92%;
 
     --primary: 142 100% 50%;
-    --primary-foreground: 228 30% 4%;
+    --primary-foreground: 220 40% 3.5%;
 
-    --secondary: 222 20% 12%;
-    --secondary-foreground: 200 15% 90%;
+    --secondary: 215 30% 10%;
+    --secondary-foreground: 210 20% 92%;
 
-    --muted: 222 18% 10%;
-    --muted-foreground: 218 12% 42%;
+    --muted: 215 25% 8%;
+    --muted-foreground: 215 15% 40%;
 
-    --accent: 222 18% 13%;
-    --accent-foreground: 200 15% 90%;
+    --accent: 215 25% 11%;
+    --accent-foreground: 210 20% 92%;
 
     --destructive: 0 85% 45%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 222 15% 14%;
-    --input: 222 15% 14%;
+    --border: 215 20% 12%;
+    --input: 215 20% 12%;
     --ring: 142 100% 50%;
 
     --radius: 0.5rem;
 
-    /* NOC-specific semantic tokens — vivid neon from prints */
+    /* NOC-specific semantic tokens — vivid neon */
     --neon-green: 142 100% 50%;
     --neon-green-glow: 0 0% 0% / 0;
     --neon-red: 0 90% 50%;
@@ -45,23 +45,23 @@
     --neon-blue: 210 100% 56%;
     --neon-cyan: 186 100% 50%;
 
-    /* Glass effect — deeper blur for print fidelity */
-    --glass-bg: 225 25% 8% / 0.75;
-    --glass-border: 222 15% 18% / 0.45;
-    --glass-highlight: 0 0% 100% / 0.04;
+    /* Glass effect — Deep Space glass */
+    --glass-bg: 220 35% 7% / 0.7;
+    --glass-border: 215 20% 16% / 0.5;
+    --glass-highlight: 0 0% 100% / 0.03;
 
-    /* Gradients */
-    --gradient-dark: linear-gradient(180deg, hsl(228 30% 5%) 0%, hsl(230 35% 2%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(225 25% 9% / 0.85) 0%, hsl(228 30% 5% / 0.65) 100%);
+    /* Gradients — petrol blue depth */
+    --gradient-dark: linear-gradient(180deg, hsl(220 40% 4%) 0%, hsl(225 45% 2%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(220 35% 8% / 0.85) 0%, hsl(225 40% 4% / 0.65) 100%);
     --gradient-neon: linear-gradient(135deg, hsl(142 100% 50%) 0%, hsl(160 100% 42%) 100%);
 
-    --sidebar-background: 228 28% 6%;
-    --sidebar-foreground: 200 15% 90%;
+    --sidebar-background: 220 38% 5%;
+    --sidebar-foreground: 210 20% 92%;
     --sidebar-primary: 142 100% 50%;
-    --sidebar-primary-foreground: 228 30% 4%;
-    --sidebar-accent: 222 18% 13%;
-    --sidebar-accent-foreground: 200 15% 90%;
-    --sidebar-border: 222 15% 14%;
+    --sidebar-primary-foreground: 220 40% 3.5%;
+    --sidebar-accent: 215 25% 11%;
+    --sidebar-accent-foreground: 210 20% 92%;
+    --sidebar-border: 215 20% 12%;
     --sidebar-ring: 142 100% 50%;
   }
 
@@ -350,7 +350,10 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', sans-serif;
-    background: linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%);
+    background:
+      radial-gradient(ellipse 80% 60% at 15% 20%, hsl(200 60% 8% / 0.5) 0%, transparent 60%),
+      radial-gradient(ellipse 60% 50% at 85% 75%, hsl(210 50% 6% / 0.4) 0%, transparent 55%),
+      linear-gradient(180deg, hsl(220 40% 4%) 0%, hsl(225 45% 2%) 100%);
     min-height: 100vh;
   }
 
@@ -360,14 +363,14 @@
     height: 4px;
   }
   ::-webkit-scrollbar-track {
-    background: hsl(228 30% 4%);
+    background: hsl(220 40% 3.5%);
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(222 15% 16%);
+    background: hsl(215 20% 14%);
     border-radius: 2px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(222 15% 24%);
+    background: hsl(215 20% 22%);
   }
 }
 
@@ -428,21 +431,21 @@
                  0 0 18px hsl(210 100% 56% / 0.2);
   }
 
-  /* Glass card — uses category-specific blur, border, shadow */
+  /* Glass card — Deep Space glassmorphism */
   .glass-card {
-    background: var(--category-card-bg, linear-gradient(145deg, hsl(225 25% 9% / 0.8) 0%, hsl(228 30% 5% / 0.6) 100%));
-    backdrop-filter: blur(var(--category-blur, 16px));
-    -webkit-backdrop-filter: blur(var(--category-blur, 16px));
-    border: var(--category-border-width, 1px) solid var(--category-card-border, hsl(222 15% 16% / 0.5));
-    box-shadow: var(--category-card-shadow, none);
+    background: var(--category-card-bg, linear-gradient(145deg, hsl(220 35% 8% / 0.75) 0%, hsl(225 40% 4% / 0.55) 100%));
+    backdrop-filter: blur(var(--category-blur, 14px));
+    -webkit-backdrop-filter: blur(var(--category-blur, 14px));
+    border: var(--category-border-width, 1px) solid var(--category-card-border, hsl(0 0% 100% / 0.07));
+    box-shadow: var(--category-card-shadow, 0 4px 24px hsl(0 0% 0% / 0.4), inset 0 1px 0 hsl(0 0% 100% / 0.03));
   }
 
   .glass-card-elevated {
-    background: var(--category-card-bg, linear-gradient(145deg, hsl(225 25% 11% / 0.85) 0%, hsl(228 30% 7% / 0.7) 100%));
-    backdrop-filter: blur(calc(var(--category-blur, 16px) + 4px));
-    -webkit-backdrop-filter: blur(calc(var(--category-blur, 16px) + 4px));
-    border: var(--category-border-width, 1px) solid var(--category-card-border, hsl(222 15% 20% / 0.6));
-    box-shadow: var(--category-card-shadow, 0 0 20px hsl(var(--primary) / 0.05));
+    background: var(--category-card-bg, linear-gradient(145deg, hsl(220 35% 10% / 0.82) 0%, hsl(225 40% 5% / 0.65) 100%));
+    backdrop-filter: blur(calc(var(--category-blur, 14px) + 6px));
+    -webkit-backdrop-filter: blur(calc(var(--category-blur, 14px) + 6px));
+    border: var(--category-border-width, 1px) solid var(--category-card-border, hsl(0 0% 100% / 0.1));
+    box-shadow: var(--category-card-shadow, 0 8px 32px hsl(0 0% 0% / 0.5), 0 0 20px hsl(var(--primary) / 0.04), inset 0 1px 0 hsl(0 0% 100% / 0.04));
   }
 
   /* Compact widget variant — tight padding for high-density views */
@@ -820,8 +823,33 @@
   border-top-color: hsl(228 30% 6% / 0.95) !important;
 }
 
-/* Leaflet container dark override */
+/* Leaflet container deep space override */
 .leaflet-container {
-  background: #0a0b10 !important;
+  background: hsl(220 40% 3.5%) !important;
   font-family: 'Inter', sans-serif !important;
+}
+
+/* ── Deep Space Sidebar glass ── */
+.sidebar-deep-space {
+  background: linear-gradient(
+    180deg,
+    hsl(220 38% 5% / 0.92) 0%,
+    hsl(225 40% 3% / 0.95) 100%
+  ) !important;
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* ── Deep Space Card hover glow ── */
+.glass-card:hover {
+  border-color: hsl(var(--primary) / 0.15);
+  box-shadow: 0 4px 24px hsl(0 0% 0% / 0.4), 0 0 12px hsl(var(--primary) / 0.06), inset 0 1px 0 hsl(0 0% 100% / 0.04);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/* ── Deep Space dialog/modal glass ── */
+[data-radix-popper-content-wrapper] > div,
+[role="dialog"] {
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }

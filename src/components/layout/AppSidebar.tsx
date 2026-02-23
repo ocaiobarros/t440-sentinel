@@ -95,7 +95,7 @@ export function AppSidebar() {
   const collapsed = state === "collapsed";
 
   return (
-    <Sidebar collapsible="icon" className="border-r border-sidebar-border">
+    <Sidebar collapsible="icon" className="border-r border-sidebar-border sidebar-deep-space">
       <SidebarHeader className="p-3 border-b border-sidebar-border">
         <NavLink to="/app/monitoring/dashboards" className="flex items-center gap-2">
           <Zap className="w-5 h-5 text-primary shrink-0" />
