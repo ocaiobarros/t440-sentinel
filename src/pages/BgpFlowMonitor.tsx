@@ -6,10 +6,11 @@ import {
   Settings2, Network, Globe, ArrowDownToLine, ArrowUpFromLine,
   BarChart3, Filter, Activity, Eye, EyeOff, Lock, User,
   RefreshCw, Wifi, WifiOff, TrendingUp, TrendingDown, Minus,
-  Zap, ArrowRight, Layers, ArrowLeft,
+  Zap, ArrowRight, Layers, ArrowLeft, Save,
 } from "lucide-react";
 import { Icon } from "@iconify/react";
 import { supabase } from "@/integrations/supabase/client";
+import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import NetworkSummaryPanel, { type NetworkSummaryData } from "@/components/bgp/NetworkSummaryPanel";
 
 /* ─── Config persistence ── */
@@ -798,7 +799,7 @@ function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
 
 /* ─── Dashboard (Phase 2) ── */
 
-function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfigure: () => void }) {
+function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpConfig; onReconfigure: () => void; onSave?: () => void; saving?: boolean }) {
   const hw = HARDWARE_CATALOG.find(h => h.id === config.model);
   const configId = `${config.host}:${config.port}`;
   const { stats, peers, flow_data, network_summary, timestamp, connected, refresh } = useBgpRealtime(configId);
@@ -875,6 +876,11 @@ function BgpDashboard({ config, onReconfigure }: { config: BgpConfig; onReconfig
             </span>
           </div>
 
+          {onSave && (
+            <button onClick={onSave} disabled={saving} className="flex items-center gap-1 text-[9px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50">
+              <Save className="w-3 h-3" /> {saving ? 'Salvando…' : 'Salvar'}
+            </button>
+          )}
           <button onClick={onReconfigure} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
             <Settings2 className="w-3 h-3" /> Reconfigurar
           </button>
@@ -1061,6 +1067,18 @@ export default function BgpFlowMonitor() {
   const [config, setConfig] = useState<Partial<BgpConfig>>(() => loadConfig() || {});
   const [step, setStep] = useState(1);
   const [showDashboard, setShowDashboard] = useState(() => !!loadConfig());
+  const { save: saveDashboard, saving, loadedConfig } = useDashboardPersist<BgpConfig>({
+    category: 'bgp',
+    listPath: '/app/monitoring/bgp',
+  });
+
+  useEffect(() => {
+    if (loadedConfig && !showDashboard) {
+      setConfig(loadedConfig);
+      saveConfig(loadedConfig);
+      setShowDashboard(true);
+    }
+  }, [loadedConfig]);
 
   const updateConfig = useCallback((partial: Partial<BgpConfig>) => {
     setConfig(prev => ({ ...prev, ...partial }));
@@ -1092,10 +1110,17 @@ export default function BgpFlowMonitor() {
     setShowDashboard(false);
   }, []);
 
+  const handleSave = useCallback(() => {
+    const full = loadConfig();
+    if (!full) return;
+    const hw = HARDWARE_CATALOG.find(h => h.id === full.model);
+    saveDashboard(`BGP ${hw?.name || full.host}`, full);
+  }, [saveDashboard]);
+
   if (showDashboard) {
     const fullConfig = loadConfig();
     if (fullConfig) {
-      return <BgpDashboard config={fullConfig} onReconfigure={handleReconfigure} />;
+      return <BgpDashboard config={fullConfig} onReconfigure={handleReconfigure} onSave={handleSave} saving={saving} />;
     }
   }
 

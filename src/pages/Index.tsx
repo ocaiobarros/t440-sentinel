@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Activity, Server, Database, Power, Loader2, Settings2, Wifi, Cpu as CpuIcon, ArrowLeft, Save } from 'lucide-react';
+import { useDashboardPersist } from '@/hooks/useDashboardPersist';
 import { parsePowerState, parseSnmpAvailability } from '@/data/serverData';
 import DashboardHeader from '@/components/dashboard/DashboardHeader';
 import StatusCard from '@/components/dashboard/StatusCard';
@@ -33,6 +34,24 @@ const Index = () => {
   const [config, setConfig] = useState<IdracConfig | null>(loadIdracConfig);
   const [showSetup, setShowSetup] = useState(!config);
   const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
+  const { save: saveDashboard, saving, dashboardId, loadedConfig, loading: dbLoading } = useDashboardPersist<IdracConfig>({
+    category: 'server',
+    listPath: '/app/monitoring/server',
+  });
+
+  // Load config from DB if dashboardId is present
+  useEffect(() => {
+    if (loadedConfig && !config) {
+      setConfig(loadedConfig);
+      setShowSetup(false);
+    }
+  }, [loadedConfig]);
+
+  const handleSave = useCallback(() => {
+    if (!config) return;
+    const name = config.hostName || 'Server Monitor';
+    saveDashboard(name, config);
+  }, [config, saveDashboard]);
 
   // Auto-fetch on mount when config exists from localStorage
   useEffect(() => {
@@ -101,13 +120,21 @@ const Index = () => {
 
         <div className="flex justify-between items-center mb-2 -mt-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate('/app/monitoring/server')}
             className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors"
           >
             <ArrowLeft className="w-3 h-3" />
             Voltar
           </button>
           <div className="flex items-center gap-3">
+            <button
+              onClick={handleSave}
+              disabled={saving}
+              className="flex items-center gap-1 text-[9px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50"
+            >
+              <Save className="w-3 h-3" />
+              {saving ? 'Salvando…' : 'Salvar'}
+            </button>
             <button
               onClick={handleReconfigure}
               className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors"

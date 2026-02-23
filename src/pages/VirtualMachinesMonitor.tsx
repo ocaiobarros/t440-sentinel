@@ -4,8 +4,9 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, Settings2, Server, Cpu, MemoryStick, HardDrive, Network,
   Activity, Box, ArrowDownToLine, ArrowUpFromLine, Clock, Search,
-  Filter, MonitorCheck, Power, Gauge, ArrowLeft,
+  Filter, MonitorCheck, Power, Gauge, ArrowLeft, Save,
 } from "lucide-react";
+import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import { useIdracLive } from "@/hooks/useIdracLive";
 import { extractVirtData } from "@/hooks/useVirtExtractors";
 import type { VirtData, VirtVM } from "@/hooks/useVirtExtractors";
@@ -406,6 +407,22 @@ export default function VirtualMachinesMonitor() {
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
+  const { save: saveDashboard, saving, loadedConfig } = useDashboardPersist<IdracConfig>({
+    category: 'virtual-machines',
+    listPath: '/app/monitoring/virtual-machines',
+  });
+
+  useEffect(() => {
+    if (loadedConfig && !config) {
+      setConfig(loadedConfig);
+      setShowSetup(false);
+    }
+  }, [loadedConfig]);
+
+  const handleSave = useCallback(() => {
+    if (!config) return;
+    saveDashboard(config.hostName || 'Virtual Machines', config);
+  }, [config, saveDashboard]);
 
   useEffect(() => {
     if (config && !data && !dataLoading) {
@@ -556,7 +573,7 @@ export default function VirtualMachinesMonitor() {
             </div>
           </div>
           <div className="flex items-center gap-3">
-            <button onClick={() => navigate(-1)} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
+            <button onClick={() => navigate('/app/monitoring/virtual-machines')} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
               <ArrowLeft className="w-3 h-3" /> Voltar
             </button>
             {data && (
@@ -564,6 +581,9 @@ export default function VirtualMachinesMonitor() {
                 ↻ Refresh
               </button>
             )}
+            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 text-[9px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50">
+              <Save className="w-3 h-3" /> {saving ? 'Salvando…' : 'Salvar'}
+            </button>
             <button onClick={handleReconfigure} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
               <Settings2 className="w-3 h-3" /> Reconfigurar
             </button>

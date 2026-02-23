@@ -14,9 +14,11 @@ interface ModuleDashboardListProps {
   icon: React.ReactNode;
   /** Path for the "New Panel" button. Defaults to /builder?category={category} */
   createPath?: string;
+  /** Base path for viewing a saved panel. Defaults to /dashboard/{id}. If set, navigates to {viewBasePath}/{id} */
+  viewBasePath?: string;
 }
 
-export default function ModuleDashboardList({ category, title, description, icon, createPath }: ModuleDashboardListProps) {
+export default function ModuleDashboardList({ category, title, description, icon, createPath, viewBasePath }: ModuleDashboardListProps) {
   const defaultCreatePath = createPath || `/builder?category=${category}`;
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -136,7 +138,7 @@ export default function ModuleDashboardList({ category, title, description, icon
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => navigate(`/dashboard/${dash.id}`)}
+                    onClick={() => navigate(viewBasePath ? `${viewBasePath}/${dash.id}` : `/dashboard/${dash.id}`)}
                     className="flex-1 gap-1 text-[10px] h-7"
                   >
                     <Eye className="w-3 h-3" />
