@@ -25,6 +25,7 @@ import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
 import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 import FlowMapPage from "./pages/FlowMapPage";
 import StubPage from "./pages/stubs/StubPage";
+import IncidentsPage from "./pages/IncidentsPage";
 import ServerMonitorList from "./pages/monitoring/ServerMonitorList";
 import VirtualizationList from "./pages/monitoring/VirtualizationList";
 import VirtualMachinesList from "./pages/monitoring/VirtualMachinesList";
@@ -61,7 +62,7 @@ const App = () => (
                       <Route path="operations/home" element={<Navigate to="/app/monitoring/dashboards" replace />} />
                       <Route path="operations/flowmap" element={<FlowMapPage />} />
                       <Route path="operations/flowmap/:mapId" element={<FlowMapPage />} />
-                      <Route path="operations/incidents" element={<StubPage />} />
+                      <Route path="operations/incidents" element={<IncidentsPage />} />
 
                       {/* Engineering */}
                       <Route path="engineering/inventory" element={<StubPage />} />
