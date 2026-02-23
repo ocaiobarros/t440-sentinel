@@ -15,10 +15,11 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Server, Box, Cable, Search, Download, Plus, Filter, X,
   MapPin, ExternalLink, AlertTriangle, CheckCircle, XCircle,
-  Loader2, Package,
+  Loader2, Package, Upload, Globe,
 } from "lucide-react";
 import { motion } from "framer-motion";
 import { useSearchParams } from "react-router-dom";
+import KmlImportExportModal from "@/components/inventory/KmlImportExportModal";
 
 /* ───── types ───── */
 type Host = {
@@ -109,6 +110,7 @@ export default function InventoryPage() {
   const [fullFilter, setFullFilter] = useState(false);
   const [selectedMapId, setSelectedMapId] = useState("all");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
+  const [kmlMode, setKmlMode] = useState<"import" | "export" | null>(null);
 
   const setTab = (t: string) => {
     setSearchParams(prev => { prev.set("tab", t); return prev; }, { replace: true });
@@ -227,6 +229,12 @@ export default function InventoryPage() {
           <p className="text-xs text-muted-foreground mt-1">Gestão consolidada de Hosts, CTOs e Cabos da sua rede</p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={() => setKmlMode("import")} className="gap-1.5">
+            <Upload className="w-3.5 h-3.5" /> Importar KML
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => setKmlMode("export")} className="gap-1.5">
+            <Globe className="w-3.5 h-3.5" /> Exportar KML
+          </Button>
           <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5">
             <Download className="w-3.5 h-3.5" /> Exportar CSV
           </Button>
@@ -434,6 +442,12 @@ export default function InventoryPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {/* KML Import/Export Modal */}
+      <KmlImportExportModal
+        open={kmlMode !== null}
+        onOpenChange={(open) => { if (!open) setKmlMode(null); }}
+        mode={kmlMode ?? "import"}
+      />
     </div>
   );
 }
