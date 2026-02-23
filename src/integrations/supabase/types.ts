@@ -759,6 +759,7 @@ export type Database = {
       flow_map_hosts: {
         Row: {
           created_at: string
+          current_status: Database["public"]["Enums"]["link_status"]
           host_group: string
           host_name: string
           icon_type: string
@@ -773,6 +774,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string
+          current_status?: Database["public"]["Enums"]["link_status"]
           host_group?: string
           host_name?: string
           icon_type?: string
@@ -787,6 +789,7 @@ export type Database = {
         }
         Update: {
           created_at?: string
+          current_status?: Database["public"]["Enums"]["link_status"]
           host_group?: string
           host_name?: string
           icon_type?: string
@@ -1685,6 +1688,15 @@ export type Database = {
           free_ports: number
           occupied_ports: number
           status_calculated: string
+        }[]
+      }
+      get_map_effective_status: {
+        Args: { p_map_id: string }
+        Returns: {
+          depth: number
+          effective_status: string
+          host_id: string
+          is_root_cause: boolean
         }[]
       }
       get_user_tenant_id: { Args: { p_user_id: string }; Returns: string }
