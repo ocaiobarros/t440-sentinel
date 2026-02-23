@@ -89,16 +89,54 @@ async function fetchViaCep(cep: string): Promise<ViaCepResponse | null> {
   return data as ViaCepResponse;
 }
 
-async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
-  const encoded = encodeURIComponent(address);
-  const res = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=1&countrycodes=br`,
-    { headers: { "User-Agent": "FlowPulse/1.0" } }
-  );
-  if (!res.ok) return null;
-  const data = await res.json();
-  if (!data.length) return null;
-  return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+async function geocodeAddress(logradouro: string, numero: string, bairro: string, cidade: string, uf: string): Promise<{ lat: number; lon: number } | null> {
+  // Try progressively less specific queries
+  const queries = [
+    `${logradouro}, ${numero}, ${bairro}, ${cidade}, ${uf}, Brasil`,
+    `${logradouro}, ${numero}, ${cidade}, ${uf}, Brasil`,
+    `${logradouro}, ${cidade}, ${uf}, Brasil`,
+    `${bairro}, ${cidade}, ${uf}, Brasil`,
+  ];
+
+  for (const q of queries) {
+    const encoded = encodeURIComponent(q);
+    try {
+      const res = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encoded}&limit=1&countrycodes=br`,
+        { headers: { "User-Agent": "FlowPulse/1.0" } }
+      );
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (data.length) {
+        return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  // Structured search as last resort
+  try {
+    const params = new URLSearchParams({
+      format: "json",
+      street: `${numero} ${logradouro}`,
+      city: cidade,
+      state: uf,
+      country: "Brazil",
+      limit: "1",
+    });
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?${params}`, {
+      headers: { "User-Agent": "FlowPulse/1.0" },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.length) {
+        return { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      }
+    }
+  } catch { /* ignore */ }
+
+  return null;
 }
 
 const statusColor = (st: string) =>
@@ -175,8 +213,7 @@ export default function ViabilityPage() {
     if (!logradouro || !numero.trim() || !cidade) return;
     setGeocoding(true);
     try {
-      const fullAddress = `${logradouro}, ${numero}, ${bairro}, ${cidade}, ${uf}, Brasil`;
-      const coords = await geocodeAddress(fullAddress);
+      const coords = await geocodeAddress(logradouro, numero, bairro, cidade, uf);
       if (coords) {
         setLat(coords.lat.toFixed(6));
         setLon(coords.lon.toFixed(6));
