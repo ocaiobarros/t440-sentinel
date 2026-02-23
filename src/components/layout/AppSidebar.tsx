@@ -1,8 +1,8 @@
 import { useLocation } from "react-router-dom";
 import {
-  Home, Map, AlertTriangle, Wrench, Search, BarChart3,
+  Map, AlertTriangle, Wrench, Search, BarChart3,
   FileText, Clock, Settings, Users, Building2, Zap, ChevronRight,
-  Server, Box, MonitorCheck, Fuel, Globe,
+  Server, Box, MonitorCheck, Fuel, Globe, LayoutDashboard,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -20,7 +20,6 @@ import {
 import RoleGate from "@/components/auth/RoleGate";
 
 const operationsItems = [
-  { title: "Home", url: "/app/operations/home", icon: Home },
   { title: "FlowMap", url: "/app/operations/flowmap", icon: Map },
   { title: "Incidentes", url: "/app/operations/incidents", icon: AlertTriangle },
 ];
@@ -31,7 +30,10 @@ const engineeringItems = [
   { title: "Capacidade", url: "/app/engineering/capacity", icon: BarChart3 },
 ];
 
+
+
 const monitoringItems = [
+  { title: "Dashboards", url: "/app/monitoring/dashboards", icon: LayoutDashboard },
   { title: "Server Monitor", url: "/app/monitoring/server", icon: Server },
   { title: "Virtualização", url: "/app/monitoring/virtualization", icon: Box },
   { title: "Máquinas Virtuais", url: "/app/monitoring/virtual-machines", icon: MonitorCheck },
@@ -95,7 +97,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border">
       <SidebarHeader className="p-3 border-b border-sidebar-border">
-        <NavLink to="/app/operations/home" className="flex items-center gap-2">
+        <NavLink to="/app/monitoring/dashboards" className="flex items-center gap-2">
           <Zap className="w-5 h-5 text-primary shrink-0" />
           {!collapsed && (
             <span className="font-display text-sm font-bold tracking-wider text-primary">

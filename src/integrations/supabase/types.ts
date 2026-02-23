@@ -394,6 +394,7 @@ export type Database = {
       }
       dashboards: {
         Row: {
+          category: string | null
           created_at: string
           created_by: string | null
           description: string | null
@@ -407,6 +408,7 @@ export type Database = {
           zabbix_connection_id: string | null
         }
         Insert: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null
@@ -420,6 +422,7 @@ export type Database = {
           zabbix_connection_id?: string | null
         }
         Update: {
+          category?: string | null
           created_at?: string
           created_by?: string | null
           description?: string | null

@@ -25,6 +25,12 @@ import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
 import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 import FlowMapPage from "./pages/FlowMapPage";
 import StubPage from "./pages/stubs/StubPage";
+import ServerMonitorList from "./pages/monitoring/ServerMonitorList";
+import VirtualizationList from "./pages/monitoring/VirtualizationList";
+import VirtualMachinesList from "./pages/monitoring/VirtualMachinesList";
+import BgpFlowList from "./pages/monitoring/BgpFlowList";
+import FleetIntelligenceList from "./pages/monitoring/FleetIntelligenceList";
+import DashboardsList from "./pages/monitoring/DashboardsList";
 
 const queryClient = new QueryClient();
 
@@ -42,7 +48,7 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
 
             {/* ── Root redirect ── */}
-            <Route path="/" element={<Navigate to="/app/operations/home" replace />} />
+            <Route path="/" element={<Navigate to="/app/monitoring/dashboards" replace />} />
 
             {/* ── Enterprise layout ── */}
             <Route
@@ -52,7 +58,7 @@ const App = () => (
                   <AppLayout>
                     <Routes>
                       {/* Operations */}
-                      <Route path="operations/home" element={<DashboardList />} />
+                      <Route path="operations/home" element={<Navigate to="/app/monitoring/dashboards" replace />} />
                       <Route path="operations/flowmap" element={<FlowMapPage />} />
                       <Route path="operations/flowmap/:mapId" element={<FlowMapPage />} />
                       <Route path="operations/incidents" element={<StubPage />} />
@@ -63,11 +69,12 @@ const App = () => (
                       <Route path="engineering/capacity" element={<StubPage />} />
 
                       {/* Monitoring */}
-                      <Route path="monitoring/server" element={<Index />} />
-                      <Route path="monitoring/virtualization" element={<VirtualizationMonitor />} />
-                      <Route path="monitoring/virtual-machines" element={<VirtualMachinesMonitor />} />
-                      <Route path="monitoring/bgp" element={<BgpFlowMonitor />} />
-                      <Route path="monitoring/fleet" element={<FleetIntelligence />} />
+                      <Route path="monitoring/dashboards" element={<DashboardsList />} />
+                      <Route path="monitoring/server" element={<ServerMonitorList />} />
+                      <Route path="monitoring/virtualization" element={<VirtualizationList />} />
+                      <Route path="monitoring/virtual-machines" element={<VirtualMachinesList />} />
+                      <Route path="monitoring/bgp" element={<BgpFlowList />} />
+                      <Route path="monitoring/fleet" element={<FleetIntelligenceList />} />
 
                       {/* Governance */}
                       <Route path="governance/sla" element={<StubPage />} />

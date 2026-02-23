@@ -66,7 +66,7 @@ function MapListView() {
             <p className="text-xs text-muted-foreground mt-1">Topologia Geoespacial NOC</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/app/operations/home")}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/app/monitoring/dashboards")}>
               <ArrowLeft className="w-3.5 h-3.5" />Dashboards
             </Button>
             <Button size="sm" className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowWizard(true)}>

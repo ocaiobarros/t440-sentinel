@@ -181,7 +181,7 @@ export default function FleetIntelligence() {
         <div className="max-w-[1600px] mx-auto px-6 py-4">
           <div className="flex items-center gap-4 mb-4">
             <button
-              onClick={() => navigate("/app/operations/home")}
+              onClick={() => navigate("/app/monitoring/fleet")}
               className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
             >
               <ChevronLeft className="w-5 h-5 text-muted-foreground" />

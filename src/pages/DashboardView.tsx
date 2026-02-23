@@ -208,7 +208,7 @@ export default function DashboardView() {
           className="flex items-center justify-between mb-6"
         >
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/app/operations/home")} className="text-muted-foreground hover:text-foreground">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-4 h-4" />
             </Button>
             <div>

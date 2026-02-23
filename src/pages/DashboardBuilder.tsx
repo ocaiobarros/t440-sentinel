@@ -2,7 +2,7 @@ import { useState, useCallback, useMemo, useRef, useEffect, startTransition } fr
 import { Responsive, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,6 +40,8 @@ const DEFAULT_CONFIG: DashboardConfig = {
 
 export default function DashboardBuilder() {
   const { dashboardId } = useParams<{ dashboardId?: string }>();
+  const [searchParams] = useSearchParams();
+  const categoryParam = searchParams.get("category") || "dashboard";
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -258,7 +260,8 @@ export default function DashboardBuilder() {
           zabbix_connection_id: config.zabbix_connection_id,
           settings: config.settings as any,
           created_by: userId,
-        }).select("id").single();
+          category: categoryParam,
+        } as any).select("id").single();
         if (error) throw error;
         dashId = data.id;
         setConfig((prev) => ({ ...prev, id: dashId }));
@@ -326,7 +329,7 @@ export default function DashboardBuilder() {
       {/* ── Top Bar ── */}
       <header className="h-12 border-b border-border/30 flex items-center justify-between px-4 flex-shrink-0 glass-card-elevated z-20">
         <div className="flex items-center gap-3">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/app/operations/home")} className="h-8 w-8">
+          <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="h-8 w-8">
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div className="h-5 w-px bg-border/50" />
