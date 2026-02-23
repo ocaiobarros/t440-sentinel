@@ -26,6 +26,7 @@ import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 import FlowMapPage from "./pages/FlowMapPage";
 import StubPage from "./pages/stubs/StubPage";
 import InventoryPage from "./pages/InventoryPage";
+import TimelinePage from "./pages/TimelinePage";
 import SLAGovernance from "./pages/SLAGovernance";
 import ViabilityPage from "./pages/ViabilityPage";
 import IncidentsPage from "./pages/IncidentsPage";
@@ -92,7 +93,7 @@ const App = () => (
 
                       {/* Governance */}
                       <Route path="governance/sla" element={<SLAGovernance />} />
-                      <Route path="governance/timeline" element={<StubPage />} />
+                      <Route path="governance/timeline" element={<TimelinePage />} />
 
                       {/* Settings */}
                       <Route path="settings/connections" element={
