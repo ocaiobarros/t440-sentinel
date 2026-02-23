@@ -78,12 +78,20 @@ export function useFlowMapStatus({
 
   // Debounce timer for realtime-triggered RPC calls
   const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Single-flight guard for RPC calls
+  const rpcInflightRef = useRef(false);
 
   const canPoll = enabled && !!mapId && !!connectionId && hosts.length > 0;
 
-  // ─── Propagation Engine RPC ───
+  // ─── Propagation Engine RPC (single-flight) ───
   const fetchEffectiveStatus = useCallback(async () => {
     if (!mapId) return;
+    // Single-flight: skip if already in-flight
+    if (rpcInflightRef.current) {
+      console.log("[FlowMapStatus] RPC skipped (in-flight)");
+      return;
+    }
+    rpcInflightRef.current = true;
     try {
       const { data, error: rpcErr } = await supabase.rpc("get_map_effective_status", {
         p_map_id: mapId,
@@ -94,7 +102,6 @@ export function useFlowMapStatus({
       }
       if (data) {
         setEffectiveStatuses(data as EffectiveHostStatus[]);
-        // Derive isolated nodes from effective status
         const isolated = (data as EffectiveHostStatus[])
           .filter((h) => h.effective_status === "ISOLATED")
           .map((h) => h.host_id);
@@ -102,6 +109,8 @@ export function useFlowMapStatus({
       }
     } catch (err: any) {
       console.warn("[FlowMapStatus] RPC fetch error:", err.message);
+    } finally {
+      rpcInflightRef.current = false;
     }
   }, [mapId]);
 

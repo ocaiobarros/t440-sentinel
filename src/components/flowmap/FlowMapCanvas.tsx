@@ -3,20 +3,21 @@ import L from "leaflet";
 import { supabase } from "@/integrations/supabase/client";
 import "leaflet/dist/leaflet.css";
 import type { FlowMap, FlowMapHost, FlowMapLink, HostStatus, FlowMapCTO, FlowMapCable, FlowMapReserva } from "@/hooks/useFlowMaps";
-import type { LinkTraffic } from "@/hooks/useFlowMapStatus";
+import type { LinkTraffic, EffectiveHostStatus } from "@/hooks/useFlowMapStatus";
 
 /* ── Icon factories ── */
-function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean): L.DivIcon {
-  const color = status === "UP" ? "#00e676" : status === "DOWN" ? "#ff1744" : "#9e9e9e";
+function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean, isIsolated: boolean): L.DivIcon {
+  const color = isIsolated ? "#9e9e9e" : status === "UP" ? "#00e676" : status === "DOWN" ? "#ff1744" : "#9e9e9e";
   const size = isCritical && status === "DOWN" ? 20 : 14;
   const pulse = status === "DOWN" ? `animation: fmPulse ${isCritical ? "0.8s" : "1.4s"} ease-in-out infinite;` : "";
+  const opacity = isIsolated ? "opacity:0.45;" : "";
 
   return L.divIcon({
     className: "",
     iconSize: [size * 2, size * 2],
     iconAnchor: [size, size],
     html: `<div style="width:${size * 2}px;height:${size * 2}px;display:flex;align-items:center;justify-content:center;">
-      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};box-shadow:0 0 ${size}px ${color}80;${pulse}cursor:pointer;"></div>
+      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};box-shadow:0 0 ${size}px ${color}80;${pulse}${opacity}cursor:pointer;"></div>
     </div>`,
   });
 }
@@ -196,6 +197,7 @@ interface Props {
   linkTraffic?: Record<string, LinkTraffic>;
   impactedLinkIds?: string[];
   isolatedNodeIds?: string[];
+  effectiveStatuses?: EffectiveHostStatus[];
   ctoTelemetry?: Record<string, CTOTelemetryData>;
   onMapClick?: (lat: number, lon: number) => void;
   onHostClick?: (hostId: string) => void;
@@ -220,6 +222,7 @@ export default function FlowMapCanvas({
   linkTraffic = {},
   impactedLinkIds = [],
   isolatedNodeIds = [],
+  effectiveStatuses = [],
   ctoTelemetry = {},
   onMapClick,
   onHostClick,
@@ -476,7 +479,7 @@ export default function FlowMapCanvas({
       const st = hostStatusById[h.id];
       const isIsolated = isolatedSet.has(h.id);
       const marker = L.marker([h.lat, h.lon], {
-        icon: hostIcon(st?.status ?? "UNKNOWN", h.is_critical || isIsolated),
+        icon: hostIcon(st?.status ?? "UNKNOWN", h.is_critical, isIsolated),
       });
       marker.bindTooltip(hostTooltipHtml(h, st), {
         className: "flowmap-tooltip",

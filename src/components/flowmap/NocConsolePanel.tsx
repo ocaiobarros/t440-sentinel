@@ -1,10 +1,10 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { AlertTriangle, ArrowDown, ArrowUp, Clock, Radio, ShieldAlert, Activity, ChevronDown, ChevronUp, Locate, Link2, Eye, EyeOff, Bell } from "lucide-react";
+import { AlertTriangle, ArrowDown, ArrowUp, Clock, Radio, ShieldAlert, Activity, ChevronDown, ChevronUp, Locate, Link2, Eye, EyeOff, Bell, Target, Unplug } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { supabase } from "@/integrations/supabase/client";
 import type { FlowMapHost, FlowMapLink, HostStatus } from "@/hooks/useFlowMaps";
-import type { LinkEvent } from "@/hooks/useFlowMapStatus";
+import type { LinkEvent, EffectiveHostStatus } from "@/hooks/useFlowMapStatus";
 
 /* ─── Webhook Alert Entry ─── */
 interface WebhookAlertEntry {
@@ -40,6 +40,7 @@ interface NocConsolePanelProps {
   isolatedNodes: string[];
   linkStatuses: Record<string, { status: string; originHost: string; destHost: string }>;
   linkEvents: LinkEvent[];
+  effectiveStatuses?: EffectiveHostStatus[];
   onFocusHost?: (host: FlowMapHost) => void;
   onCriticalDown?: (host: FlowMapHost) => void;
   warRoom?: boolean;
@@ -105,6 +106,7 @@ export default function NocConsolePanel({
   isolatedNodes,
   linkStatuses,
   linkEvents,
+  effectiveStatuses = [],
   onFocusHost,
   onCriticalDown,
   warRoom = false,
@@ -112,7 +114,7 @@ export default function NocConsolePanel({
   onHideAccessNetworkChange,
 }: NocConsolePanelProps) {
   const [events, setEvents] = useState<EventEntry[]>([]);
-  const [activeTab, setActiveTab] = useState<"timeline" | "sla" | "alerts">("timeline");
+  const [activeTab, setActiveTab] = useState<"timeline" | "sla" | "alerts" | "rootcause" | "impact">("timeline");
   const prevStatusRef = useRef<Record<string, string>>({});
   const maxEvents = 50;
 
@@ -206,6 +208,23 @@ export default function NocConsolePanel({
   // ─── SLA data ───
   const activeEvents = useMemo(() => linkEvents.filter((e) => !e.ended_at), [linkEvents]);
   const closedEvents = useMemo(() => linkEvents.filter((e) => !!e.ended_at).slice(0, 20), [linkEvents]);
+
+  // ─── Root Cause & Impact derived from effectiveStatuses ───
+  const rootCauseHosts = useMemo(() => {
+    const rcIds = new Set(
+      effectiveStatuses.filter((e) => e.is_root_cause).map((e) => e.host_id)
+    );
+    return hosts
+      .filter((h) => rcIds.has(h.id))
+      .sort((a, b) => (b.is_critical ? 1 : 0) - (a.is_critical ? 1 : 0));
+  }, [effectiveStatuses, hosts]);
+
+  const impactHosts = useMemo(() => {
+    const isoIds = new Set(
+      effectiveStatuses.filter((e) => e.effective_status === "ISOLATED").map((e) => e.host_id)
+    );
+    return hosts.filter((h) => isoIds.has(h.id));
+  }, [effectiveStatuses, hosts]);
 
   const textScale = warRoom ? "text-base" : "text-[11px]";
   const counterScale = warRoom ? "text-2xl" : "text-sm";
@@ -341,6 +360,28 @@ export default function NocConsolePanel({
           <Bell className="w-3 h-3" />
           Alertas ({webhookAlerts.length})
         </button>
+        {rootCauseHosts.length > 0 && (
+          <button
+            onClick={() => setActiveTab("rootcause")}
+            className={`flex-1 flex items-center justify-center gap-1 p-2 text-[9px] font-display uppercase tracking-wider transition-colors ${
+              activeTab === "rootcause" ? "text-neon-red border-b-2 border-neon-red" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Target className="w-3 h-3" />
+            RC ({rootCauseHosts.length})
+          </button>
+        )}
+        {impactHosts.length > 0 && (
+          <button
+            onClick={() => setActiveTab("impact")}
+            className={`flex-1 flex items-center justify-center gap-1 p-2 text-[9px] font-display uppercase tracking-wider transition-colors ${
+              activeTab === "impact" ? "text-neon-amber border-b-2 border-neon-amber" : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Unplug className="w-3 h-3" />
+            Impact ({impactHosts.length})
+          </button>
+        )}
       </div>
 
       {/* ── Tab Content ── */}
@@ -476,7 +517,7 @@ export default function NocConsolePanel({
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === "alerts" ? (
           /* ── Webhook Alerts Panel ── */
           webhookAlerts.length === 0 ? (
             <div className="p-4 text-center">
@@ -511,7 +552,7 @@ export default function NocConsolePanel({
                   >
                     <div className="flex items-center justify-between mb-1">
                       <div className="flex items-center gap-1.5">
-                        <span className={`text-[10px] ${isProblem ? "" : ""}`}>{isProblem ? "🚨" : "✅"}</span>
+                        <span className={`text-[10px]`}>{isProblem ? "🚨" : "✅"}</span>
                         <span className="font-mono font-bold text-foreground truncate text-[10px]">
                           {alert.host_name || "—"}
                         </span>
@@ -531,7 +572,66 @@ export default function NocConsolePanel({
               })}
             </div>
           )
-        )}
+        ) : activeTab === "rootcause" ? (
+          /* ── Root Cause Panel ── */
+          <div className="p-1.5 space-y-1">
+            <div className="text-[9px] font-display uppercase tracking-wider text-neon-red px-1 flex items-center gap-1 mb-2">
+              <Target className="w-3 h-3" />
+              FALHAS FÍSICAS (ROOT CAUSE)
+            </div>
+            {rootCauseHosts.length === 0 ? (
+              <div className="p-4 text-center">
+                <p className="text-[10px] text-muted-foreground/50 font-mono">Nenhuma falha raiz detectada</p>
+              </div>
+            ) : (
+              rootCauseHosts.map((h) => (
+                <button
+                  key={h.id}
+                  onClick={() => onFocusHost?.(h)}
+                  className="w-full flex items-center gap-2 p-2 rounded border border-neon-red/20 bg-neon-red/5 text-left hover:bg-neon-red/10 transition-colors group"
+                >
+                  <span className="w-2 h-2 rounded-full bg-neon-red animate-pulse shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-[10px] font-mono font-bold text-neon-red truncate block">
+                      {h.host_name || h.zabbix_host_id}
+                    </span>
+                    <span className="text-[8px] font-mono text-muted-foreground">{h.host_group || "—"}</span>
+                  </div>
+                  {h.is_critical && <AlertTriangle className="w-3 h-3 text-neon-red shrink-0" />}
+                  <Locate className="w-3 h-3 text-neon-red/50 group-hover:text-neon-red transition-colors shrink-0" />
+                </button>
+              ))
+            )}
+          </div>
+        ) : activeTab === "impact" ? (
+          /* ── Impact Panel ── */
+          <div className="p-1.5 space-y-1">
+            <div className="text-[9px] font-display uppercase tracking-wider text-neon-amber px-1 flex items-center gap-1 mb-2">
+              <Unplug className="w-3 h-3" />
+              NÓS ISOLADOS (IMPACTO)
+            </div>
+            <div className="px-2 py-1.5 mb-2 rounded bg-neon-amber/5 border border-neon-amber/20">
+              <span className="text-[10px] font-display text-neon-amber font-bold">{impactHosts.length}</span>
+              <span className="text-[9px] text-muted-foreground ml-1.5">nó{impactHosts.length !== 1 ? "s" : ""} sem alcance à rede core</span>
+            </div>
+            {impactHosts.map((h) => (
+              <button
+                key={h.id}
+                onClick={() => onFocusHost?.(h)}
+                className="w-full flex items-center gap-2 p-2 rounded border border-neon-amber/20 bg-neon-amber/5 text-left hover:bg-neon-amber/10 transition-colors group"
+              >
+                <span className="w-2 h-2 rounded-full bg-neon-amber/60 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <span className="text-[10px] font-mono text-muted-foreground truncate block">
+                    {h.host_name || h.zabbix_host_id}
+                  </span>
+                  <span className="text-[8px] font-mono text-muted-foreground/60">{h.host_group || "—"}</span>
+                </div>
+                <Locate className="w-3 h-3 text-neon-amber/50 group-hover:text-neon-amber transition-colors shrink-0" />
+              </button>
+            ))}
+          </div>
+        ) : null}
       </div>
     </div>
   );
