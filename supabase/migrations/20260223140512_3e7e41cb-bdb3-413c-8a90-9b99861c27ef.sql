@@ -1,0 +1,1 @@
+ALTER TABLE public.dashboards ADD COLUMN IF NOT EXISTS category TEXT DEFAULT 'dashboard';
