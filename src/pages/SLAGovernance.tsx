@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useSearchParams } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -11,11 +12,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import {
   ShieldCheck, AlertTriangle, TrendingDown, Clock, RefreshCw, FileDown,
-  CheckCircle, XCircle, Activity, BarChart3,
+  CheckCircle, XCircle, Activity, BarChart3, Filter, X,
 } from "lucide-react";
 import { motion } from "framer-motion";
-import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInSeconds, isWithinInterval } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { format, subDays, startOfMonth, endOfMonth, subMonths, differenceInSeconds } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from "recharts";
 import type { AlertInstance } from "@/hooks/useIncidents";
 
@@ -35,10 +35,7 @@ function useSLAPolicies() {
   return useQuery({
     queryKey: ["sla-policies"],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("sla_policies")
-        .select("*")
-        .order("name");
+      const { data, error } = await supabase.from("sla_policies").select("*").order("name");
       if (error) throw error;
       return data ?? [];
     },
@@ -69,10 +66,28 @@ function useSLAAlerts(period: Period) {
   });
 }
 
+function useHostGroups() {
+  return useQuery({
+    queryKey: ["sla-host-groups"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("flow_map_hosts")
+        .select("host_group, host_name, zabbix_host_id");
+      if (error) throw error;
+      const groups = new Map<string, { host_name: string; zabbix_host_id: string }[]>();
+      for (const h of data ?? []) {
+        const g = h.host_group || "Sem Grupo";
+        if (!groups.has(g)) groups.set(g, []);
+        groups.get(g)!.push({ host_name: h.host_name, zabbix_host_id: h.zabbix_host_id });
+      }
+      return groups;
+    },
+  });
+}
+
 function useSLASweep() {
   const qc = useQueryClient();
   const { toast } = useToast();
-
   return useMutation({
     mutationFn: async () => {
       const { data, error } = await supabase.rpc("sla_sweep_breaches");
@@ -89,70 +104,127 @@ function useSLASweep() {
 
 /* ─── Main Page ─── */
 export default function SLAGovernance() {
-  const [period, setPeriod] = useState<Period>("current");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [period, setPeriod] = useState<Period>((searchParams.get("period") as Period) || "current");
+  const [selectedGroup, setSelectedGroup] = useState<string>(searchParams.get("group") || "");
+  const [selectedHost, setSelectedHost] = useState<string>(searchParams.get("host") || "");
+
   const { data: policies, isLoading: policiesLoading } = useSLAPolicies();
   const { data: alerts, isLoading: alertsLoading, refetch } = useSLAAlerts(period);
+  const { data: hostGroupsMap } = useHostGroups();
   const sweep = useSLASweep();
 
   const isLoading = policiesLoading || alertsLoading;
 
+  // Persist filters to URL
+  const updateParams = useCallback((updates: Record<string, string>) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      for (const [k, v] of Object.entries(updates)) {
+        if (v) next.set(k, v); else next.delete(k);
+      }
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
+
+  const handlePeriodChange = (v: string) => { setPeriod(v as Period); updateParams({ period: v }); };
+  const handleGroupChange = (v: string) => {
+    const val = v === "__all__" ? "" : v;
+    setSelectedGroup(val);
+    setSelectedHost("");
+    updateParams({ group: val, host: "" });
+  };
+  const handleHostChange = (v: string) => {
+    const val = v === "__all__" ? "" : v;
+    setSelectedHost(val);
+    updateParams({ host: val });
+  };
+  const clearFilters = () => {
+    setSelectedGroup(""); setSelectedHost("");
+    updateParams({ group: "", host: "" });
+  };
+
+  // Derive groups & hosts lists
+  const groupNames = useMemo(() => {
+    if (!hostGroupsMap) return [];
+    return Array.from(hostGroupsMap.keys()).sort();
+  }, [hostGroupsMap]);
+
+  const hostList = useMemo(() => {
+    if (!hostGroupsMap) return [];
+    if (selectedGroup) return hostGroupsMap.get(selectedGroup) ?? [];
+    const all: { host_name: string; zabbix_host_id: string }[] = [];
+    hostGroupsMap.forEach((v) => all.push(...v));
+    return all.sort((a, b) => a.host_name.localeCompare(b.host_name));
+  }, [hostGroupsMap, selectedGroup]);
+
+  // Filter alerts by group/host
+  const filteredAlerts = useMemo(() => {
+    if (!alerts) return [];
+    if (!selectedGroup && !selectedHost) return alerts;
+
+    const allowedHosts = new Set<string>();
+    if (selectedHost) {
+      allowedHosts.add(selectedHost);
+    } else if (selectedGroup && hostGroupsMap) {
+      const hosts = hostGroupsMap.get(selectedGroup) ?? [];
+      for (const h of hosts) {
+        allowedHosts.add(h.host_name);
+        allowedHosts.add(h.zabbix_host_id);
+      }
+    }
+
+    return alerts.filter((a) => {
+      const host = (a.payload as any)?.hostname || (a.payload as any)?.host || a.dedupe_key;
+      return allowedHosts.has(host);
+    });
+  }, [alerts, selectedGroup, selectedHost, hostGroupsMap]);
+
   /* ── Computed Metrics ── */
   const metrics = useMemo(() => {
-    if (!alerts?.length) return { uptime: 100, breaches: 0, totalDownSeconds: 0, totalAlerts: 0, worstHosts: [] as { host: string; downSeconds: number; uptime: number }[], dailyUptime: [] as { day: string; uptime: number }[] };
+    const empty = { uptime: 100, breaches: 0, totalDownSeconds: 0, totalAlerts: 0, worstHosts: [] as { host: string; downSeconds: number; uptime: number }[], dailyUptime: [] as { day: string; uptime: number }[] };
+    if (!filteredAlerts?.length) return empty;
 
     const now = new Date();
     const periodStart = period === "current" ? startOfMonth(now) : startOfMonth(subMonths(now, 1));
     const periodEnd = period === "current" ? now : endOfMonth(subMonths(now, 1));
     const totalPeriodSeconds = differenceInSeconds(periodEnd, periodStart);
 
-    // Per-host downtime
     const hostDown: Record<string, number> = {};
     let breaches = 0;
 
-    for (const a of alerts) {
+    for (const a of filteredAlerts) {
       const host = (a.payload as any)?.hostname || (a.payload as any)?.host || a.dedupe_key;
       const start = new Date(a.opened_at);
       const end = a.resolved_at ? new Date(a.resolved_at) : now;
       const down = differenceInSeconds(end, start);
       hostDown[host] = (hostDown[host] || 0) + down;
-
       if (a.ack_breached_at || a.resolve_breached_at) breaches++;
     }
 
-    // Global uptime
     const uniqueHosts = Object.keys(hostDown);
     const totalPossible = totalPeriodSeconds * Math.max(uniqueHosts.length, 1);
     const totalDown = Object.values(hostDown).reduce((s, v) => s + v, 0);
     const uptime = Math.max(0, ((totalPossible - totalDown) / totalPossible) * 100);
 
-    // Worst 5
     const worstHosts = uniqueHosts
-      .map((host) => ({
-        host,
-        downSeconds: hostDown[host],
-        uptime: Math.max(0, ((totalPeriodSeconds - hostDown[host]) / totalPeriodSeconds) * 100),
-      }))
+      .map((host) => ({ host, downSeconds: hostDown[host], uptime: Math.max(0, ((totalPeriodSeconds - hostDown[host]) / totalPeriodSeconds) * 100) }))
       .sort((a, b) => a.uptime - b.uptime)
       .slice(0, 5);
 
-    // Daily uptime (last 30 days)
     const dailyUptime: { day: string; uptime: number }[] = [];
     for (let i = 29; i >= 0; i--) {
       const day = subDays(now, i);
       const dayStr = format(day, "dd/MM");
       const dayStart = new Date(day); dayStart.setHours(0, 0, 0, 0);
       const dayEnd = new Date(day); dayEnd.setHours(23, 59, 59, 999);
-      const daySeconds = 86400;
-
       let dayDownSeconds = 0;
-      let dayHosts = new Set<string>();
+      const dayHosts = new Set<string>();
 
-      for (const a of alerts) {
+      for (const a of filteredAlerts) {
         const host = (a.payload as any)?.hostname || (a.payload as any)?.host || a.dedupe_key;
         const aStart = new Date(a.opened_at);
         const aEnd = a.resolved_at ? new Date(a.resolved_at) : now;
-
-        // Check overlap with this day
         const overlapStart = Math.max(aStart.getTime(), dayStart.getTime());
         const overlapEnd = Math.min(aEnd.getTime(), dayEnd.getTime());
         if (overlapStart < overlapEnd) {
@@ -162,12 +234,14 @@ export default function SLAGovernance() {
       }
 
       const hostCount = Math.max(dayHosts.size, uniqueHosts.length, 1);
-      const possibleDay = daySeconds * hostCount;
+      const possibleDay = 86400 * hostCount;
       dailyUptime.push({ day: dayStr, uptime: parseFloat(Math.max(0, ((possibleDay - dayDownSeconds) / possibleDay) * 100).toFixed(2)) });
     }
 
-    return { uptime: parseFloat(uptime.toFixed(3)), breaches, totalDownSeconds: totalDown, totalAlerts: alerts.length, worstHosts, dailyUptime };
-  }, [alerts, period]);
+    return { uptime: parseFloat(uptime.toFixed(3)), breaches, totalDownSeconds: totalDown, totalAlerts: filteredAlerts.length, worstHosts, dailyUptime };
+  }, [filteredAlerts, period]);
+
+  const hasFilters = !!selectedGroup || !!selectedHost;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -179,22 +253,7 @@ export default function SLAGovernance() {
             <h1 className="text-lg font-display font-bold text-foreground">SLA & Disponibilidade</h1>
           </div>
           <div className="flex items-center gap-2">
-            <Select value={period} onValueChange={(v) => setPeriod(v as Period)}>
-              <SelectTrigger className="h-7 w-36 text-[10px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="current">Mês Atual</SelectItem>
-                <SelectItem value="previous">Mês Anterior</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              size="sm"
-              variant="outline"
-              className="h-7 gap-1 text-[10px]"
-              onClick={() => sweep.mutate()}
-              disabled={sweep.isPending}
-            >
+            <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={() => sweep.mutate()} disabled={sweep.isPending}>
               <CheckCircle className="w-3 h-3" />
               {sweep.isPending ? "Verificando..." : "Check Compliance"}
             </Button>
@@ -206,6 +265,50 @@ export default function SLAGovernance() {
             </Button>
           </div>
         </div>
+
+        {/* ── Filter Bar ── */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter className="w-3.5 h-3.5 text-muted-foreground" />
+          <Select value={period} onValueChange={handlePeriodChange}>
+            <SelectTrigger className="h-7 w-32 text-[10px]"><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="current">Mês Atual</SelectItem>
+              <SelectItem value="previous">Mês Anterior</SelectItem>
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedGroup || "__all__"} onValueChange={handleGroupChange}>
+            <SelectTrigger className="h-7 w-44 text-[10px]"><SelectValue placeholder="Todos os Grupos" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos os Grupos</SelectItem>
+              {groupNames.map((g) => (
+                <SelectItem key={g} value={g}>{g}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select value={selectedHost || "__all__"} onValueChange={handleHostChange}>
+            <SelectTrigger className="h-7 w-48 text-[10px]"><SelectValue placeholder="Todos os Hosts" /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="__all__">Todos os Hosts</SelectItem>
+              {hostList.map((h) => (
+                <SelectItem key={h.zabbix_host_id} value={h.host_name}>{h.host_name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {hasFilters && (
+            <Button size="sm" variant="ghost" className="h-7 gap-1 text-[10px] text-muted-foreground hover:text-foreground" onClick={clearFilters}>
+              <X className="w-3 h-3" /> Limpar
+            </Button>
+          )}
+
+          {hasFilters && (
+            <Badge variant="outline" className="text-[9px] text-neon-cyan border-neon-cyan/30">
+              {selectedHost ? `Host: ${selectedHost}` : `Grupo: ${selectedGroup}`}
+            </Badge>
+          )}
+        </div>
       </div>
 
       {/* ── Content ── */}
@@ -213,34 +316,10 @@ export default function SLAGovernance() {
         <div className="p-4 space-y-6">
           {/* ── Scorecards ── */}
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-            <ScoreCard
-              icon={Activity}
-              label="Uptime Global"
-              value={isLoading ? null : `${metrics.uptime.toFixed(3)}%`}
-              color={metrics.uptime >= 99.9 ? "text-neon-green" : metrics.uptime >= 99 ? "text-neon-amber" : "text-neon-red"}
-              sub={isLoading ? "" : `${metrics.totalAlerts} incidentes no período`}
-            />
-            <ScoreCard
-              icon={XCircle}
-              label="Violações SLA"
-              value={isLoading ? null : String(metrics.breaches)}
-              color={metrics.breaches === 0 ? "text-neon-green" : "text-neon-red"}
-              sub={isLoading ? "" : metrics.breaches === 0 ? "Nenhuma violação" : "Incidentes fora do prazo"}
-            />
-            <ScoreCard
-              icon={Clock}
-              label="Downtime Total"
-              value={isLoading ? null : formatDuration(metrics.totalDownSeconds)}
-              color="text-neon-amber"
-              sub={isLoading ? "" : "Soma de indisponibilidade"}
-            />
-            <ScoreCard
-              icon={BarChart3}
-              label="Ativos Monitorados"
-              value={isLoading ? null : String(metrics.worstHosts.length || "—")}
-              color="text-neon-cyan"
-              sub={isLoading ? "" : "Hosts com incidentes"}
-            />
+            <ScoreCard icon={Activity} label="Uptime Global" value={isLoading ? null : `${metrics.uptime.toFixed(3)}%`} color={metrics.uptime >= 99.9 ? "text-neon-green" : metrics.uptime >= 99 ? "text-neon-amber" : "text-neon-red"} sub={isLoading ? "" : `${metrics.totalAlerts} incidentes no período`} />
+            <ScoreCard icon={XCircle} label="Violações SLA" value={isLoading ? null : String(metrics.breaches)} color={metrics.breaches === 0 ? "text-neon-green" : "text-neon-red"} sub={isLoading ? "" : metrics.breaches === 0 ? "Nenhuma violação" : "Incidentes fora do prazo"} />
+            <ScoreCard icon={Clock} label="Downtime Total" value={isLoading ? null : formatDuration(metrics.totalDownSeconds)} color="text-neon-amber" sub={isLoading ? "" : "Soma de indisponibilidade"} />
+            <ScoreCard icon={BarChart3} label="Ativos Monitorados" value={isLoading ? null : String(metrics.worstHosts.length || "—")} color="text-neon-cyan" sub={isLoading ? "" : "Hosts com incidentes"} />
           </div>
 
           {/* ── Daily Uptime Chart ── */}
@@ -258,17 +337,10 @@ export default function SLAGovernance() {
                   <BarChart data={metrics.dailyUptime} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
                     <XAxis dataKey="day" tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} interval={2} />
                     <YAxis domain={[95, 100]} tick={{ fontSize: 9, fill: "hsl(var(--muted-foreground))" }} tickFormatter={(v) => `${v}%`} />
-                    <Tooltip
-                      contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }}
-                      formatter={(value: number) => [`${value.toFixed(3)}%`, "Uptime"]}
-                    />
+                    <Tooltip contentStyle={{ background: "hsl(var(--card))", border: "1px solid hsl(var(--border))", borderRadius: 8, fontSize: 11 }} formatter={(value: number) => [`${value.toFixed(3)}%`, "Uptime"]} />
                     <Bar dataKey="uptime" radius={[2, 2, 0, 0]} maxBarSize={14}>
                       {metrics.dailyUptime.map((entry, i) => (
-                        <Cell
-                          key={i}
-                          fill={entry.uptime >= 99.9 ? "hsl(142 100% 50%)" : entry.uptime >= 99 ? "hsl(43 100% 50%)" : "hsl(0 90% 50%)"}
-                          fillOpacity={0.7}
-                        />
+                        <Cell key={i} fill={entry.uptime >= 99.9 ? "hsl(142 100% 50%)" : entry.uptime >= 99 ? "hsl(43 100% 50%)" : "hsl(0 90% 50%)"} fillOpacity={0.7} />
                       ))}
                     </Bar>
                   </BarChart>
@@ -305,9 +377,7 @@ export default function SLAGovernance() {
                           <TableCell className="text-xs font-mono py-1.5 px-2 truncate max-w-[200px]">{h.host}</TableCell>
                           <TableCell className="text-xs font-mono py-1.5 px-2 text-right text-neon-amber">{formatDuration(h.downSeconds)}</TableCell>
                           <TableCell className="text-xs font-mono py-1.5 px-2 text-right">
-                            <span className={h.uptime >= 99.9 ? "text-neon-green" : h.uptime >= 99 ? "text-neon-amber" : "text-neon-red"}>
-                              {h.uptime.toFixed(3)}%
-                            </span>
+                            <span className={h.uptime >= 99.9 ? "text-neon-green" : h.uptime >= 99 ? "text-neon-amber" : "text-neon-red"}>{h.uptime.toFixed(3)}%</span>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -358,15 +428,13 @@ export default function SLAGovernance() {
             <CardHeader className="py-3 px-4">
               <CardTitle className="text-xs font-display uppercase tracking-wider text-muted-foreground flex items-center gap-2">
                 <AlertTriangle className="w-3.5 h-3.5" /> Incidentes no Período
-                {!isLoading && (
-                  <Badge variant="outline" className="text-[9px] font-mono ml-1">{alerts?.length ?? 0}</Badge>
-                )}
+                {!isLoading && <Badge variant="outline" className="text-[9px] font-mono ml-1">{filteredAlerts?.length ?? 0}</Badge>}
               </CardTitle>
             </CardHeader>
             <CardContent className="px-0 pb-2">
               {alertsLoading ? (
                 <div className="px-4 space-y-2">{[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-8 w-full" />)}</div>
-              ) : !alerts?.length ? (
+              ) : !filteredAlerts?.length ? (
                 <div className="text-center py-8 text-muted-foreground text-xs">Sem incidentes no período selecionado</div>
               ) : (
                 <ScrollArea className="max-h-[400px]">
@@ -382,30 +450,21 @@ export default function SLAGovernance() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {alerts.slice(0, 100).map((a) => {
+                      {filteredAlerts.slice(0, 100).map((a) => {
                         const host = (a.payload as any)?.hostname || (a.payload as any)?.host || "—";
                         const isDependency = (a.payload as any)?.effective_status === "ISOLATED";
                         const slaViolated = !!a.ack_breached_at || !!a.resolve_breached_at;
-                        const duration = differenceInSeconds(
-                          a.resolved_at ? new Date(a.resolved_at) : new Date(),
-                          new Date(a.opened_at)
-                        );
+                        const duration = differenceInSeconds(a.resolved_at ? new Date(a.resolved_at) : new Date(), new Date(a.opened_at));
 
                         return (
                           <TableRow key={a.id} className={`border-border/20 ${slaViolated ? "bg-neon-red/5" : ""}`}>
-                            <TableCell className="py-1.5 px-3">
-                              <SeverityDot severity={a.severity} />
-                            </TableCell>
+                            <TableCell className="py-1.5 px-3"><SeverityDot severity={a.severity} /></TableCell>
                             <TableCell className="text-xs font-mono py-1.5 px-3 truncate max-w-[160px]">
                               {host}
-                              {isDependency && (
-                                <Badge variant="outline" className="ml-1 text-[7px] text-neon-cyan border-neon-cyan/30">DEP</Badge>
-                              )}
+                              {isDependency && <Badge variant="outline" className="ml-1 text-[7px] text-neon-cyan border-neon-cyan/30">DEP</Badge>}
                             </TableCell>
                             <TableCell className="text-xs py-1.5 px-3 truncate max-w-[240px]">{a.title}</TableCell>
-                            <TableCell className="py-1.5 px-3">
-                              <StatusBadge status={a.status} />
-                            </TableCell>
+                            <TableCell className="py-1.5 px-3"><StatusBadge status={a.status} /></TableCell>
                             <TableCell className="text-xs font-mono py-1.5 px-3 text-muted-foreground">{formatDuration(duration)}</TableCell>
                             <TableCell className="py-1.5 px-3">
                               {slaViolated ? (
@@ -437,16 +496,12 @@ function ScoreCard({ icon: Icon, label, value, color, sub }: { icon: React.Eleme
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
       <Card className="glass-card border-border/50">
         <CardContent className="p-4 flex items-center gap-3">
-          <div className={`p-2 rounded-lg bg-card/80 border border-border/30`}>
+          <div className="p-2 rounded-lg bg-card/80 border border-border/30">
             <Icon className={`w-5 h-5 ${color}`} />
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-[10px] font-display uppercase tracking-wider text-muted-foreground">{label}</p>
-            {value === null ? (
-              <Skeleton className="h-6 w-20 mt-1" />
-            ) : (
-              <p className={`text-xl font-display font-bold ${color}`}>{value}</p>
-            )}
+            {value === null ? <Skeleton className="h-6 w-20 mt-1" /> : <p className={`text-xl font-display font-bold ${color}`}>{value}</p>}
             <p className="text-[9px] text-muted-foreground truncate">{sub}</p>
           </div>
         </CardContent>
@@ -456,13 +511,7 @@ function ScoreCard({ icon: Icon, label, value, color, sub }: { icon: React.Eleme
 }
 
 function SeverityDot({ severity }: { severity: string }) {
-  const colors: Record<string, string> = {
-    disaster: "bg-red-500",
-    high: "bg-orange-500",
-    average: "bg-neon-amber",
-    warning: "bg-yellow-400",
-    info: "bg-neon-cyan",
-  };
+  const colors: Record<string, string> = { disaster: "bg-destructive", high: "bg-neon-amber", average: "bg-neon-amber", warning: "bg-neon-amber", info: "bg-neon-cyan" };
   return <span className={`inline-block w-2.5 h-2.5 rounded-full ${colors[severity] || "bg-muted"}`} />;
 }
 
