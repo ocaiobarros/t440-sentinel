@@ -1064,13 +1064,13 @@ bash ne8000-bgp-collector.sh`}</pre>
 /* ─── Main Page ── */
 
 export default function BgpFlowMonitor() {
-  const [config, setConfig] = useState<Partial<BgpConfig>>(() => loadConfig() || {});
-  const [step, setStep] = useState(1);
-  const [showDashboard, setShowDashboard] = useState(() => !!loadConfig());
-  const { save: saveDashboard, saving, loadedConfig } = useDashboardPersist<BgpConfig>({
+  const { save: saveDashboard, saving, dashboardId, loadedConfig } = useDashboardPersist<BgpConfig>({
     category: 'bgp',
     listPath: '/app/monitoring/bgp',
   });
+  const [config, setConfig] = useState<Partial<BgpConfig>>(() => dashboardId ? (loadConfig() || {}) : {});
+  const [step, setStep] = useState(1);
+  const [showDashboard, setShowDashboard] = useState(() => dashboardId ? !!loadConfig() : false);
 
   useEffect(() => {
     if (loadedConfig && !showDashboard) {

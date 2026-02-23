@@ -401,16 +401,16 @@ function SummaryStat({ label, value, icon: Icon, color, sub }: {
 
 export default function VirtualMachinesMonitor() {
   const navigate = useNavigate();
-  const [config, setConfig] = useState<IdracConfig | null>(loadConfig);
-  const [showSetup, setShowSetup] = useState(!config);
+  const { save: saveDashboard, saving, dashboardId, loadedConfig } = useDashboardPersist<IdracConfig>({
+    category: 'virtual-machines',
+    listPath: '/app/monitoring/virtual-machines',
+  });
+  const [config, setConfig] = useState<IdracConfig | null>(() => dashboardId ? loadConfig() : null);
+  const [showSetup, setShowSetup] = useState(() => !dashboardId ? true : !loadConfig());
   const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
-  const { save: saveDashboard, saving, loadedConfig } = useDashboardPersist<IdracConfig>({
-    category: 'virtual-machines',
-    listPath: '/app/monitoring/virtual-machines',
-  });
 
   useEffect(() => {
     if (loadedConfig && !config) {

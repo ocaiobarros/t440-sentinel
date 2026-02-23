@@ -31,13 +31,15 @@ import {
 
 const Index = () => {
   const navigate = useNavigate();
-  const [config, setConfig] = useState<IdracConfig | null>(loadIdracConfig);
-  const [showSetup, setShowSetup] = useState(!config);
-  const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
   const { save: saveDashboard, saving, dashboardId, loadedConfig, loading: dbLoading } = useDashboardPersist<IdracConfig>({
     category: 'server',
     listPath: '/app/monitoring/server',
   });
+  // Only load from localStorage when editing an existing dashboard (has dashboardId)
+  // On /new route (no dashboardId), always start fresh with the wizard
+  const [config, setConfig] = useState<IdracConfig | null>(() => dashboardId ? loadIdracConfig() : null);
+  const [showSetup, setShowSetup] = useState(() => !dashboardId ? true : !loadIdracConfig());
+  const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
 
   // Load config from DB if dashboardId is present
   useEffect(() => {

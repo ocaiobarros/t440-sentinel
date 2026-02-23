@@ -303,13 +303,13 @@ function StatusPill({ label, value, isOk }: { label: string; value: string; isOk
 
 export default function VirtualizationMonitor() {
   const navigate = useNavigate();
-  const [config, setConfig] = useState<IdracConfig | null>(loadConfig);
-  const [showSetup, setShowSetup] = useState(!config);
-  const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
-  const { save: saveDashboard, saving, loadedConfig } = useDashboardPersist<IdracConfig>({
+  const { save: saveDashboard, saving, dashboardId, loadedConfig } = useDashboardPersist<IdracConfig>({
     category: 'virtualization',
     listPath: '/app/monitoring/virtualization',
   });
+  const [config, setConfig] = useState<IdracConfig | null>(() => dashboardId ? loadConfig() : null);
+  const [showSetup, setShowSetup] = useState(() => !dashboardId ? true : !loadConfig());
+  const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
 
   useEffect(() => {
     if (loadedConfig && !config) {
