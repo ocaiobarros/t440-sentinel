@@ -2,25 +2,29 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
-import Index from "./pages/Index";
+import AppLayout from "@/components/layout/AppLayout";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
-import ZabbixConnections from "./pages/ZabbixConnections";
-import RMSConnections from "./pages/RMSConnections";
+import NotFound from "./pages/NotFound";
+
+// Lazy-ish imports (kept synchronous for simplicity)
+import DashboardList from "./pages/DashboardList";
 import DashboardView from "./pages/DashboardView";
 import DashboardBuilder from "./pages/DashboardBuilder";
-import DashboardList from "./pages/DashboardList";
-import NotFound from "./pages/NotFound";
+import ZabbixConnections from "./pages/ZabbixConnections";
+import RMSConnections from "./pages/RMSConnections";
+import Index from "./pages/Index";
 import FleetIntelligence from "./pages/FleetIntelligence";
 import AdminHub from "./pages/AdminHub";
 import VirtualizationMonitor from "./pages/VirtualizationMonitor";
 import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
 import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 import FlowMapPage from "./pages/FlowMapPage";
+import StubPage from "./pages/stubs/StubPage";
 
 const queryClient = new QueryClient();
 
@@ -32,121 +36,92 @@ const App = () => (
       <BrowserRouter>
         <AuthProvider>
           <Routes>
+            {/* ── Auth (no layout) ── */}
             <Route path="/login" element={<Login />} />
             <Route path="/forgot-password" element={<ForgotPassword />} />
             <Route path="/reset-password" element={<ResetPassword />} />
+
+            {/* ── Root redirect ── */}
+            <Route path="/" element={<Navigate to="/app/operations/home" replace />} />
+
+            {/* ── Enterprise layout ── */}
             <Route
-              path="/"
+              path="/app/*"
               element={
                 <ProtectedRoute>
-                  <DashboardList />
+                  <AppLayout>
+                    <Routes>
+                      {/* Operations */}
+                      <Route path="operations/home" element={<DashboardList />} />
+                      <Route path="operations/flowmap" element={<FlowMapPage />} />
+                      <Route path="operations/flowmap/:mapId" element={<FlowMapPage />} />
+                      <Route path="operations/incidents" element={<StubPage />} />
+
+                      {/* Engineering */}
+                      <Route path="engineering/inventory" element={<StubPage />} />
+                      <Route path="engineering/viability" element={<StubPage />} />
+                      <Route path="engineering/capacity" element={<StubPage />} />
+
+                      {/* Governance */}
+                      <Route path="governance/sla" element={<StubPage />} />
+                      <Route path="governance/timeline" element={<StubPage />} />
+
+                      {/* Settings */}
+                      <Route path="settings/connections" element={
+                        <ProtectedRoute roles={["admin"]}><ZabbixConnections /></ProtectedRoute>
+                      } />
+                      <Route path="settings/rms-connections" element={
+                        <ProtectedRoute roles={["admin"]}><RMSConnections /></ProtectedRoute>
+                      } />
+                      <Route path="settings/users" element={
+                        <ProtectedRoute roles={["admin"]}><AdminHub /></ProtectedRoute>
+                      } />
+                      <Route path="settings/tenants" element={
+                        <ProtectedRoute roles={["admin"]}><StubPage /></ProtectedRoute>
+                      } />
+
+                      <Route path="*" element={<NotFound />} />
+                    </Routes>
+                  </AppLayout>
                 </ProtectedRoute>
               }
             />
-            <Route
-              path="/dashboard/:dashboardId"
-              element={
-                <ProtectedRoute>
-                  <DashboardView />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/builder"
-              element={
-                <ProtectedRoute roles={["admin", "editor"]}>
-                  <DashboardBuilder />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/builder/:dashboardId"
-              element={
-                <ProtectedRoute roles={["admin", "editor"]}>
-                  <DashboardBuilder />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings/connections"
-              element={
-                <ProtectedRoute roles={["admin"]}>
-                  <ZabbixConnections />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/settings/rms-connections"
-              element={
-                <ProtectedRoute roles={["admin"]}>
-                  <RMSConnections />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/templates/server-monitor"
-              element={
-                <ProtectedRoute>
-                  <Index />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/templates/fleet-intelligence"
-              element={
-                <ProtectedRoute>
-                  <FleetIntelligence />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/templates/virtualization-monitor"
-              element={
-                <ProtectedRoute>
-                  <VirtualizationMonitor />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/templates/virtualmachines-monitor"
-              element={
-                <ProtectedRoute>
-                  <VirtualMachinesMonitor />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/Flow/bgp-asn-flow-monitor"
-              element={
-                <ProtectedRoute>
-                  <BgpFlowMonitor />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/flowmap/maps"
-              element={
-                <ProtectedRoute>
-                  <FlowMapPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/flowmap/maps/:mapId"
-              element={
-                <ProtectedRoute>
-                  <FlowMapPage />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/admin"
-              element={
-                <ProtectedRoute roles={["admin"]}>
-                  <AdminHub />
-                </ProtectedRoute>
-              }
-            />
+
+            {/* ── Dashboard routes (outside sidebar for full-width) ── */}
+            <Route path="/dashboard/:dashboardId" element={
+              <ProtectedRoute><DashboardView /></ProtectedRoute>
+            } />
+            <Route path="/builder" element={
+              <ProtectedRoute roles={["admin", "editor"]}><DashboardBuilder /></ProtectedRoute>
+            } />
+            <Route path="/builder/:dashboardId" element={
+              <ProtectedRoute roles={["admin", "editor"]}><DashboardBuilder /></ProtectedRoute>
+            } />
+
+            {/* ── Legacy redirects ── */}
+            <Route path="/flowmap/maps" element={<Navigate to="/app/operations/flowmap" replace />} />
+            <Route path="/flowmap/maps/:mapId" element={<LegacyFlowmapRedirect />} />
+            <Route path="/settings/connections" element={<Navigate to="/app/settings/connections" replace />} />
+            <Route path="/settings/rms-connections" element={<Navigate to="/app/settings/rms-connections" replace />} />
+            <Route path="/admin" element={<Navigate to="/app/settings/users" replace />} />
+
+            {/* ── Template routes (kept as-is, no sidebar) ── */}
+            <Route path="/templates/server-monitor" element={
+              <ProtectedRoute><Index /></ProtectedRoute>
+            } />
+            <Route path="/templates/fleet-intelligence" element={
+              <ProtectedRoute><FleetIntelligence /></ProtectedRoute>
+            } />
+            <Route path="/templates/virtualization-monitor" element={
+              <ProtectedRoute><VirtualizationMonitor /></ProtectedRoute>
+            } />
+            <Route path="/templates/virtualmachines-monitor" element={
+              <ProtectedRoute><VirtualMachinesMonitor /></ProtectedRoute>
+            } />
+            <Route path="/Flow/bgp-asn-flow-monitor" element={
+              <ProtectedRoute><BgpFlowMonitor /></ProtectedRoute>
+            } />
+
             <Route path="*" element={<NotFound />} />
           </Routes>
         </AuthProvider>
@@ -154,5 +129,12 @@ const App = () => (
     </TooltipProvider>
   </QueryClientProvider>
 );
+
+/** Redirect /flowmap/maps/:mapId → /app/operations/flowmap/:mapId */
+function LegacyFlowmapRedirect() {
+  const path = window.location.pathname;
+  const mapId = path.split("/").pop();
+  return <Navigate to={`/app/operations/flowmap/${mapId}`} replace />;
+}
 
 export default App;

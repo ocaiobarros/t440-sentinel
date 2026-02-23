@@ -70,7 +70,7 @@ export default function DashboardList() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => navigate("/settings/connections")}
+                onClick={() => navigate("/app/settings/connections")}
                 className="gap-1.5 text-xs"
               >
                 <Settings className="w-3.5 h-3.5" />

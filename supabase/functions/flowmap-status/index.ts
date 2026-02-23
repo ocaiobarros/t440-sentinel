@@ -525,6 +525,25 @@ Deno.serve(async (req) => {
       resultByHostId[host.id] = st;
     }
 
+    // ─── Sync current_status to flow_map_hosts ───
+    const hostStatusUpdates: Promise<unknown>[] = [];
+    for (const host of hosts) {
+      const st = resultByHostId[host.id];
+      if (!st) continue;
+      // Map "UP"/"DOWN"/"UNKNOWN" to link_status enum
+      const dbStatus = st.status === "UP" ? "UP" : st.status === "DOWN" ? "DOWN" : "UNKNOWN";
+      hostStatusUpdates.push(
+        serviceClient.from("flow_map_hosts")
+          .update({ current_status: dbStatus })
+          .eq("id", host.id)
+          .neq("current_status", dbStatus)
+      );
+    }
+    if (hostStatusUpdates.length > 0) {
+      await Promise.all(hostStatusUpdates);
+      console.log(`[flowmap-status] synced current_status for ${hostStatusUpdates.length} hosts`);
+    }
+
     // Ring break detection
     const typedLinks = (links ?? []) as LinkRow[];
     const ringResult = detectRingBreaks(typedLinks, resultByHostId);

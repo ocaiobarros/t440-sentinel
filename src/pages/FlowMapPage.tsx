@@ -46,7 +46,7 @@ function MapListView() {
     try {
       const mapResult = await createMap.mutateAsync({ name: result.mapName, tenant_id: tenantId });
       setShowWizard(false);
-      navigate(`/flowmap/maps/${mapResult.id}`);
+      navigate(`/app/operations/flowmap/${mapResult.id}`);
     } catch (e: any) {
       toast({ variant: "destructive", title: "Erro ao criar mapa", description: e.message });
     }
@@ -66,7 +66,7 @@ function MapListView() {
             <p className="text-xs text-muted-foreground mt-1">Topologia Geoespacial NOC</p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/")}>
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/app/operations/home")}>
               <ArrowLeft className="w-3.5 h-3.5" />Dashboards
             </Button>
             <Button size="sm" className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowWizard(true)}>
@@ -103,7 +103,7 @@ function MapListView() {
                   <span>{new Date(m.updated_at).toLocaleDateString("pt-BR")}</span>
                 </div>
                 <div className="flex items-center gap-1.5">
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/flowmap/maps/${m.id}`)} className="flex-1 gap-1 text-[10px] h-7">
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/app/operations/flowmap/${m.id}`)} className="flex-1 gap-1 text-[10px] h-7">
                     <Eye className="w-3 h-3" />Abrir
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => deleteMap.mutate(m.id)} className="h-7 w-7 text-muted-foreground hover:text-neon-red">
@@ -454,7 +454,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
       {!warRoom && (
         <div className="h-11 flex items-center justify-between px-3 border-b border-border/30 bg-card/90 backdrop-blur-xl shrink-0 z-20">
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate("/flowmap/maps")}>
+            <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => navigate("/app/operations/flowmap")}>
               <ArrowLeft className="w-3.5 h-3.5" />
             </Button>
             <h1 className="font-display text-xs font-bold text-neon-green tracking-wider">{data.map.name}</h1>

@@ -24,6 +24,14 @@ export interface LinkTraffic {
   sideB: LinkTrafficSide;
 }
 
+/** Effective status from the propagation engine RPC */
+export interface EffectiveHostStatus {
+  host_id: string;
+  effective_status: string; // "UP" | "DOWN" | "ISOLATED" | "DEGRADED" | "UNKNOWN"
+  is_root_cause: boolean;
+  depth: number;
+}
+
 const BROADCAST_CHANNEL_NAME = "flowmap-status-poll";
 const LEADER_HEARTBEAT_MS = 5_000;
 const LEADER_TIMEOUT_MS = 8_000;
@@ -38,10 +46,9 @@ interface UseFlowMapStatusOptions {
 
 /**
  * Polls the flowmap-status edge function for real Zabbix host status.
- * Implements:
- *  - BroadcastChannel leader election (only one tab polls)
- *  - document.hidden pause (no polling when tab is hidden)
- *  - Abort on unmount
+ * After each poll, calls the get_map_effective_status RPC to compute
+ * propagation (ISOLATED nodes). Also subscribes to Realtime changes
+ * on flow_map_hosts to trigger recomputation with debounce.
  */
 export function useFlowMapStatus({
   mapId,
@@ -56,6 +63,7 @@ export function useFlowMapStatus({
   const [linkStatuses, setLinkStatuses] = useState<Record<string, { status: string; originHost: string; destHost: string }>>({});
   const [linkEvents, setLinkEvents] = useState<LinkEvent[]>([]);
   const [linkTraffic, setLinkTraffic] = useState<Record<string, LinkTraffic>>({});
+  const [effectiveStatuses, setEffectiveStatuses] = useState<EffectiveHostStatus[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -68,7 +76,34 @@ export function useFlowMapStatus({
   const tabIdRef = useRef(`${Date.now()}-${Math.random().toString(36).slice(2, 8)}`);
   const channelRef = useRef<BroadcastChannel | null>(null);
 
+  // Debounce timer for realtime-triggered RPC calls
+  const realtimeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
   const canPoll = enabled && !!mapId && !!connectionId && hosts.length > 0;
+
+  // ─── Propagation Engine RPC ───
+  const fetchEffectiveStatus = useCallback(async () => {
+    if (!mapId) return;
+    try {
+      const { data, error: rpcErr } = await supabase.rpc("get_map_effective_status", {
+        p_map_id: mapId,
+      });
+      if (rpcErr) {
+        console.warn("[FlowMapStatus] RPC error:", rpcErr.message);
+        return;
+      }
+      if (data) {
+        setEffectiveStatuses(data as EffectiveHostStatus[]);
+        // Derive isolated nodes from effective status
+        const isolated = (data as EffectiveHostStatus[])
+          .filter((h) => h.effective_status === "ISOLATED")
+          .map((h) => h.host_id);
+        setIsolatedNodes(isolated);
+      }
+    } catch (err: any) {
+      console.warn("[FlowMapStatus] RPC fetch error:", err.message);
+    }
+  }, [mapId]);
 
   const fetchStatus = useCallback(async () => {
     if (!mapId || !connectionId) return;
@@ -110,12 +145,14 @@ export function useFlowMapStatus({
           prevStatusRef.current = hash;
           setStatusMap(hostsData);
           setImpactedLinks(payload.impactedLinks ?? []);
-          setIsolatedNodes(payload.isolatedNodes ?? []);
           setLinkStatuses(payload.linkStatuses ?? {});
           setLinkEvents(payload.linkEvents ?? []);
           setLinkTraffic(payload.linkTraffic ?? {});
         }
       }
+
+      // After poll, fetch effective status from propagation engine
+      await fetchEffectiveStatus();
 
       // Broadcast data to passive tabs
       try {
@@ -130,7 +167,7 @@ export function useFlowMapStatus({
     } finally {
       setLoading(false);
     }
-  }, [mapId, connectionId]);
+  }, [mapId, connectionId, fetchEffectiveStatus]);
 
   // ─── Polling control: start/stop based on leadership + visibility ───
   const startPolling = useCallback(() => {
@@ -153,6 +190,37 @@ export function useFlowMapStatus({
     abortRef.current?.abort();
   }, []);
 
+  // ─── Supabase Realtime: postgres_changes on flow_map_hosts ───
+  useEffect(() => {
+    if (!mapId || !enabled) return;
+
+    const channel = supabase
+      .channel(`flowmap-hosts-rt-${mapId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "flow_map_hosts",
+          filter: `map_id=eq.${mapId}`,
+        },
+        () => {
+          // Debounce: avoid rapid recompute on burst updates
+          if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+          realtimeDebounceRef.current = setTimeout(() => {
+            console.log("[FlowMapStatus] Realtime trigger → recompute effective status");
+            fetchEffectiveStatus();
+          }, 500);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+      if (realtimeDebounceRef.current) clearTimeout(realtimeDebounceRef.current);
+    };
+  }, [mapId, enabled, fetchEffectiveStatus]);
+
   // ─── BroadcastChannel leader election ───
   useEffect(() => {
     if (!canPoll) return;
@@ -161,7 +229,6 @@ export function useFlowMapStatus({
     try {
       bc = new BroadcastChannel(BROADCAST_CHANNEL_NAME);
     } catch {
-      // BroadcastChannel not supported → this tab is always leader
       isLeaderRef.current = true;
       return;
     }
@@ -173,10 +240,8 @@ export function useFlowMapStatus({
       const msg = event.data;
 
       if (msg.type === "leader-heartbeat" && msg.tabId !== tabId) {
-        // Another tab is leader
         lastLeaderHeartbeatRef.current = Date.now();
         if (isLeaderRef.current) {
-          // Conflict: lower tabId wins
           if (msg.tabId < tabId) {
             isLeaderRef.current = false;
             stopPolling();
@@ -187,7 +252,6 @@ export function useFlowMapStatus({
 
       if (msg.type === "leader-claim" && msg.tabId !== tabId) {
         if (isLeaderRef.current) {
-          // Defend leadership
           bc.postMessage({ type: "leader-heartbeat", tabId });
         }
       }
@@ -198,18 +262,17 @@ export function useFlowMapStatus({
           prevStatusRef.current = hash;
           setStatusMap(msg.payload.hosts ?? {});
           setImpactedLinks(msg.payload.impactedLinks ?? []);
-          setIsolatedNodes(msg.payload.isolatedNodes ?? []);
           setLinkStatuses(msg.payload.linkStatuses ?? {});
           setLinkEvents(msg.payload.linkEvents ?? []);
           setLinkTraffic(msg.payload.linkTraffic ?? {});
         }
+        // Passive tabs also fetch effective status
+        fetchEffectiveStatus();
       }
     };
 
-    // Attempt to claim leadership
     bc.postMessage({ type: "leader-claim", tabId });
 
-    // Wait briefly for an existing leader to respond
     const claimTimeout = setTimeout(() => {
       const timeSinceHeartbeat = Date.now() - lastLeaderHeartbeatRef.current;
       if (timeSinceHeartbeat > LEADER_TIMEOUT_MS || lastLeaderHeartbeatRef.current === 0) {
@@ -219,14 +282,12 @@ export function useFlowMapStatus({
       }
     }, 500);
 
-    // Heartbeat interval (leader broadcasts, passive checks for leader death)
     const heartbeatInterval = setInterval(() => {
       if (isLeaderRef.current) {
         bc.postMessage({ type: "leader-heartbeat", tabId });
       } else {
         const elapsed = Date.now() - lastLeaderHeartbeatRef.current;
         if (elapsed > LEADER_TIMEOUT_MS && lastLeaderHeartbeatRef.current > 0) {
-          // Leader died → claim leadership
           isLeaderRef.current = true;
           console.log("[FlowMapStatus] leader died, taking over:", tabId);
           startPolling();
@@ -241,7 +302,7 @@ export function useFlowMapStatus({
       try { bc.close(); } catch { /* ignore */ }
       channelRef.current = null;
     };
-  }, [canPoll, startPolling, stopPolling]);
+  }, [canPoll, startPolling, stopPolling, fetchEffectiveStatus]);
 
   // ─── Visibility change: pause/resume polling ───
   useEffect(() => {
@@ -258,5 +319,17 @@ export function useFlowMapStatus({
     return () => document.removeEventListener("visibilitychange", handler);
   }, [canPoll, startPolling, stopPolling]);
 
-  return { statusMap, impactedLinks, isolatedNodes, linkStatuses, linkEvents, linkTraffic, loading, error, refetch: fetchStatus };
+  return {
+    statusMap,
+    impactedLinks,
+    isolatedNodes,
+    linkStatuses,
+    linkEvents,
+    linkTraffic,
+    effectiveStatuses,
+    loading,
+    error,
+    refetch: fetchStatus,
+    refetchEffective: fetchEffectiveStatus,
+  };
 }
