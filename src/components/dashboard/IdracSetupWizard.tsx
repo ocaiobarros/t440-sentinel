@@ -29,6 +29,12 @@ interface ZabbixHost {
 interface Props {
   onComplete: (config: IdracConfig) => void;
   existingConfig?: IdracConfig | null;
+  /** Override the wizard title (default: "Server Monitor") */
+  title?: string;
+  /** Override the wizard subtitle */
+  subtitle?: string;
+  /** Override the wizard icon */
+  icon?: React.ElementType;
 }
 
 const STORAGE_KEY = "flowpulse_idrac_config";
@@ -64,7 +70,7 @@ async function zabbixProxy(connectionId: string, method: string, params: Record<
 
 /* ─── Component ──────────────────────── */
 
-export default function IdracSetupWizard({ onComplete, existingConfig }: Props) {
+export default function IdracSetupWizard({ onComplete, existingConfig, title = "Server Monitor", subtitle = "Dell iDRAC (T440, R440, R720, R740) • Linux/SNMP (Huawei 2288H)", icon: HeaderIcon = MonitorSpeaker }: Props) {
   const { connections, isLoading: connectionsLoading } = useZabbixConnections();
   const [step, setStep] = useState(0); // 0=connection, 1=hostgroup, 2=host
 
@@ -163,14 +169,14 @@ export default function IdracSetupWizard({ onComplete, existingConfig }: Props) 
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex items-center justify-center gap-3 mb-3">
-            <MonitorSpeaker className="w-8 h-8 text-neon-green" />
+            <HeaderIcon className="w-8 h-8 text-neon-green" />
             <h1 className="font-display text-2xl font-bold tracking-wider">
               <span className="text-neon-green text-glow-green">FLOWPULSE</span>
               <span className="text-muted-foreground mx-2">|</span>
-              <span className="text-foreground">Server Monitor</span>
+              <span className="text-foreground">{title}</span>
             </h1>
           </div>
-          <p className="text-xs text-muted-foreground font-mono">Dell iDRAC (T440, R440, R720, R740) • Linux/SNMP (Huawei 2288H)</p>
+          <p className="text-xs text-muted-foreground font-mono">{subtitle}</p>
         </div>
 
         {/* Step indicators */}

@@ -117,10 +117,20 @@ export default function FleetIntelligence() {
   const [searchQuery, setSearchQuery] = useState("");
   const [modelFilter, setModelFilter] = useState<string>("all");
   const [selectedDriver, setSelectedDriver] = useState<DriverStats | null>(null);
-  const { save: saveDashboard, saving } = useDashboardPersist<{ startDate: string; endDate: string }>({
+  const { save: saveDashboard, saving, dashboardId, loadedConfig } = useDashboardPersist<{ startDate: string; endDate: string }>({
     category: 'fleet',
     listPath: '/app/monitoring/fleet',
   });
+  // On /new route (no dashboardId), don't auto-load — user sees fresh dashboard
+  const [isNew] = useState(() => !dashboardId);
+
+  // Load saved dates when editing an existing dashboard
+  useEffect(() => {
+    if (loadedConfig && dashboardId) {
+      if (loadedConfig.startDate) setStartDate(loadedConfig.startDate);
+      if (loadedConfig.endDate) setEndDate(loadedConfig.endDate);
+    }
+  }, [loadedConfig, dashboardId]);
 
   const handleSave = useCallback(() => {
     saveDashboard('Fleet Intelligence', { startDate, endDate });

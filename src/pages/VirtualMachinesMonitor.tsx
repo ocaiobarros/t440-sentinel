@@ -521,7 +521,7 @@ export default function VirtualMachinesMonitor() {
   }, [virt?.cpu?.frequency]);
 
   if (showSetup) {
-    return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} />;
+    return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} title="Máquinas Virtuais" subtitle="Monitoramento individual de VMs" icon={MonitorCheck} />;
   }
 
   const isVMware = virt?.type === "vmware";

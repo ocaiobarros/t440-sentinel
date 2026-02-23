@@ -345,7 +345,7 @@ export default function VirtualizationMonitor() {
   const virt = useMemo(() => (data ? extractVirtData(data) : null), [data]);
 
   if (showSetup) {
-    return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} />;
+    return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} title="Virtualização" subtitle="Monitoramento de hypervisors VMware / Proxmox" icon={Box} />;
   }
 
   const isVMware = virt?.type === "vmware";
