@@ -25,6 +25,7 @@ import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
 import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 import FlowMapPage from "./pages/FlowMapPage";
 import StubPage from "./pages/stubs/StubPage";
+import SLAGovernance from "./pages/SLAGovernance";
 import IncidentsPage from "./pages/IncidentsPage";
 import ServerMonitorList from "./pages/monitoring/ServerMonitorList";
 import VirtualizationList from "./pages/monitoring/VirtualizationList";
@@ -88,7 +89,7 @@ const App = () => (
                       <Route path="monitoring/fleet/:dashboardId" element={<FleetIntelligence />} />
 
                       {/* Governance */}
-                      <Route path="governance/sla" element={<StubPage />} />
+                      <Route path="governance/sla" element={<SLAGovernance />} />
                       <Route path="governance/timeline" element={<StubPage />} />
 
                       {/* Settings */}
