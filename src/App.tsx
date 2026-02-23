@@ -61,7 +61,7 @@ const App = () => (
                       {/* Operations */}
                       <Route path="operations/home" element={<Navigate to="/app/monitoring/dashboards" replace />} />
                       <Route path="operations/flowmap" element={<FlowMapPage />} />
-                      <Route path="operations/flowmap/:mapId" element={<FlowMapPage />} />
+                      {/* flowmap/:mapId renders outside layout — see below */}
                       <Route path="operations/incidents" element={<IncidentsPage />} />
 
                       {/* Engineering */}
@@ -112,7 +112,10 @@ const App = () => (
               }
             />
 
-            {/* ── Dashboard routes (outside sidebar for full-width) ── */}
+            {/* ── Full-screen routes (outside sidebar) ── */}
+            <Route path="/app/operations/flowmap/:mapId" element={
+              <ProtectedRoute><FlowMapPage /></ProtectedRoute>
+            } />
             <Route path="/dashboard/:dashboardId" element={
               <ProtectedRoute><DashboardView /></ProtectedRoute>
             } />
