@@ -3,7 +3,7 @@ import {
   Map, AlertTriangle, Wrench, Search, BarChart3,
   FileText, Clock, Settings, Users, Building2, Zap, ChevronRight,
   Server, Box, MonitorCheck, Fuel, Globe, LayoutDashboard,
-  RefreshCw, Send,
+  RefreshCw, Send, UserCog,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -48,6 +48,7 @@ const governanceItems = [
 ];
 
 const settingsItems = [
+  { title: "Perfil", url: "/app/settings/profile", icon: UserCog },
   { title: "Conectores Zabbix", url: "/app/settings/connections", icon: Settings },
   { title: "Conectores RMS", url: "/app/settings/rms-connections", icon: Zap },
   { title: "Telegram", url: "/app/settings/telegram", icon: Send },
