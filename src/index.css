@@ -69,61 +69,62 @@
      LIGHT THEME — Professional Clean
      ═══════════════════════════════════════════════ */
   .light {
-    --background: 210 20% 98%;
-    --foreground: 220 20% 12%;
+    /* ── Arctic Frost ── */
+    --background: 210 25% 97%;
+    --foreground: 220 25% 10%;
 
     --card: 0 0% 100%;
-    --card-foreground: 220 20% 12%;
+    --card-foreground: 220 25% 10%;
 
     --popover: 0 0% 100%;
-    --popover-foreground: 220 20% 12%;
+    --popover-foreground: 220 25% 10%;
 
-    --primary: 142 70% 35%;
+    --primary: 152 60% 32%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 215 20% 93%;
-    --secondary-foreground: 220 20% 12%;
+    --secondary: 210 18% 93%;
+    --secondary-foreground: 220 25% 10%;
 
-    --muted: 215 15% 92%;
-    --muted-foreground: 215 10% 45%;
+    --muted: 210 14% 91%;
+    --muted-foreground: 215 12% 48%;
 
-    --accent: 215 20% 95%;
-    --accent-foreground: 220 20% 12%;
+    --accent: 210 18% 94%;
+    --accent-foreground: 220 25% 10%;
 
-    --destructive: 0 75% 50%;
+    --destructive: 0 72% 48%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 215 15% 85%;
-    --input: 215 15% 85%;
-    --ring: 142 70% 35%;
+    --border: 210 16% 84%;
+    --input: 210 16% 84%;
+    --ring: 152 60% 32%;
 
     --radius: 0.5rem;
 
-    /* Semantic — solid readable on white */
-    --neon-green: 142 70% 35%;
+    /* Semantic — professional on white */
+    --neon-green: 152 60% 32%;
     --neon-green-glow: 0 0% 0% / 0;
-    --neon-red: 0 75% 45%;
-    --neon-amber: 36 90% 42%;
-    --neon-blue: 210 80% 45%;
-    --neon-cyan: 186 70% 38%;
+    --neon-red: 0 68% 42%;
+    --neon-amber: 30 85% 40%;
+    --neon-blue: 210 72% 42%;
+    --neon-cyan: 192 65% 35%;
 
-    /* Glass — light mode uses subtle white */
-    --glass-bg: 0 0% 100% / 0.8;
-    --glass-border: 215 15% 80% / 0.6;
-    --glass-highlight: 0 0% 100% / 0.5;
+    /* Glass — frosted white */
+    --glass-bg: 0 0% 100% / 0.82;
+    --glass-border: 210 16% 82% / 0.7;
+    --glass-highlight: 0 0% 100% / 0.6;
 
-    --gradient-dark: linear-gradient(180deg, hsl(210 20% 98%) 0%, hsl(215 18% 95%) 100%);
+    --gradient-dark: linear-gradient(180deg, hsl(210 25% 97%) 0%, hsl(210 20% 94%) 100%);
     --gradient-card: hsl(0 0% 100%);
-    --gradient-neon: linear-gradient(135deg, hsl(142 70% 35%) 0%, hsl(160 70% 32%) 100%);
+    --gradient-neon: linear-gradient(135deg, hsl(152 60% 32%) 0%, hsl(165 55% 30%) 100%);
 
-    --sidebar-background: 0 0% 100%;
-    --sidebar-foreground: 220 20% 12%;
-    --sidebar-primary: 142 70% 35%;
+    --sidebar-background: 210 18% 98%;
+    --sidebar-foreground: 220 25% 10%;
+    --sidebar-primary: 152 60% 32%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 215 20% 95%;
-    --sidebar-accent-foreground: 220 20% 12%;
-    --sidebar-border: 215 15% 88%;
-    --sidebar-ring: 142 70% 35%;
+    --sidebar-accent: 210 18% 95%;
+    --sidebar-accent-foreground: 220 25% 10%;
+    --sidebar-border: 210 16% 87%;
+    --sidebar-ring: 152 60% 32%;
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -423,15 +424,14 @@
   }
 
   .light body, body.light {
-    background: hsl(210 20% 98%);
+    background: linear-gradient(180deg, hsl(210 25% 97%) 0%, hsl(210 20% 94%) 100%);
   }
 
-  /* Apply light bg when html has .light */
   html.light {
-    background: hsl(210 20% 98%);
+    background: hsl(210 25% 97%);
   }
   html.light body {
-    background: hsl(210 20% 98%);
+    background: linear-gradient(180deg, hsl(210 25% 97%) 0%, hsl(210 20% 94%) 100%);
   }
 
   /* Scrollbar styling — thin */
@@ -527,19 +527,19 @@
 
   /* Light mode glass overrides */
   .light .glass-card {
-    background: hsl(0 0% 100% / 0.85);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1px solid hsl(215 15% 85%);
-    box-shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.05);
+    background: hsl(0 0% 100% / 0.88);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid hsl(210 16% 84%);
+    box-shadow: 0 1px 3px hsl(220 25% 10% / 0.06), 0 4px 12px hsl(220 25% 10% / 0.04);
   }
 
   .light .glass-card-elevated {
-    background: hsl(0 0% 100% / 0.92);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
-    border: 1px solid hsl(215 15% 82%);
-    box-shadow: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.05);
+    background: hsl(0 0% 100% / 0.94);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    border: 1px solid hsl(210 16% 80%);
+    box-shadow: 0 4px 6px -1px hsl(220 25% 10% / 0.08), 0 10px 20px -4px hsl(220 25% 10% / 0.06);
   }
 
   /* Light mode: disable text glows */

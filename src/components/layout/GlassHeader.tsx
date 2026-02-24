@@ -9,6 +9,7 @@ import {
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
+import NotificationBell from "./NotificationBell";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -80,6 +81,9 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
 
         {/* Right: help + user */}
         <div className="flex items-center gap-1.5">
+          {/* Notifications */}
+          <NotificationBell />
+
           {/* Help dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -130,10 +134,10 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
                 <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/30" />
-              <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
+              <DropdownMenuItem onClick={() => navigate("/app/settings/profile")} className="gap-2 text-xs cursor-pointer">
                 <User className="h-3.5 w-3.5" /> Perfil
               </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
+              <DropdownMenuItem onClick={() => navigate("/app/settings/profile")} className="gap-2 text-xs cursor-pointer">
                 <Lock className="h-3.5 w-3.5" /> Alterar Senha
               </DropdownMenuItem>
               <DropdownMenuItem onClick={toggleTheme} className="gap-2 text-xs cursor-pointer">

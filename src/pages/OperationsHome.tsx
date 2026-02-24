@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
+import BgpHealthWidget from "@/components/home/BgpHealthWidget";
 
 /* ── Animated counter ── */
 function AnimatedCounter({ target, duration = 1200 }: { target: number; duration?: number }) {
@@ -276,15 +277,12 @@ export default function OperationsHome() {
         </motion.div>
       </div>
 
-      {/* ── Quick Links ── */}
-      <motion.div
-        custom={6}
-        initial="hidden"
-        animate="visible"
-        variants={cardVariants}
-        className="grid grid-cols-2 md:grid-cols-4 gap-3"
-      >
-        {quickLinks.map((link) => (
+      {/* ── BGP Health + Quick Links row ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <BgpHealthWidget />
+
+        <div className="lg:col-span-2 grid grid-cols-2 md:grid-cols-4 gap-3">
+          {quickLinks.map((link) => (
           <button
             key={link.label}
             onClick={() => navigate(link.path)}
@@ -302,8 +300,9 @@ export default function OperationsHome() {
               <p className="text-[10px] text-muted-foreground">Acessar módulo</p>
             </div>
           </button>
-        ))}
-      </motion.div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }

@@ -39,6 +39,7 @@ import VirtualMachinesList from "./pages/monitoring/VirtualMachinesList";
 import BgpFlowList from "./pages/monitoring/BgpFlowList";
 import FleetIntelligenceList from "./pages/monitoring/FleetIntelligenceList";
 import DashboardsList from "./pages/monitoring/DashboardsList";
+import UserSettings from "./pages/UserSettings";
 
 const queryClient = new QueryClient();
 
@@ -111,6 +112,7 @@ const App = () => (
                       <Route path="settings/tenants" element={
                         <ProtectedRoute roles={["admin"]}><TenantsPage /></ProtectedRoute>
                       } />
+                      <Route path="settings/profile" element={<UserSettings />} />
 
                       <Route path="*" element={<NotFound />} />
                     </Routes>
