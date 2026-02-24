@@ -3,7 +3,7 @@ import { motion } from "framer-motion";
 import {
   User, Camera, Lock, Globe2, Palette, Save, RotateCcw,
   Eye, EyeOff, Check, Shield, ZoomIn, ZoomOut, Briefcase, Phone,
-  Moon, Sun,
+  Moon, Sun, Trash2, Loader2,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -43,6 +43,7 @@ export default function UserSettings() {
   const [phone, setPhone] = useState("");
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarZoom, setAvatarZoom] = useState(1);
+  const [avatarLoading, setAvatarLoading] = useState(false);
   const [language, setLanguage] = useState("pt-BR");
   const [saving, setSaving] = useState(false);
 
@@ -71,27 +72,59 @@ export default function UserSettings() {
   const handleAvatarUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file || !user) return;
-    const ext = file.name.split(".").pop();
-    const path = `avatars/${user.id}.${ext}`;
+    setAvatarLoading(true);
+    try {
+      const ext = file.name.split(".").pop();
+      const path = `avatars/${user.id}.${ext}`;
 
-    const { error } = await supabase.storage.from("dashboard-assets").upload(path, file, { upsert: true });
-    if (error) { toast.error("Erro ao enviar avatar"); return; }
+      // Remove old file variants (jpg/png/webp)
+      const { data: existingFiles } = await supabase.storage.from("dashboard-assets").list("avatars", {
+        search: user.id,
+      });
+      if (existingFiles?.length) {
+        await supabase.storage.from("dashboard-assets").remove(
+          existingFiles.map(f => `avatars/${f.name}`)
+        );
+      }
 
-    const { data: pub } = supabase.storage.from("dashboard-assets").getPublicUrl(path);
-    const url = pub.publicUrl + `?t=${Date.now()}`;
-    setAvatarUrl(url);
-    await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
-    await refreshProfile();
-    toast.success("Avatar atualizado");
+      const { error } = await supabase.storage.from("dashboard-assets").upload(path, file, { upsert: true });
+      if (error) { toast.error("Erro ao enviar avatar"); return; }
+
+      const { data: pub } = supabase.storage.from("dashboard-assets").getPublicUrl(path);
+      const url = pub.publicUrl + `?t=${Date.now()}`;
+      setAvatarUrl(url);
+      setAvatarZoom(1);
+      await supabase.from("profiles").update({ avatar_url: url }).eq("id", user.id);
+      await refreshProfile();
+      toast.success("Avatar atualizado");
+    } finally {
+      setAvatarLoading(false);
+      // Reset input so re-selecting same file triggers change
+      if (fileRef.current) fileRef.current.value = "";
+    }
   }, [user, refreshProfile]);
 
   const handleResetAvatar = useCallback(async () => {
     if (!user) return;
-    setAvatarUrl(null);
-    setAvatarZoom(1);
-    await supabase.from("profiles").update({ avatar_url: null }).eq("id", user.id);
-    await refreshProfile();
-    toast.success("Avatar removido");
+    setAvatarLoading(true);
+    try {
+      // Remove from storage
+      const { data: existingFiles } = await supabase.storage.from("dashboard-assets").list("avatars", {
+        search: user.id,
+      });
+      if (existingFiles?.length) {
+        await supabase.storage.from("dashboard-assets").remove(
+          existingFiles.map(f => `avatars/${f.name}`)
+        );
+      }
+      setAvatarUrl(null);
+      setAvatarZoom(1);
+      await supabase.from("profiles").update({ avatar_url: null }).eq("id", user.id);
+      await refreshProfile();
+      toast.success("Avatar removido");
+    } finally {
+      setAvatarLoading(false);
+    }
   }, [user, refreshProfile]);
 
   // Save profile
@@ -162,13 +195,33 @@ export default function UserSettings() {
                   <span className="text-2xl font-bold font-mono text-primary">{initials}</span>
                 )}
               </div>
-              <button
-                onClick={() => fileRef.current?.click()}
-                className="absolute inset-0 rounded-full bg-background/60 opacity-0 group-hover:opacity-100
-                  flex items-center justify-center transition-opacity"
-              >
-                <Camera className="h-5 w-5 text-foreground" />
-              </button>
+              {/* Loading overlay */}
+              {avatarLoading && (
+                <div className="absolute inset-0 rounded-full bg-background/70 flex items-center justify-center">
+                  <Loader2 className="h-6 w-6 text-primary animate-spin" />
+                </div>
+              )}
+              {/* Camera button */}
+              {!avatarLoading && (
+                <button
+                  onClick={() => fileRef.current?.click()}
+                  className="absolute inset-0 rounded-full bg-background/60 opacity-0 group-hover:opacity-100
+                    flex items-center justify-center transition-opacity"
+                >
+                  <Camera className="h-5 w-5 text-foreground" />
+                </button>
+              )}
+              {/* Trash button */}
+              {avatarUrl && !avatarLoading && (
+                <button
+                  onClick={handleResetAvatar}
+                  className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-destructive text-destructive-foreground
+                    flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
+                  title="Remover foto"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
+              )}
               <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
             </div>
 
@@ -185,9 +238,6 @@ export default function UserSettings() {
                   className="flex-1"
                 />
                 <ZoomIn className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                <button onClick={handleResetAvatar} className="text-muted-foreground hover:text-foreground" title="Resetar">
-                  <RotateCcw className="h-3.5 w-3.5" />
-                </button>
               </div>
             )}
           </div>
