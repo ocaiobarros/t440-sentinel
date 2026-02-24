@@ -1,6 +1,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   AlertTriangle, ShieldCheck, Activity, Wifi,
   Server, MapPin, TrendingUp, Clock, Zap,
@@ -43,7 +44,7 @@ function generateUptimeData() {
   for (let i = 6; i >= 0; i--) {
     const d = new Date(now - i * 86400000);
     data.push({
-      day: d.toLocaleDateString("pt-BR", { weekday: "short" }),
+      day: d.toLocaleDateString(undefined, { weekday: "short" }),
       uptime: 95 + Math.random() * 5,
     });
   }
@@ -52,6 +53,7 @@ function generateUptimeData() {
 
 export default function OperationsHome() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [stats, setStats] = useState({ incidents: 0, sla: 99.8, capacity: 0, viability: 0 });
   const [activities, setActivities] = useState<{ text: string; time: string; type: string }[]>([]);
   const uptimeData = useMemo(generateUptimeData, []);
@@ -82,7 +84,7 @@ export default function OperationsHome() {
       if (logs?.length) {
         setActivities(logs.map(l => ({
           text: `${l.user_email?.split("@")[0] || "Sistema"} → ${l.action} em ${l.table_name}`,
-          time: new Date(l.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }),
+          time: new Date(l.created_at).toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" }),
           type: l.action === "DELETE" ? "danger" : l.action === "INSERT" ? "success" : "info",
         })));
       }
@@ -91,7 +93,7 @@ export default function OperationsHome() {
 
   const kpiCards = [
     {
-      label: "Incidentes Abertos",
+      label: t("operations.openIncidents"),
       value: stats.incidents,
       icon: AlertTriangle,
       color: stats.incidents > 0 ? "text-[hsl(var(--neon-red))]" : "text-[hsl(var(--neon-green))]",
@@ -99,7 +101,7 @@ export default function OperationsHome() {
       onClick: () => navigate("/app/operations/incidents"),
     },
     {
-      label: "SLA Uptime",
+      label: t("operations.slaUptime"),
       value: stats.sla,
       suffix: "%",
       icon: ShieldCheck,
@@ -108,7 +110,7 @@ export default function OperationsHome() {
       onClick: () => navigate("/app/governance/sla"),
     },
     {
-      label: "Capacidade Ocupada",
+      label: t("operations.capacityOccupied"),
       value: stats.capacity,
       suffix: "%",
       icon: BarChart3,
@@ -117,7 +119,7 @@ export default function OperationsHome() {
       onClick: () => navigate("/app/engineering/capacity"),
     },
     {
-      label: "Viabilidades Hoje",
+      label: t("operations.viabilityToday"),
       value: stats.viability,
       icon: MapPin,
       color: "text-[hsl(var(--neon-blue))]",
@@ -128,9 +130,9 @@ export default function OperationsHome() {
 
   const quickLinks = [
     { label: "FlowMap", icon: Globe2, path: "/app/operations/flowmap" },
-    { label: "Dashboards", icon: Activity, path: "/app/monitoring/dashboards" },
-    { label: "Inventário", icon: Server, path: "/app/engineering/inventory" },
-    { label: "Conexões", icon: Wifi, path: "/app/settings/connections" },
+    { label: t("sidebar.dashboards"), icon: Activity, path: "/app/monitoring/dashboards" },
+    { label: t("operations.inventory"), icon: Server, path: "/app/engineering/inventory" },
+    { label: t("operations.connections"), icon: Wifi, path: "/app/settings/connections" },
   ];
 
   return (
@@ -147,10 +149,10 @@ export default function OperationsHome() {
         </div>
         <div>
           <h1 className="text-xl font-bold text-foreground font-display tracking-tight">
-            Central de Operações
+            {t("operations.title")}
           </h1>
           <p className="text-xs text-muted-foreground">
-            Visão consolidada · {new Date().toLocaleDateString("pt-BR", { weekday: "long", day: "numeric", month: "long" })}
+            {t("operations.subtitle")} · {new Date().toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })}
           </p>
         </div>
       </motion.div>
@@ -198,7 +200,7 @@ export default function OperationsHome() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <TrendingUp className="h-4 w-4 text-[hsl(var(--neon-cyan))]" />
-              <h2 className="text-sm font-semibold text-foreground">Uptime — Últimos 7 dias</h2>
+              <h2 className="text-sm font-semibold text-foreground">{t("operations.uptimeLast7Days")}</h2>
             </div>
             <span className="text-xs text-muted-foreground font-mono">avg {(uptimeData.reduce((s, d) => s + d.uptime, 0) / uptimeData.length).toFixed(2)}%</span>
           </div>
@@ -253,11 +255,11 @@ export default function OperationsHome() {
         >
           <div className="flex items-center gap-2 mb-4">
             <Clock className="h-4 w-4 text-[hsl(var(--neon-amber))]" />
-            <h2 className="text-sm font-semibold text-foreground">Atividade Recente</h2>
+            <h2 className="text-sm font-semibold text-foreground">{t("operations.recentActivity")}</h2>
           </div>
           <div className="flex-1 space-y-2.5 overflow-y-auto max-h-[220px] pr-1">
             {activities.length === 0 ? (
-              <p className="text-xs text-muted-foreground text-center py-8">Nenhuma atividade recente</p>
+              <p className="text-xs text-muted-foreground text-center py-8">{t("operations.noRecentActivity")}</p>
             ) : (
               activities.map((a, i) => (
                 <div key={i} className="flex items-start gap-2.5 group">
@@ -297,7 +299,7 @@ export default function OperationsHome() {
             </div>
             <div>
               <p className="text-sm font-medium text-foreground">{link.label}</p>
-              <p className="text-[10px] text-muted-foreground">Acessar módulo</p>
+              <p className="text-[10px] text-muted-foreground">{t("operations.accessModule")}</p>
             </div>
           </button>
           ))}

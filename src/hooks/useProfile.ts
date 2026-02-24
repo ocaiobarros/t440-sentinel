@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import i18n from "@/i18n";
 
 export interface Profile {
   display_name: string | null;
@@ -36,6 +37,11 @@ export function useProfile() {
       .single();
     if (data) {
       cached = data as Profile;
+      // Sync language from DB on load
+      if (data.language && data.language !== i18n.language) {
+        i18n.changeLanguage(data.language);
+        localStorage.setItem("flowpulse-lang", data.language);
+      }
       notify();
     }
   }, [user]);
