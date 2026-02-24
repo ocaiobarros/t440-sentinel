@@ -1,4 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -8,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import RoleGate from "@/components/auth/RoleGate";
 
 export default function DashboardList() {
+  const { t, i18n } = useTranslation();
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -32,9 +34,11 @@ export default function DashboardList() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["dashboards"] });
-      toast({ title: "Dashboard excluído" });
+      toast({ title: t("dashboards.deleted") });
     },
   });
+
+  const localeDateStr = i18n.language === "en" ? "en-US" : i18n.language === "es" ? "es" : "pt-BR";
 
   return (
     <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
@@ -51,9 +55,9 @@ export default function DashboardList() {
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-3">
               <Zap className="w-6 h-6 text-neon-green" />
-              <span className="text-glow-green text-neon-green">FLOWPULSE</span>
+              <span className="text-glow-green text-neon-green">{t("dashboards.title")}</span>
             </h1>
-            <p className="text-xs text-muted-foreground mt-1">Dashboards de Monitoramento</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("dashboards.subtitle")}</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -64,7 +68,7 @@ export default function DashboardList() {
               className="gap-1.5 text-xs"
             >
               <Server className="w-3.5 h-3.5" />
-              Templates
+              {t("dashboards.templates")}
             </Button>
             <RoleGate allowed={["admin"]}>
               <Button
@@ -74,7 +78,7 @@ export default function DashboardList() {
                 className="gap-1.5 text-xs"
               >
                 <Settings className="w-3.5 h-3.5" />
-                Conexões
+                {t("dashboards.connections")}
               </Button>
             </RoleGate>
             <RoleGate allowed={["admin", "editor"]}>
@@ -84,7 +88,7 @@ export default function DashboardList() {
                 className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
               >
                 <Plus className="w-3.5 h-3.5" />
-                Novo Dashboard
+                {t("dashboards.newDashboard")}
               </Button>
             </RoleGate>
           </div>
@@ -104,16 +108,16 @@ export default function DashboardList() {
             className="glass-card-elevated rounded-xl p-12 text-center max-w-md mx-auto"
           >
             <LayoutDashboard className="w-12 h-12 text-neon-green mx-auto mb-4" />
-            <h2 className="text-lg font-display font-bold text-foreground mb-2">Crie seu primeiro Dashboard</h2>
+            <h2 className="text-lg font-display font-bold text-foreground mb-2">{t("dashboards.createFirst")}</h2>
             <p className="text-sm text-muted-foreground mb-6">
-              Arraste widgets, customize cores, ícones e fontes. Conecte ao Zabbix para dados em tempo real.
+              {t("dashboards.createFirstDesc")}
             </p>
             <Button
               onClick={() => navigate("/builder")}
               className="gap-2 bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
             >
               <Plus className="w-4 h-4" />
-              Criar Dashboard
+              {t("dashboards.createDashboard")}
             </Button>
           </motion.div>
         ) : (
@@ -137,16 +141,16 @@ export default function DashboardList() {
                   </div>
                   {dash.is_default && (
                     <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-green/10 text-neon-green border border-neon-green/20 font-display uppercase">
-                      Padrão
+                      {t("dashboards.default")}
                     </span>
                   )}
                 </div>
 
                 <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground mb-4">
                   <span className={`w-1.5 h-1.5 rounded-full ${dash.zabbix_connection_id ? "bg-neon-green pulse-green" : "bg-muted-foreground/30"}`} />
-                  <span>{dash.zabbix_connection_id ? "Conectado" : "Sem conexão"}</span>
+                  <span>{dash.zabbix_connection_id ? t("dashboards.connected") : t("dashboards.noConnection")}</span>
                   <span className="mx-1">•</span>
-                  <span>{new Date(dash.updated_at).toLocaleDateString("pt-BR")}</span>
+                  <span>{new Date(dash.updated_at).toLocaleDateString(localeDateStr)}</span>
                 </div>
 
                 <div className="flex items-center gap-1.5">
@@ -157,7 +161,7 @@ export default function DashboardList() {
                     className="flex-1 gap-1 text-[10px] h-7"
                   >
                     <Eye className="w-3 h-3" />
-                    Visualizar
+                    {t("dashboards.view")}
                   </Button>
                   <RoleGate allowed={["admin", "editor"]}>
                     <Button
@@ -167,7 +171,7 @@ export default function DashboardList() {
                       className="flex-1 gap-1 text-[10px] h-7"
                     >
                       <Pencil className="w-3 h-3" />
-                      Editar
+                      {t("dashboards.edit")}
                     </Button>
                   </RoleGate>
                   <RoleGate allowed={["admin"]}>
@@ -188,7 +192,7 @@ export default function DashboardList() {
 
         <div className="text-center py-8">
           <p className="text-[10px] font-mono text-muted-foreground/50">
-            FLOWPULSE • Dashboard Builder • Infinitas possibilidades
+            {t("dashboards.possibilities")}
           </p>
         </div>
       </div>

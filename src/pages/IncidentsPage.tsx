@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -10,33 +11,34 @@ import {
 import { useAlertInstances, useAlertRealtime, type AlertInstance } from "@/hooks/useIncidents";
 import IncidentDetailDrawer from "@/components/incidents/IncidentDetailDrawer";
 import { formatDistanceToNow } from "date-fns";
-import { ptBR } from "date-fns/locale";
+import { ptBR, enUS, es } from "date-fns/locale";
 import { motion, AnimatePresence } from "framer-motion";
-
-const SEVERITY_ORDER: Record<string, number> = { disaster: 0, high: 1, average: 2, warning: 3, info: 4 };
-
-const SEVERITY_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
-  disaster: { icon: Flame, color: "text-red-500", bg: "bg-red-500/10 border-red-500/30", label: "Desastre" },
-  high: { icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10 border-orange-500/30", label: "Alta" },
-  average: { icon: AlertTriangle, color: "text-neon-amber", bg: "bg-neon-amber/10 border-neon-amber/30", label: "Média" },
-  warning: { icon: AlertTriangle, color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/30", label: "Aviso" },
-  info: { icon: Info, color: "text-neon-cyan", bg: "bg-neon-cyan/10 border-neon-cyan/30", label: "Info" },
-};
-
-const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
-  open: { icon: XCircle, color: "text-neon-red", label: "Aberto" },
-  ack: { icon: ShieldCheck, color: "text-neon-blue", label: "Reconhecido" },
-  resolved: { icon: CheckCircle, color: "text-neon-green", label: "Resolvido" },
-};
 
 type SeverityFilter = "disaster" | "high" | "average" | "warning" | "info";
 type StatusFilter = "open" | "ack" | "resolved";
 
+const DATE_LOCALES: Record<string, typeof ptBR> = { "pt-BR": ptBR, en: enUS, es };
+
 export default function IncidentsPage() {
+  const { t, i18n } = useTranslation();
   const [severityFilters, setSeverityFilters] = useState<SeverityFilter[]>([]);
   const [statusFilters, setStatusFilters] = useState<StatusFilter[]>(["open", "ack"]);
   const [search, setSearch] = useState("");
   const [selectedAlert, setSelectedAlert] = useState<AlertInstance | null>(null);
+
+  const SEVERITY_CONFIG: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }> = {
+    disaster: { icon: Flame, color: "text-red-500", bg: "bg-red-500/10 border-red-500/30", label: t("incidents.disaster") },
+    high: { icon: Zap, color: "text-orange-500", bg: "bg-orange-500/10 border-orange-500/30", label: t("incidents.high") },
+    average: { icon: AlertTriangle, color: "text-neon-amber", bg: "bg-neon-amber/10 border-neon-amber/30", label: t("incidents.average") },
+    warning: { icon: AlertTriangle, color: "text-yellow-400", bg: "bg-yellow-400/10 border-yellow-400/30", label: t("incidents.warning") },
+    info: { icon: Info, color: "text-neon-cyan", bg: "bg-neon-cyan/10 border-neon-cyan/30", label: t("incidents.info") },
+  };
+
+  const STATUS_CONFIG: Record<string, { icon: React.ElementType; color: string; label: string }> = {
+    open: { icon: XCircle, color: "text-neon-red", label: t("incidents.open") },
+    ack: { icon: ShieldCheck, color: "text-neon-blue", label: t("incidents.ack") },
+    resolved: { icon: CheckCircle, color: "text-neon-green", label: t("incidents.resolved") },
+  };
 
   const { data: alerts, isLoading, refetch } = useAlertInstances({
     statuses: statusFilters.length ? statusFilters : undefined,
@@ -65,7 +67,6 @@ export default function IncidentsPage() {
   const toggleStatus = (s: StatusFilter) =>
     setStatusFilters((p) => (p.includes(s) ? p.filter((x) => x !== s) : [...p, s]));
 
-  // Counters
   const counts = useMemo(() => {
     const c = { open: 0, ack: 0, resolved: 0, disaster: 0, high: 0, average: 0, warning: 0, info: 0 };
     (alerts ?? []).forEach((a) => {
@@ -75,6 +76,8 @@ export default function IncidentsPage() {
     return c;
   }, [alerts]);
 
+  const dateFnsLocale = DATE_LOCALES[i18n.language] || ptBR;
+
   return (
     <div className="h-full flex flex-col gap-0 overflow-hidden">
       {/* ── Header ── */}
@@ -82,15 +85,15 @@ export default function IncidentsPage() {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <AlertTriangle className="w-5 h-5 text-neon-red" />
-            <h1 className="text-lg font-display font-bold text-foreground">Incidentes</h1>
+            <h1 className="text-lg font-display font-bold text-foreground">{t("incidents.title")}</h1>
             {!isLoading && (
               <Badge variant="outline" className="text-[10px] font-mono">
-                {filtered.length} alertas
+                {filtered.length} {t("incidents.alerts")}
               </Badge>
             )}
           </div>
           <Button size="sm" variant="outline" className="h-7 gap-1 text-[10px]" onClick={() => refetch()}>
-            <RefreshCw className="w-3 h-3" /> Atualizar
+            <RefreshCw className="w-3 h-3" /> {t("incidents.refresh")}
           </Button>
         </div>
 
@@ -98,7 +101,7 @@ export default function IncidentsPage() {
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-1">
             <Filter className="w-3 h-3 text-muted-foreground" />
-            <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">Status:</span>
+            <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">{t("incidents.status")}</span>
             {(Object.entries(STATUS_CONFIG) as [StatusFilter, typeof STATUS_CONFIG.open][]).map(([key, cfg]) => {
               const active = statusFilters.includes(key);
               return (
@@ -120,7 +123,7 @@ export default function IncidentsPage() {
           <div className="w-px h-4 bg-border" />
 
           <div className="flex items-center gap-1">
-            <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">Severidade:</span>
+            <span className="text-[9px] text-muted-foreground font-display uppercase tracking-wider">{t("incidents.severity")}</span>
             {(Object.entries(SEVERITY_CONFIG) as [SeverityFilter, typeof SEVERITY_CONFIG.disaster][]).map(([key, cfg]) => {
               const active = severityFilters.includes(key);
               return (
@@ -143,7 +146,7 @@ export default function IncidentsPage() {
             <div className="relative">
               <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-muted-foreground" />
               <Input
-                placeholder="Buscar..."
+                placeholder={t("incidents.search")}
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="h-7 w-48 pl-7 text-xs"
@@ -164,20 +167,20 @@ export default function IncidentsPage() {
         ) : filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground">
             <CheckCircle className="w-10 h-10 opacity-30" />
-            <p className="text-sm font-display">Nenhum incidente encontrado</p>
-            <p className="text-xs">Ajuste os filtros ou aguarde novos alertas.</p>
+            <p className="text-sm font-display">{t("incidents.noIncidents")}</p>
+            <p className="text-xs">{t("incidents.adjustFilters")}</p>
           </div>
         ) : (
           <table className="w-full text-xs">
             <thead className="sticky top-0 bg-background z-10">
               <tr className="border-b border-border text-[10px] text-muted-foreground font-display uppercase tracking-wider">
-                <th className="py-2 px-3 text-left w-8">Sev</th>
+                <th className="py-2 px-3 text-left w-8">{t("incidents.sev")}</th>
                 <th className="py-2 px-3 text-left w-10">Status</th>
-                <th className="py-2 px-3 text-left">Host</th>
-                <th className="py-2 px-3 text-left">Alerta</th>
-                <th className="py-2 px-3 text-left w-28">Início</th>
-                <th className="py-2 px-3 text-left w-24">Duração</th>
-                <th className="py-2 px-3 text-left w-12">RC</th>
+                <th className="py-2 px-3 text-left">{t("incidents.host")}</th>
+                <th className="py-2 px-3 text-left">{t("incidents.alert")}</th>
+                <th className="py-2 px-3 text-left w-28">{t("incidents.start")}</th>
+                <th className="py-2 px-3 text-left w-24">{t("incidents.duration")}</th>
+                <th className="py-2 px-3 text-left w-12">{t("incidents.rc")}</th>
               </tr>
             </thead>
             <tbody>
@@ -215,16 +218,16 @@ export default function IncidentsPage() {
                         <span>{alert.title}</span>
                         {isolatedCount && (
                           <Badge variant="outline" className="ml-2 text-[8px] text-neon-red border-neon-red/30">
-                            +{isolatedCount} isolados
+                            +{isolatedCount} {t("incidents.isolated")}
                           </Badge>
                         )}
                       </td>
                       <td className="py-2 px-3 font-mono text-muted-foreground">
-                        {new Date(alert.opened_at).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+                        {new Date(alert.opened_at).toLocaleString(i18n.language === "en" ? "en-US" : i18n.language === "es" ? "es" : "pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
                       </td>
                       <td className="py-2 px-3">
                         <span className={`font-mono ${alert.status !== "resolved" ? "text-neon-amber" : "text-muted-foreground"}`}>
-                          {formatDistanceToNow(new Date(alert.opened_at), { locale: ptBR })}
+                          {formatDistanceToNow(new Date(alert.opened_at), { locale: dateFnsLocale })}
                         </span>
                       </td>
                       <td className="py-2 px-3">

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,6 +55,7 @@ function barColor(pct: number): string {
 
 /* ═══════════════════════════════════════════ */
 export default function CapacityPage() {
+  const { t } = useTranslation();
   const [selectedMapId, setSelectedMapId] = useState("all");
   const [threshold, setThreshold] = useState(80);
   const [search, setSearch] = useState("");
@@ -162,12 +164,10 @@ export default function CapacityPage() {
       <div className="shrink-0 px-4 pt-4 pb-3 border-b border-border">
         <div className="flex items-center gap-2">
           <Gauge className="w-5 h-5 text-primary" />
-          <h1 className="text-lg font-display font-bold text-foreground">Capacidade de Rede</h1>
+          <h1 className="text-lg font-display font-bold text-foreground">{t("capacity.title")}</h1>
           <Badge variant="outline" className="text-[9px] ml-2">Engineering</Badge>
         </div>
-        <p className="text-[11px] text-muted-foreground mt-1">
-          Análise de ocupação, planejamento de expansão e previsão de demanda.
-        </p>
+        <p className="text-[11px] text-muted-foreground mt-1">{t("capacity.subtitle")}</p>
       </div>
 
       <ScrollArea className="flex-1">
@@ -175,40 +175,24 @@ export default function CapacityPage() {
           {/* Filters */}
           <div className="flex flex-wrap items-end gap-3">
             <div className="space-y-1 min-w-[180px]">
-              <Label className="text-[10px] font-display uppercase text-muted-foreground">Mapa</Label>
+              <Label className="text-[10px] font-display uppercase text-muted-foreground">{t("capacity.map")}</Label>
               <Select value={selectedMapId} onValueChange={setSelectedMapId}>
-                <SelectTrigger className="h-8 text-xs">
-                  <SelectValue placeholder="Todos os mapas" />
-                </SelectTrigger>
+                <SelectTrigger className="h-8 text-xs"><SelectValue placeholder={t("capacity.allMaps")} /></SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">Todos os mapas</SelectItem>
-                  {maps?.map((m) => (
-                    <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
-                  ))}
+                  <SelectItem value="all">{t("capacity.allMaps")}</SelectItem>
+                  {maps?.map((m) => (<SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>))}
                 </SelectContent>
               </Select>
             </div>
             <div className="space-y-1 min-w-[100px]">
-              <Label className="text-[10px] font-display uppercase text-muted-foreground">Limiar de Alerta (%)</Label>
-              <Input
-                type="number"
-                min={50}
-                max={100}
-                value={threshold}
-                onChange={(e) => setThreshold(Number(e.target.value) || 80)}
-                className="h-8 text-xs font-mono w-20"
-              />
+              <Label className="text-[10px] font-display uppercase text-muted-foreground">{t("capacity.alertThreshold")}</Label>
+              <Input type="number" min={50} max={100} value={threshold} onChange={(e) => setThreshold(Number(e.target.value) || 80)} className="h-8 text-xs font-mono w-20" />
             </div>
             <div className="space-y-1 flex-1 min-w-[140px]">
-              <Label className="text-[10px] font-display uppercase text-muted-foreground">Buscar CTO</Label>
+              <Label className="text-[10px] font-display uppercase text-muted-foreground">{t("capacity.searchCto")}</Label>
               <div className="relative">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Nome da CTO..."
-                  className="h-8 text-xs pl-7"
-                />
+                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t("capacity.ctoName")} className="h-8 text-xs pl-7" />
               </div>
             </div>
           </div>
@@ -217,16 +201,16 @@ export default function CapacityPage() {
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             <GaugeKpiCard
               icon={<HardDrive className="w-4 h-4" />}
-              label="Portas Totais"
+              label={t("capacity.totalPorts")}
               value={totalPorts}
-              sub={`${occupiedPorts} ocupadas`}
+              sub={`${occupiedPorts} ${t("capacity.occupied")}`}
               pct={globalPct}
               color="text-primary"
               arcColor="hsl(var(--primary))"
             />
             <GaugeKpiCard
               icon={<Gauge className="w-4 h-4" />}
-              label="Ocupação Global"
+              label={t("capacity.globalOccupancy")}
               value={`${globalPct}%`}
               sub={`${occupiedPorts} / ${totalPorts}`}
               pct={globalPct}
@@ -235,18 +219,18 @@ export default function CapacityPage() {
             />
             <GaugeKpiCard
               icon={<AlertTriangle className="w-4 h-4" />}
-              label="Caixas Esgotadas"
+              label={t("capacity.exhaustedBoxes")}
               value={exhaustedCount}
-              sub="100% ocupação"
+              sub={t("capacity.fullOccupancy")}
               pct={filtered.length > 0 ? Math.round((exhaustedCount / filtered.length) * 100) : 0}
               color={exhaustedCount > 0 ? "text-red-400" : "text-emerald-400"}
               arcColor={exhaustedCount > 0 ? "#f87171" : "#34d399"}
             />
             <GaugeKpiCard
               icon={<TrendingUp className="w-4 h-4" />}
-              label="Novas CTOs (30d)"
+              label={t("capacity.newCtos30d")}
               value={recentCtos}
-              sub="Ativações recentes"
+              sub={t("capacity.recentActivations")}
               pct={Math.min(100, recentCtos * 10)}
               color="text-sky-400"
               arcColor="#38bdf8"
@@ -256,15 +240,9 @@ export default function CapacityPage() {
           {/* Tabs */}
           <Tabs defaultValue="pon">
             <TabsList>
-              <TabsTrigger value="pon" className="gap-1.5 text-xs">
-                <Wifi className="w-3.5 h-3.5" /> PON (Atendimento)
-              </TabsTrigger>
-              <TabsTrigger value="backbone" className="gap-1.5 text-xs">
-                <Network className="w-3.5 h-3.5" /> Backbone
-              </TabsTrigger>
-              <TabsTrigger value="infra" className="gap-1.5 text-xs">
-                <Server className="w-3.5 h-3.5" /> Infraestrutura
-              </TabsTrigger>
+              <TabsTrigger value="pon" className="gap-1.5 text-xs"><Wifi className="w-3.5 h-3.5" /> {t("capacity.pon")}</TabsTrigger>
+              <TabsTrigger value="backbone" className="gap-1.5 text-xs"><Network className="w-3.5 h-3.5" /> {t("capacity.backbone")}</TabsTrigger>
+              <TabsTrigger value="infra" className="gap-1.5 text-xs"><Server className="w-3.5 h-3.5" /> {t("capacity.infrastructure")}</TabsTrigger>
             </TabsList>
 
             <TabsContent value="pon" className="mt-3 space-y-4">
@@ -273,7 +251,7 @@ export default function CapacityPage() {
                 <Card className="border-amber-500/30">
                   <CardHeader className="py-3 px-4">
                     <CardTitle className="text-xs font-display uppercase tracking-wider text-amber-400 flex items-center gap-2">
-                      <MapPin className="w-3.5 h-3.5" /> Zonas Críticas (≥80% média)
+                      <MapPin className="w-3.5 h-3.5" /> {t("capacity.criticalZones")}
                     </CardTitle>
                   </CardHeader>
                   <CardContent className="px-4 pb-4">
@@ -297,7 +275,7 @@ export default function CapacityPage() {
                               {cl.lat.toFixed(4)}, {cl.lon.toFixed(4)}
                             </p>
                             <p className="text-[10px] text-muted-foreground/60">
-                              {cl.ctos.length} CTO{cl.ctos.length > 1 ? "s" : ""} na zona
+                              {cl.ctos.length} {t("capacity.ctosInZone")}
                             </p>
                           </div>
                         </motion.div>
@@ -311,26 +289,26 @@ export default function CapacityPage() {
               <Card className="border-border/50">
                 <CardHeader className="py-3 px-4">
                   <CardTitle className="text-xs font-display uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5" /> Alerta de Expansão (≥{threshold}%)
-                    <Badge variant="outline" className="text-[9px] ml-auto">{alertRows.length} itens</Badge>
+                    <AlertTriangle className="w-3.5 h-3.5" /> {t("capacity.expansionAlert")} (≥{threshold}%)
+                    <Badge variant="outline" className="text-[9px] ml-auto">{alertRows.length} {t("capacity.items")}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-0 pb-2">
                   {alertRows.length === 0 ? (
                     <p className="text-xs text-muted-foreground/50 text-center py-6">
-                      Nenhuma CTO acima do limiar configurado.
+                      {t("capacity.noAboveThreshold")}
                     </p>
                   ) : (
                     <Table>
                       <TableHeader>
                         <TableRow className="border-border/30 hover:bg-transparent">
-                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto">Equipamento</TableHead>
-                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto">Mapa</TableHead>
-                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">Portas</TableHead>
-                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">Livres</TableHead>
-                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">Ocupação</TableHead>
-                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">Consultas (30d)</TableHead>
-                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto">Insight</TableHead>
+                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto">{t("capacity.equipment")}</TableHead>
+                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto">{t("capacity.map")}</TableHead>
+                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">{t("capacity.ports")}</TableHead>
+                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">{t("capacity.free")}</TableHead>
+                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">{t("capacity.occupancy")}</TableHead>
+                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto text-right">{t("capacity.queries30d")}</TableHead>
+                          <TableHead className="text-[10px] font-display uppercase py-1 px-3 h-auto">{t("capacity.insight")}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -339,7 +317,7 @@ export default function CapacityPage() {
                             <TableCell className="text-xs font-mono py-1.5 px-3">
                               <div className="flex items-center gap-1.5">
                                 <Package className="w-3 h-3 text-muted-foreground" />
-                                {row.name || "Sem nome"}
+                                {row.name || t("inventory.noName")}
                               </div>
                             </TableCell>
                             <TableCell className="text-[10px] text-muted-foreground py-1.5 px-3">{mapName(row.map_id)}</TableCell>
@@ -368,14 +346,14 @@ export default function CapacityPage() {
                             <TableCell className="py-1.5 px-3">
                               {row.pct >= 90 && row.nearbyQueries >= 3 ? (
                                 <Badge variant="destructive" className="text-[9px] gap-1">
-                                  <Zap className="w-2.5 h-2.5" /> Expansão Necessária
+                                  <Zap className="w-2.5 h-2.5" /> {t("capacity.expansionNeeded")}
                                 </Badge>
                               ) : row.pct >= 90 ? (
-                                <Badge variant="outline" className="text-[9px] border-red-500/40 text-red-400">Crítico</Badge>
+                                <Badge variant="outline" className="text-[9px] border-red-500/40 text-red-400">{t("capacity.critical")}</Badge>
                               ) : row.nearbyQueries >= 3 ? (
-                                <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-400">Demanda Alta</Badge>
+                                <Badge variant="outline" className="text-[9px] border-amber-500/40 text-amber-400">{t("capacity.highDemand")}</Badge>
                               ) : (
-                                <Badge variant="outline" className="text-[9px]">Monitorar</Badge>
+                                <Badge variant="outline" className="text-[9px]">{t("capacity.monitor")}</Badge>
                               )}
                             </TableCell>
                           </TableRow>
@@ -391,10 +369,7 @@ export default function CapacityPage() {
               <Card className="border-border/50">
                 <CardContent className="p-8 text-center">
                   <Network className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-sm font-display font-bold text-foreground">Backbone — Portas de Uplink</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Análise de capacidade de backbone será habilitada ao integrar dados de switches core.
-                  </p>
+                  <p className="text-sm font-display font-bold text-foreground">{t("capacity.backbone")}</p>
                 </CardContent>
               </Card>
             </TabsContent>
@@ -403,10 +378,7 @@ export default function CapacityPage() {
               <Card className="border-border/50">
                 <CardContent className="p-8 text-center">
                   <Server className="w-10 h-10 text-muted-foreground/30 mx-auto mb-2" />
-                  <p className="text-sm font-display font-bold text-foreground">Infraestrutura — Espaço em Racks</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Gestão de capacidade física será adicionada em breve.
-                  </p>
+                  <p className="text-sm font-display font-bold text-foreground">{t("capacity.infrastructure")}</p>
                 </CardContent>
               </Card>
             </TabsContent>

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import { Globe, MapPin } from "lucide-react";
 
@@ -31,7 +32,6 @@ interface GeoPeer {
   bw_in_mbps?: number;
 }
 
-/* ─── SVG Map Component (Simplified World) ── */
 export default function GeoBgpMap({ peers, coreLocation }: {
   peers: Array<{
     asn: number; ip: string; state: string;
@@ -40,6 +40,7 @@ export default function GeoBgpMap({ peers, coreLocation }: {
   }>;
   coreLocation?: { lat: number; lon: number; name: string };
 }) {
+  const { t } = useTranslation();
   const core = coreLocation || { lat: -20.46, lon: -54.62, name: "Core ISP" };
 
   const geoPeers: GeoPeer[] = useMemo(() =>
@@ -76,7 +77,7 @@ export default function GeoBgpMap({ peers, coreLocation }: {
     return (
       <div className="flex flex-col items-center justify-center py-12 gap-3 text-muted-foreground/40">
         <Globe className="w-10 h-10" />
-        <p className="text-xs font-mono">Sem dados geográficos de peers</p>
+        <p className="text-xs font-mono">{t("geoBgp.noGeoData")}</p>
       </div>
     );
   }
@@ -86,14 +87,16 @@ export default function GeoBgpMap({ peers, coreLocation }: {
       <div className="flex items-center justify-between">
         <h3 className="text-xs font-mono font-semibold text-foreground flex items-center gap-2">
           <MapPin className="w-4 h-4 text-primary" />
-          Mapa de Origem BGP — Geo-ASN
+          {t("geoBgp.title")}
         </h3>
         <div className="flex items-center gap-3 text-[9px] font-mono text-muted-foreground/40">
           <span className="flex items-center gap-1">
-            <div className="w-2 h-0.5 bg-[hsl(var(--neon-green))]" /> Established
+            <div className="w-2 h-0.5 bg-[hsl(var(--neon-green))]" />
+            {t("geoBgp.established")}
           </span>
           <span className="flex items-center gap-1">
-            <div className="w-2 h-0.5 bg-[hsl(var(--neon-red))]" /> Down
+            <div className="w-2 h-0.5 bg-[hsl(var(--neon-red))]" />
+            {t("geoBgp.down")}
           </span>
         </div>
       </div>

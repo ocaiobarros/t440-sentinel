@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import {
   Wifi, WifiOff, Filter, Bell, Clock, TrendingUp,
@@ -52,17 +53,17 @@ function getStatusMeta(state: string) {
   return { label: state?.toUpperCase() || "UNKNOWN", color: "hsl(var(--muted-foreground))", bg: "hsl(var(--muted) / 0.2)", borderColor: "hsl(var(--border))", pulse: false };
 }
 
-const TRAFFIC_LABELS: Record<string, string> = {
-  transit: "Trânsito IP",
-  ix: "IX-BR / Peering",
-  cdn: "CDN",
-  enterprise: "Enterprise",
-  unknown: "Outros",
-};
-
-/* ─── Main Component ── */
 export default function PeeringWall({ peers }: { peers: BgpPeer[] }) {
+  const { t } = useTranslation();
   const [showOnlyDown, setShowOnlyDown] = useState(false);
+
+  const TRAFFIC_LABELS: Record<string, string> = {
+    transit: t("peeringWall.transitIp"),
+    ix: t("peeringWall.ixPeering"),
+    cdn: t("peeringWall.cdn"),
+    enterprise: t("peeringWall.enterprise"),
+    unknown: t("peeringWall.other"),
+  };
 
   const filtered = useMemo(() => {
     if (!showOnlyDown) return peers;
@@ -78,7 +79,7 @@ export default function PeeringWall({ peers }: { peers: BgpPeer[] }) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-3 text-muted-foreground/40">
         <Globe className="w-12 h-12" />
-        <p className="text-xs font-mono">Aguardando dados de sessões BGP...</p>
+        <p className="text-xs font-mono">{t("peeringWall.waitingData")}</p>
       </div>
     );
   }
@@ -89,7 +90,7 @@ export default function PeeringWall({ peers }: { peers: BgpPeer[] }) {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <span className="text-xs font-mono text-muted-foreground">
-            {peers.length} sessões • {peers.length - downCount} ativas
+            {peers.length} {t("peeringWall.sessions")} • {peers.length - downCount} {t("peeringWall.active")}
           </span>
           {downCount > 0 && (
             <span className="flex items-center gap-1 text-[10px] font-mono text-[hsl(var(--neon-red))]">
@@ -106,7 +107,7 @@ export default function PeeringWall({ peers }: { peers: BgpPeer[] }) {
           }`}
         >
           <Filter className="w-3 h-3" />
-          {showOnlyDown ? "Mostrando DOWN" : "Filtrar DOWN"}
+          {showOnlyDown ? t("peeringWall.showingDown") : t("peeringWall.filterDown")}
         </button>
       </div>
 
@@ -195,10 +196,10 @@ export default function PeeringWall({ peers }: { peers: BgpPeer[] }) {
 
                 {/* Metrics grid */}
                 <div className="grid grid-cols-3 gap-2">
-                  <MetricCell icon={Clock} label="Uptime" value={peer.uptime || "—"} />
-                  <MetricCell icon={TrendingUp} label="Prefixos Rx" value={peer.prefixes_received?.toLocaleString() || "0"} />
+                  <MetricCell icon={Clock} label={t("peeringWall.uptime")} value={peer.uptime || "—"} />
+                  <MetricCell icon={TrendingUp} label={t("peeringWall.prefixesRx")} value={peer.prefixes_received?.toLocaleString() || "0"} />
                   <MetricCell
-                    label="BW In"
+                    label={t("peeringWall.bwIn")}
                     value={peer.bw_in_mbps
                       ? peer.bw_in_mbps >= 1000
                         ? `${(peer.bw_in_mbps / 1000).toFixed(1)}G`
@@ -212,7 +213,7 @@ export default function PeeringWall({ peers }: { peers: BgpPeer[] }) {
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
-                    toast.info(`Configurar alerta Telegram para AS${peer.asn} — ${peer.info?.name || "Peer"}`);
+                    toast.info(`${t("peeringWall.notifyTelegram")} AS${peer.asn} — ${peer.info?.name || "Peer"}`);
                   }}
                   className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg
                     border border-border/50 text-[9px] font-mono text-muted-foreground/50
@@ -220,7 +221,7 @@ export default function PeeringWall({ peers }: { peers: BgpPeer[] }) {
                     hover:bg-[hsl(var(--neon-cyan)/0.05)] transition-all opacity-0 group-hover:opacity-100"
                 >
                   <Bell className="w-3 h-3" />
-                  Notificar via Telegram
+                  {t("peeringWall.notifyTelegram")}
                 </button>
               </div>
             </motion.div>
