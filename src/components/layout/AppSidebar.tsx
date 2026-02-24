@@ -97,7 +97,7 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border sidebar-deep-space">
       <SidebarHeader className="p-3 border-b border-sidebar-border">
-        <NavLink to="/app/monitoring/dashboards" className="flex items-center gap-2">
+        <NavLink to="/app/operations/home" className="flex items-center gap-2">
           <Zap className="w-5 h-5 text-primary shrink-0" />
           {!collapsed && (
             <span className="font-display text-sm font-bold tracking-wider text-primary">
