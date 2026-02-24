@@ -5,7 +5,7 @@
 @tailwind utilities;
 
 @layer base {
-  :root {
+  :root, .dark {
     /* ── Deep Space core ── */
     --background: 220 40% 3.5%;
     --foreground: 210 20% 92%;
@@ -63,6 +63,67 @@
     --sidebar-accent-foreground: 210 20% 92%;
     --sidebar-border: 215 20% 12%;
     --sidebar-ring: 142 100% 50%;
+  }
+
+  /* ═══════════════════════════════════════════════
+     LIGHT THEME — Professional Clean
+     ═══════════════════════════════════════════════ */
+  .light {
+    --background: 210 20% 98%;
+    --foreground: 220 20% 12%;
+
+    --card: 0 0% 100%;
+    --card-foreground: 220 20% 12%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 220 20% 12%;
+
+    --primary: 142 70% 35%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 215 20% 93%;
+    --secondary-foreground: 220 20% 12%;
+
+    --muted: 215 15% 92%;
+    --muted-foreground: 215 10% 45%;
+
+    --accent: 215 20% 95%;
+    --accent-foreground: 220 20% 12%;
+
+    --destructive: 0 75% 50%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 215 15% 85%;
+    --input: 215 15% 85%;
+    --ring: 142 70% 35%;
+
+    --radius: 0.5rem;
+
+    /* Semantic — solid readable on white */
+    --neon-green: 142 70% 35%;
+    --neon-green-glow: 0 0% 0% / 0;
+    --neon-red: 0 75% 45%;
+    --neon-amber: 36 90% 42%;
+    --neon-blue: 210 80% 45%;
+    --neon-cyan: 186 70% 38%;
+
+    /* Glass — light mode uses subtle white */
+    --glass-bg: 0 0% 100% / 0.8;
+    --glass-border: 215 15% 80% / 0.6;
+    --glass-highlight: 0 0% 100% / 0.5;
+
+    --gradient-dark: linear-gradient(180deg, hsl(210 20% 98%) 0%, hsl(215 18% 95%) 100%);
+    --gradient-card: hsl(0 0% 100%);
+    --gradient-neon: linear-gradient(135deg, hsl(142 70% 35%) 0%, hsl(160 70% 32%) 100%);
+
+    --sidebar-background: 0 0% 100%;
+    --sidebar-foreground: 220 20% 12%;
+    --sidebar-primary: 142 70% 35%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 20% 95%;
+    --sidebar-accent-foreground: 220 20% 12%;
+    --sidebar-border: 215 15% 88%;
+    --sidebar-ring: 142 70% 35%;
   }
 
   /* ══════════════════════════════════════════════════════════
@@ -350,27 +411,43 @@
   body {
     @apply bg-background text-foreground;
     font-family: 'Inter', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* Dark-only body background */
+  :root body, .dark body {
     background:
       radial-gradient(ellipse 80% 60% at 15% 20%, hsl(200 60% 8% / 0.5) 0%, transparent 60%),
       radial-gradient(ellipse 60% 50% at 85% 75%, hsl(210 50% 6% / 0.4) 0%, transparent 55%),
       linear-gradient(180deg, hsl(220 40% 4%) 0%, hsl(225 45% 2%) 100%);
-    min-height: 100vh;
   }
 
-  /* Scrollbar styling — thin & dark */
+  .light body, body.light {
+    background: hsl(210 20% 98%);
+  }
+
+  /* Apply light bg when html has .light */
+  html.light {
+    background: hsl(210 20% 98%);
+  }
+  html.light body {
+    background: hsl(210 20% 98%);
+  }
+
+  /* Scrollbar styling — thin */
   ::-webkit-scrollbar {
     width: 4px;
     height: 4px;
   }
   ::-webkit-scrollbar-track {
-    background: hsl(220 40% 3.5%);
+    background: hsl(var(--background));
   }
   ::-webkit-scrollbar-thumb {
-    background: hsl(215 20% 14%);
+    background: hsl(var(--border));
     border-radius: 2px;
   }
   ::-webkit-scrollbar-thumb:hover {
-    background: hsl(215 20% 22%);
+    background: hsl(var(--muted-foreground));
   }
 }
 
@@ -446,6 +523,41 @@
     -webkit-backdrop-filter: blur(calc(var(--category-blur, 14px) + 6px));
     border: var(--category-border-width, 1px) solid var(--category-card-border, hsl(0 0% 100% / 0.1));
     box-shadow: var(--category-card-shadow, 0 8px 32px hsl(0 0% 0% / 0.5), 0 0 20px hsl(var(--primary) / 0.04), inset 0 1px 0 hsl(0 0% 100% / 0.04));
+  }
+
+  /* Light mode glass overrides */
+  .light .glass-card {
+    background: hsl(0 0% 100% / 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1px solid hsl(215 15% 85%);
+    box-shadow: 0 4px 6px -1px hsl(0 0% 0% / 0.1), 0 2px 4px -2px hsl(0 0% 0% / 0.05);
+  }
+
+  .light .glass-card-elevated {
+    background: hsl(0 0% 100% / 0.92);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border: 1px solid hsl(215 15% 82%);
+    box-shadow: 0 10px 15px -3px hsl(0 0% 0% / 0.1), 0 4px 6px -4px hsl(0 0% 0% / 0.05);
+  }
+
+  /* Light mode: disable text glows */
+  .light .text-glow-green,
+  .light .text-glow-red,
+  .light .text-glow-amber,
+  .light .text-glow-cyan,
+  .light .text-glow-blue {
+    text-shadow: none;
+  }
+
+  /* Light mode: subtle box glows */
+  .light .glow-green,
+  .light .glow-red,
+  .light .glow-amber,
+  .light .glow-blue,
+  .light .glow-cyan {
+    box-shadow: 0 1px 3px hsl(0 0% 0% / 0.1);
   }
 
   /* Compact widget variant — tight padding for high-density views */

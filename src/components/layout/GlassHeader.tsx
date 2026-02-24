@@ -4,9 +4,11 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   User, LogOut, Palette, Monitor, Lock, HelpCircle,
   BookOpen, MessageCircle, Users, Info, Search, Command, X,
+  Sun, Moon,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { useAuth } from "@/hooks/useAuth";
+import { useTheme } from "@/hooks/useTheme";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +25,7 @@ interface GlassHeaderProps {
 
 export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps) {
   const { user, signOut } = useAuth();
+  const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const [searchOpen, setSearchOpen] = useState(false);
 
@@ -133,8 +136,9 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
               <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
                 <Lock className="h-3.5 w-3.5" /> Alterar Senha
               </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
-                <Palette className="h-3.5 w-3.5" /> Trocar Tema
+              <DropdownMenuItem onClick={toggleTheme} className="gap-2 text-xs cursor-pointer">
+                {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+                {theme === "dark" ? "Tema Claro" : "Tema Escuro"}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onToggleKiosk} className="gap-2 text-xs cursor-pointer">
                 <Monitor className="h-3.5 w-3.5" /> Modo Kiosk
