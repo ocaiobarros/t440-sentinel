@@ -266,9 +266,9 @@ export default function SLAGovernance() {
               variant="outline"
               className="h-7 gap-1 text-[10px]"
               disabled={isLoading}
-              onClick={() => {
+              onClick={async () => {
                 if (!filteredAlerts || !metrics) return;
-                exportSLAPdf({
+                await exportSLAPdf({
                   metrics,
                   policies: (policies ?? []) as any,
                   alerts: filteredAlerts as any,

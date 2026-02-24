@@ -205,7 +205,13 @@ export default function KmlImportExportModal({ open, onOpenChange, mode }: Props
     queryClient.invalidateQueries({ queryKey: ["inv-hosts"] });
     queryClient.invalidateQueries({ queryKey: ["inv-ctos"] });
     queryClient.invalidateQueries({ queryKey: ["inv-cables"] });
-    toast({ title: "Importação KML concluída", description: `${hostsCreated + ctosCreated + cablesCreated} ativos criados` });
+    // Invalidate FlowMap queries so new assets appear immediately
+    queryClient.invalidateQueries({ queryKey: ["flowmap-hosts"] });
+    queryClient.invalidateQueries({ queryKey: ["flowmap-ctos"] });
+    queryClient.invalidateQueries({ queryKey: ["flowmap-cables"] });
+    queryClient.invalidateQueries({ queryKey: ["flowmap-links"] });
+    queryClient.invalidateQueries({ queryKey: ["flow-maps"] });
+    toast({ title: "✅ Importação KML concluída", description: `${hostsCreated + ctosCreated + cablesCreated} ativos criados com sucesso` });
   }, [parseResult, selectedMapId, maps, addLog, queryClient, toast]);
 
   /* ── Export ── */
