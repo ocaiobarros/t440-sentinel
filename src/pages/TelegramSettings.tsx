@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useTranslation } from "react-i18next";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,7 +7,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Send, Bot, Shield, Bell, MessageSquare, Wifi, Cpu, UserPlus, Save } from "lucide-react";
+import { Send, Bot, Shield, Bell, MessageSquare, Wifi, Cpu, UserPlus, Save, Link2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
@@ -35,10 +36,13 @@ const DEFAULT_CONFIG: TelegramConfig = {
 };
 
 export default function TelegramSettings() {
+  const { t } = useTranslation();
   const tenantId = useTenantId();
   const [config, setConfig] = useState<TelegramConfig>(DEFAULT_CONFIG);
   const [saving, setSaving] = useState(false);
   const [testing, setTesting] = useState(false);
+  const [settingWebhook, setSettingWebhook] = useState(false);
+  const [webhookActive, setWebhookActive] = useState(false);
 
   useEffect(() => {
     if (!tenantId) return;
@@ -57,6 +61,7 @@ export default function TelegramSettings() {
         "telegram_notify_high_cpu",
         "telegram_notify_admin_login",
         "telegram_interactive_mode",
+        "telegram_webhook_active",
       ]);
 
     if (data && data.length > 0) {
@@ -69,6 +74,7 @@ export default function TelegramSettings() {
         notify_admin_login: map.telegram_notify_admin_login === "true",
         interactive_mode: map.telegram_interactive_mode === "true",
       });
+      setWebhookActive(map.telegram_webhook_active === "true");
     }
   };
 
@@ -104,7 +110,7 @@ export default function TelegramSettings() {
   const handleTest = async () => {
     setTesting(true);
     try {
-      const { error } = await supabase.functions.invoke("alert-escalation-worker", {
+      const { error } = await supabase.functions.invoke("telegram-bot", {
         body: { action: "test_telegram", bot_token: config.bot_token, chat_id: config.chat_id },
       });
       if (error) throw error;
@@ -113,6 +119,37 @@ export default function TelegramSettings() {
       toast.error("Falha ao enviar teste. Verifique Token e Chat ID.");
     } finally {
       setTesting(false);
+    }
+  };
+
+  const handleSetWebhook = async () => {
+    setSettingWebhook(true);
+    try {
+      const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
+      const webhookUrl = `https://${projectId}.supabase.co/functions/v1/telegram-bot`;
+
+      const { data, error } = await supabase.functions.invoke("telegram-bot", {
+        body: { action: "set_webhook", bot_token: config.bot_token, webhook_url: webhookUrl },
+      });
+      if (error) throw error;
+      if (data?.ok || data?.result) {
+        // Save webhook state
+        await supabase
+          .from("telemetry_config")
+          .upsert(
+            { tenant_id: tenantId!, config_key: "telegram_webhook_active", config_value: "true" },
+            { onConflict: "tenant_id,config_key" }
+          );
+        setWebhookActive(true);
+        toast.success("Webhook ativado! O bot agora responde a comandos.");
+      } else {
+        throw new Error(JSON.stringify(data));
+      }
+    } catch (err) {
+      toast.error("Falha ao configurar webhook.");
+      console.error(err);
+    } finally {
+      setSettingWebhook(false);
     }
   };
 
@@ -166,16 +203,38 @@ export default function TelegramSettings() {
               Use @userinfobot ou @RawDataBot para descobrir o Chat ID
             </p>
           </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleTest}
-            disabled={testing || !config.bot_token || !config.chat_id}
-            className="gap-2 font-mono text-xs"
-          >
-            <Send className="w-3 h-3" />
-            {testing ? "Enviando…" : "Enviar Teste"}
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleTest}
+              disabled={testing || !config.bot_token || !config.chat_id}
+              className="gap-2 font-mono text-xs"
+            >
+              <Send className="w-3 h-3" />
+              {testing ? "Enviando…" : "Enviar Teste"}
+            </Button>
+            <Button
+              variant={webhookActive ? "secondary" : "default"}
+              size="sm"
+              onClick={handleSetWebhook}
+              disabled={settingWebhook || !config.bot_token}
+              className="gap-2 font-mono text-xs"
+            >
+              {webhookActive ? (
+                <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+              ) : (
+                <Link2 className="w-3 h-3" />
+              )}
+              {settingWebhook ? "Ativando…" : webhookActive ? "Webhook Ativo" : "Ativar Webhook"}
+            </Button>
+          </div>
+          {webhookActive && (
+            <div className="flex items-center gap-2 text-[10px] text-emerald-500/80 font-mono">
+              <CheckCircle2 className="w-3 h-3" />
+              Bot recebendo comandos via webhook
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -231,8 +290,9 @@ export default function TelegramSettings() {
             <div>
               <p className="text-xs font-medium text-foreground">Habilitar Comandos de Chat</p>
               <p className="text-[10px] text-muted-foreground">
-                O bot responderá a <code className="text-primary">/status</code> e{" "}
-                <code className="text-primary">/graficos</code>
+                O bot responderá a <code className="text-primary">/status</code>,{" "}
+                <code className="text-primary">/flowmaps</code> e{" "}
+                <code className="text-primary">/help</code>
               </p>
             </div>
             <Switch
@@ -248,7 +308,8 @@ export default function TelegramSettings() {
               </p>
               {[
                 { cmd: "/status", desc: "Resumo geral do NOC (hosts up/down, alertas ativos)" },
-                { cmd: "/graficos", desc: "Envia gráfico PNG com métricas das últimas 6h" },
+                { cmd: "/flowmaps", desc: "Navega mapas → links → gráfico de tráfego" },
+                { cmd: "/help", desc: "Lista de comandos disponíveis" },
               ].map((c) => (
                 <div key={c.cmd} className="flex gap-2 items-baseline">
                   <Badge variant="outline" className="font-mono text-[10px] text-primary border-primary/30">
@@ -257,6 +318,12 @@ export default function TelegramSettings() {
                   <span className="text-[10px] text-muted-foreground">{c.desc}</span>
                 </div>
               ))}
+              {!webhookActive && (
+                <div className="flex items-center gap-1.5 mt-2 text-[10px] text-amber-500/80">
+                  <AlertTriangle className="w-3 h-3" />
+                  Ative o Webhook acima para que os comandos funcionem
+                </div>
+              )}
             </div>
           )}
         </CardContent>
