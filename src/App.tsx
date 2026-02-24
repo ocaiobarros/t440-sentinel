@@ -25,6 +25,7 @@ import VirtualMachinesMonitor from "./pages/VirtualMachinesMonitor";
 import BgpFlowMonitor from "./pages/BgpFlowMonitor";
 import FlowMapPage from "./pages/FlowMapPage";
 import StubPage from "./pages/stubs/StubPage";
+import OperationsHome from "./pages/OperationsHome";
 import InventoryPage from "./pages/InventoryPage";
 import CapacityPage from "./pages/CapacityPage";
 import TimelinePage from "./pages/TimelinePage";
@@ -55,7 +56,7 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
 
             {/* ── Root redirect ── */}
-            <Route path="/" element={<Navigate to="/app/monitoring/dashboards" replace />} />
+            <Route path="/" element={<Navigate to="/app/operations/home" replace />} />
 
             {/* ── Enterprise layout ── */}
             <Route
@@ -65,7 +66,7 @@ const App = () => (
                   <AppLayout>
                     <Routes>
                       {/* Operations */}
-                      <Route path="operations/home" element={<Navigate to="/app/monitoring/dashboards" replace />} />
+                      <Route path="operations/home" element={<OperationsHome />} />
                       <Route path="operations/flowmap" element={<FlowMapPage />} />
                       {/* flowmap/:mapId renders outside layout — see below */}
                       <Route path="operations/incidents" element={<IncidentsPage />} />
