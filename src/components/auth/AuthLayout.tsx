@@ -1,5 +1,6 @@
 import { type ReactNode } from "react";
 import { Activity } from "lucide-react";
+import { useTranslation } from "react-i18next";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -8,6 +9,7 @@ interface AuthLayoutProps {
 }
 
 export default function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
+  const { t } = useTranslation();
   return (
     <div className="min-h-screen bg-background grid-pattern scanlines relative flex items-center justify-center p-4">
       {/* Ambient glow */}
@@ -34,7 +36,7 @@ export default function AuthLayout({ children, title, subtitle }: AuthLayoutProp
         </div>
 
         <p className="text-center text-[10px] font-mono text-muted-foreground/40 mt-6">
-          FLOWPULSE • Enterprise Monitoring Platform
+          FLOWPULSE • {t("auth.platformSubtitle")}
         </p>
       </div>
     </div>
