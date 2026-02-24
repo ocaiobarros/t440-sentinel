@@ -44,3 +44,6 @@ verify_jwt = false
 
 [functions.webhook-token-manage]
 verify_jwt = false
+
+[functions.telegram-bot]
+verify_jwt = false
