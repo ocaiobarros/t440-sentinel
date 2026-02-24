@@ -1,3 +1,4 @@
+import { useTranslation } from "react-i18next";
 import { motion } from "framer-motion";
 import {
   Globe, Server, Layers, Shield, Activity, Network,
@@ -57,8 +58,8 @@ function SummaryCard({ label, value, icon: Ic, color }: {
 }
 
 /* ─── Top 10 Table (bidirectional: in/out/total) ── */
-function Top10TableBidi({ title, icon: Ic, color, data }: {
-  title: string; icon: React.ElementType; color: string; data: TrafficEntry[];
+function Top10TableBidi({ title, icon: Ic, color, data, inLabel, outLabel, totalLabel }: {
+  title: string; icon: React.ElementType; color: string; data: TrafficEntry[]; inLabel: string; outLabel: string; totalLabel: string;
 }) {
   const maxTotal = Math.max(...data.map(d => d.total_bytes), 1);
 
@@ -78,15 +79,15 @@ function Top10TableBidi({ title, icon: Ic, color, data }: {
               <th className="text-left py-2 px-4">{title.split(" ")[0]}</th>
               <th className="text-right py-2 px-3 w-24">
                 <span className="flex items-center justify-end gap-1">
-                  <ArrowDownToLine className="w-3 h-3 text-cyan-400/50" /> Entrada
+                  <ArrowDownToLine className="w-3 h-3 text-cyan-400/50" /> {inLabel}
                 </span>
               </th>
               <th className="text-right py-2 px-3 w-24">
                 <span className="flex items-center justify-end gap-1">
-                  <ArrowUpFromLine className="w-3 h-3 text-emerald-400/50" /> Saída
+                  <ArrowUpFromLine className="w-3 h-3 text-emerald-400/50" /> {outLabel}
                 </span>
               </th>
-              <th className="text-right py-2 px-3 w-24">Total</th>
+              <th className="text-right py-2 px-3 w-24">{totalLabel}</th>
               <th className="w-32 py-2 px-3"></th>
             </tr>
           </thead>
@@ -127,8 +128,8 @@ function Top10TableBidi({ title, icon: Ic, color, data }: {
 }
 
 /* ─── Top 10 Table (single total column) ── */
-function Top10TableSingle({ title, icon: Ic, color, data }: {
-  title: string; icon: React.ElementType; color: string; data: TrafficEntry[];
+function Top10TableSingle({ title, icon: Ic, color, data, totalLabel }: {
+  title: string; icon: React.ElementType; color: string; data: TrafficEntry[]; totalLabel: string;
 }) {
   const maxTotal = Math.max(...data.map(d => d.total_bytes), 1);
 
@@ -146,7 +147,7 @@ function Top10TableSingle({ title, icon: Ic, color, data }: {
           <thead>
             <tr className="border-b border-muted/10 text-muted-foreground/40">
               <th className="text-left py-2 px-4">{title.split(" ")[0]}</th>
-              <th className="text-right py-2 px-3 w-24">Total</th>
+              <th className="text-right py-2 px-3 w-24">{totalLabel}</th>
               <th className="w-40 py-2 px-3"></th>
             </tr>
           </thead>
@@ -186,76 +187,81 @@ function Top10TableSingle({ title, icon: Ic, color, data }: {
 
 /* ─── Main Panel ── */
 export default function NetworkSummaryPanel({ data }: { data: NetworkSummaryData }) {
+  const { t } = useTranslation();
   const totalIn = (data.subnets || []).reduce((s, e) => s + (e.in_bytes || 0), 0);
   const totalOut = (data.subnets || []).reduce((s, e) => s + (e.out_bytes || 0), 0);
   const totalTraffic = totalIn + totalOut;
   const deviceCount = (data.devices || []).length;
 
+  const inLabel = t("networkSummary.in");
+  const outLabel = t("networkSummary.out");
+  const totalLabel = t("networkSummary.total");
+
   return (
     <div className="space-y-6">
       {/* Summary cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <SummaryCard label="Tráfego Total (1h)" value={formatTraffic(totalTraffic)} icon={Activity} color="#00e5ff" />
-        <SummaryCard label="Entrada Total" value={formatTraffic(totalIn)} icon={ArrowDownToLine} color="#448aff" />
-        <SummaryCard label="Saída Total" value={formatTraffic(totalOut)} icon={ArrowUpFromLine} color="#00e676" />
-        <SummaryCard label="Dispositivos" value={String(deviceCount)} icon={Server} color="#c050ff" />
+        <SummaryCard label={t("networkSummary.totalTraffic1h")} value={formatTraffic(totalTraffic)} icon={Activity} color="#00e5ff" />
+        <SummaryCard label={t("networkSummary.totalIn")} value={formatTraffic(totalIn)} icon={ArrowDownToLine} color="#448aff" />
+        <SummaryCard label={t("networkSummary.totalOut")} value={formatTraffic(totalOut)} icon={ArrowUpFromLine} color="#00e676" />
+        <SummaryCard label={t("networkSummary.devices")} value={String(deviceCount)} icon={Server} color="#c050ff" />
       </div>
 
       {/* Grid: 2 columns on large screens */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
         {/* Subredes */}
         {data.subnets && data.subnets.length > 0 && (
-          <Top10TableBidi title="Subrede Top 10" icon={Globe} color="#00e5ff" data={data.subnets} />
+          <Top10TableBidi title={t("networkSummary.subnetTop10")} icon={Globe} color="#00e5ff" data={data.subnets} inLabel={inLabel} outLabel={outLabel} totalLabel={totalLabel} />
         )}
 
         {/* Sistemas Autônomos */}
         {data.autonomous_systems && data.autonomous_systems.length > 0 && (
-          <Top10TableBidi title="Sistema Autônomo Top 10" icon={Network} color="#c050ff" data={data.autonomous_systems} />
+          <Top10TableBidi title={t("networkSummary.asTop10")} icon={Network} color="#c050ff" data={data.autonomous_systems} inLabel={inLabel} outLabel={outLabel} totalLabel={totalLabel} />
         )}
 
         {/* Aplicação */}
         {data.applications && data.applications.length > 0 && (
-          <Top10TableSingle title="Aplicação Top 10" icon={Layers} color="#00e676" data={data.applications} />
+          <Top10TableSingle title={t("networkSummary.applicationTop10")} icon={Layers} color="#00e676" data={data.applications} totalLabel={totalLabel} />
         )}
 
         {/* Protocolo */}
         {data.protocols && data.protocols.length > 0 && (
-          <Top10TableSingle title="Protocolo Top 10" icon={Shield} color="#ffab40" data={data.protocols} />
+          <Top10TableSingle title={t("networkSummary.protocolTop10")} icon={Shield} color="#ffab40" data={data.protocols} totalLabel={totalLabel} />
         )}
 
         {/* Grupo de Subredes */}
         {data.subnet_groups && data.subnet_groups.length > 0 && (
-          <Top10TableBidi title="Grupo de Subredes Top 10" icon={Globe} color="#448aff" data={data.subnet_groups} />
+          <Top10TableBidi title={t("networkSummary.subnetGroupTop10")} icon={Globe} color="#448aff" data={data.subnet_groups} inLabel={inLabel} outLabel={outLabel} totalLabel={totalLabel} />
         )}
 
         {/* Grupo de Interfaces */}
         {data.interface_groups && data.interface_groups.length > 0 && (
-          <Top10TableBidi title="Grupo de Interfaces Top 10" icon={BarChart3} color="#00e5ff" data={data.interface_groups} />
+          <Top10TableBidi title={t("networkSummary.interfaceGroupTop10")} icon={BarChart3} color="#00e5ff" data={data.interface_groups} inLabel={inLabel} outLabel={outLabel} totalLabel={totalLabel} />
         )}
 
         {/* Grupo de Sistemas Autônomos */}
         {data.as_groups && data.as_groups.length > 0 && (
-          <Top10TableBidi title="Grupo de Sistemas Autônomos Top 10" icon={Network} color="#c050ff" data={data.as_groups} />
+          <Top10TableBidi title={t("networkSummary.asGroupTop10")} icon={Network} color="#c050ff" data={data.as_groups} inLabel={inLabel} outLabel={outLabel} totalLabel={totalLabel} />
         )}
 
         {/* ToS */}
         {data.tos && data.tos.length > 0 && (
-          <Top10TableSingle title="ToS Top 10" icon={Shield} color="#ff5252" data={data.tos} />
+          <Top10TableSingle title={t("networkSummary.tosTop10")} icon={Shield} color="#ff5252" data={data.tos} totalLabel={totalLabel} />
         )}
 
         {/* Grupo de ToS */}
         {data.tos_groups && data.tos_groups.length > 0 && (
-          <Top10TableSingle title="Grupo de ToS Top 10" icon={Shield} color="#ff5252" data={data.tos_groups} />
+          <Top10TableSingle title={t("networkSummary.tosGroupTop10")} icon={Shield} color="#ff5252" data={data.tos_groups} totalLabel={totalLabel} />
         )}
 
         {/* Objetos Mapeados */}
         {data.mapped_objects && data.mapped_objects.length > 0 && (
-          <Top10TableBidi title="Objeto Mapeado Top 10" icon={Server} color="#ffab40" data={data.mapped_objects} />
+          <Top10TableBidi title={t("networkSummary.mappedObjectTop10")} icon={Server} color="#ffab40" data={data.mapped_objects} inLabel={inLabel} outLabel={outLabel} totalLabel={totalLabel} />
         )}
 
         {/* Dispositivos */}
         {data.devices && data.devices.length > 0 && (
-          <Top10TableSingle title="Dispositivo Top 10" icon={Server} color="#c050ff" data={data.devices} />
+          <Top10TableSingle title={t("networkSummary.deviceTop10")} icon={Server} color="#c050ff" data={data.devices} totalLabel={totalLabel} />
         )}
       </div>
     </div>
