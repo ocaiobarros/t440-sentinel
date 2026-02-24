@@ -1,4 +1,5 @@
 import { useLocation } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import {
   Map, AlertTriangle, Wrench, Search, BarChart3,
   FileText, Clock, Settings, Users, Building2, Zap, ChevronRight,
@@ -20,46 +21,50 @@ import {
 } from "@/components/ui/sidebar";
 import RoleGate from "@/components/auth/RoleGate";
 
-const operationsItems = [
-  { title: "FlowMap", url: "/app/operations/flowmap", icon: Map },
-  { title: "Incidentes", url: "/app/operations/incidents", icon: AlertTriangle },
-];
+function useSidebarItems() {
+  const { t } = useTranslation();
 
-const engineeringItems = [
-  { title: "Inventário", url: "/app/engineering/inventory", icon: Wrench },
-  { title: "Viabilidade", url: "/app/engineering/viability", icon: Search },
-  { title: "Capacidade", url: "/app/engineering/capacity", icon: BarChart3 },
-];
+  const operationsItems = [
+    { title: t("sidebar.flowmap"), url: "/app/operations/flowmap", icon: Map },
+    { title: t("sidebar.incidents"), url: "/app/operations/incidents", icon: AlertTriangle },
+  ];
 
+  const engineeringItems = [
+    { title: t("sidebar.inventory"), url: "/app/engineering/inventory", icon: Wrench },
+    { title: t("sidebar.viability"), url: "/app/engineering/viability", icon: Search },
+    { title: t("sidebar.capacity"), url: "/app/engineering/capacity", icon: BarChart3 },
+  ];
 
+  const monitoringItems = [
+    { title: t("sidebar.dashboards"), url: "/app/monitoring/dashboards", icon: LayoutDashboard },
+    { title: t("sidebar.serverMonitor"), url: "/app/monitoring/server", icon: Server },
+    { title: t("sidebar.virtualization"), url: "/app/monitoring/virtualization", icon: Box },
+    { title: t("sidebar.virtualMachines"), url: "/app/monitoring/virtual-machines", icon: MonitorCheck },
+    { title: t("sidebar.bgpFlow"), url: "/app/monitoring/bgp", icon: Globe },
+    { title: t("sidebar.fleetIntelligence"), url: "/app/monitoring/fleet", icon: Fuel },
+  ];
 
-const monitoringItems = [
-  { title: "Dashboards", url: "/app/monitoring/dashboards", icon: LayoutDashboard },
-  { title: "Server Monitor", url: "/app/monitoring/server", icon: Server },
-  { title: "Virtualização", url: "/app/monitoring/virtualization", icon: Box },
-  { title: "Máquinas Virtuais", url: "/app/monitoring/virtual-machines", icon: MonitorCheck },
-  { title: "BGP Flow", url: "/app/monitoring/bgp", icon: Globe },
-  { title: "Fleet Intelligence", url: "/app/monitoring/fleet", icon: Fuel },
-];
+  const governanceItems = [
+    { title: t("sidebar.sla"), url: "/app/governance/sla", icon: FileText },
+    { title: t("sidebar.timeMachine"), url: "/app/governance/timeline", icon: Clock },
+  ];
 
-const governanceItems = [
-  { title: "SLA", url: "/app/governance/sla", icon: FileText },
-  { title: "Time-Machine", url: "/app/governance/timeline", icon: Clock },
-];
+  const settingsItems = [
+    { title: t("sidebar.profile"), url: "/app/settings/profile", icon: UserCog },
+    { title: t("sidebar.zabbixConnectors"), url: "/app/settings/connections", icon: Settings },
+    { title: t("sidebar.rmsConnectors"), url: "/app/settings/rms-connections", icon: Zap },
+    { title: t("sidebar.telegram"), url: "/app/settings/telegram", icon: Send },
+    { title: t("sidebar.users"), url: "/app/settings/users", icon: Users },
+    { title: t("sidebar.tenants"), url: "/app/settings/tenants", icon: Building2 },
+  ];
 
-const settingsItems = [
-  { title: "Perfil", url: "/app/settings/profile", icon: UserCog },
-  { title: "Conectores Zabbix", url: "/app/settings/connections", icon: Settings },
-  { title: "Conectores RMS", url: "/app/settings/rms-connections", icon: Zap },
-  { title: "Telegram", url: "/app/settings/telegram", icon: Send },
-  { title: "Usuários", url: "/app/settings/users", icon: Users },
-  { title: "Tenants", url: "/app/settings/tenants", icon: Building2 },
-];
+  const systemItems = [
+    { title: t("sidebar.hostStatus"), url: "/app/system/status", icon: Server },
+    { title: t("sidebar.updates"), url: "/app/system/updates", icon: RefreshCw },
+  ];
 
-const systemItems = [
-  { title: "Status do Host", url: "/app/system/status", icon: Server },
-  { title: "Atualizações", url: "/app/system/updates", icon: RefreshCw },
-];
+  return { operationsItems, engineeringItems, monitoringItems, governanceItems, settingsItems, systemItems };
+}
 
 interface NavGroupProps {
   label: string;
@@ -69,7 +74,6 @@ interface NavGroupProps {
 
 function NavGroup({ label, items, collapsed }: NavGroupProps) {
   const location = useLocation();
-  const isGroupActive = items.some((i) => location.pathname.startsWith(i.url));
 
   return (
     <SidebarGroup>
@@ -100,7 +104,9 @@ function NavGroup({ label, items, collapsed }: NavGroupProps) {
 
 export function AppSidebar() {
   const { state } = useSidebar();
+  const { t } = useTranslation();
   const collapsed = state === "collapsed";
+  const { operationsItems, monitoringItems, engineeringItems, governanceItems, settingsItems, systemItems } = useSidebarItems();
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border sidebar-deep-space">
@@ -116,13 +122,13 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="py-2">
-        <NavGroup label="Operações" items={operationsItems} collapsed={collapsed} />
-        <NavGroup label="Monitoramento" items={monitoringItems} collapsed={collapsed} />
-        <NavGroup label="Engenharia" items={engineeringItems} collapsed={collapsed} />
-        <NavGroup label="Governança" items={governanceItems} collapsed={collapsed} />
+        <NavGroup label={t("sidebar.operations")} items={operationsItems} collapsed={collapsed} />
+        <NavGroup label={t("sidebar.monitoring")} items={monitoringItems} collapsed={collapsed} />
+        <NavGroup label={t("sidebar.engineering")} items={engineeringItems} collapsed={collapsed} />
+        <NavGroup label={t("sidebar.governance")} items={governanceItems} collapsed={collapsed} />
         <RoleGate allowed={["admin"]}>
-          <NavGroup label="Configurações" items={settingsItems} collapsed={collapsed} />
-          <NavGroup label="Sistema" items={systemItems} collapsed={collapsed} />
+          <NavGroup label={t("sidebar.settings")} items={settingsItems} collapsed={collapsed} />
+          <NavGroup label={t("sidebar.system")} items={systemItems} collapsed={collapsed} />
         </RoleGate>
       </SidebarContent>
     </Sidebar>

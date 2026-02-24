@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import {
   User, LogOut, Palette, Monitor, Lock, HelpCircle,
   BookOpen, MessageCircle, Users, Info, Search, Command, X,
@@ -30,6 +31,7 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
   const { theme, toggleTheme } = useTheme();
   const { profile } = useProfile();
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const [searchOpen, setSearchOpen] = useState(false);
 
   const displayName = profile?.display_name
@@ -39,7 +41,6 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
   const initials = displayName.slice(0, 2).toUpperCase();
   const avatarUrl = profile?.avatar_url;
 
-  // Ctrl+K shortcut
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
@@ -63,12 +64,10 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
     <>
       <header className="h-11 flex items-center justify-between border-b border-border/20
         bg-background/60 backdrop-blur-md px-3 shrink-0 z-30 relative">
-        {/* Left: sidebar trigger */}
         <div className="flex items-center gap-2">
           <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:text-foreground" />
         </div>
 
-        {/* Center: search bar */}
         <button
           onClick={() => setSearchOpen(true)}
           className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-lg
@@ -76,19 +75,16 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
             hover:bg-muted/50 hover:border-border/50 transition-all max-w-[280px] w-full"
         >
           <Search className="h-3.5 w-3.5 shrink-0" />
-          <span className="flex-1 text-left">Buscar módulos...</span>
+          <span className="flex-1 text-left">{t("header.searchModules")}</span>
           <kbd className="hidden sm:inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded
             bg-muted/50 border border-border/30 text-[10px] font-mono text-muted-foreground/70">
             <Command className="h-2.5 w-2.5" /> K
           </kbd>
         </button>
 
-        {/* Right: help + user */}
         <div className="flex items-center gap-1.5">
-          {/* Notifications */}
           <NotificationBell />
 
-          {/* Help dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="h-7 w-7 rounded-lg flex items-center justify-center
@@ -96,22 +92,19 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
                 <HelpCircle className="h-4 w-4" />
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-52 bg-card border-border/50 backdrop-blur-xl z-50"
-            >
+            <DropdownMenuContent align="end" className="w-52 bg-card border-border/50 backdrop-blur-xl z-50">
               <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-display">
-                Ajuda & Recursos
+                {t("header.helpResources")}
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/30" />
               <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
-                <BookOpen className="h-3.5 w-3.5" /> Documentação
+                <BookOpen className="h-3.5 w-3.5" /> {t("header.documentation")}
               </DropdownMenuItem>
               <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
-                <MessageCircle className="h-3.5 w-3.5" /> Suporte
+                <MessageCircle className="h-3.5 w-3.5" /> {t("header.support")}
               </DropdownMenuItem>
               <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
-                <Users className="h-3.5 w-3.5" /> Comunidade
+                <Users className="h-3.5 w-3.5" /> {t("header.community")}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border/30" />
               <DropdownMenuItem disabled className="gap-2 text-[10px] text-muted-foreground/50">
@@ -120,7 +113,6 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* User dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <button className="h-7 w-7 rounded-lg flex items-center justify-center
@@ -131,38 +123,34 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
                 ) : initials}
               </button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent
-              align="end"
-              className="w-56 bg-card border-border/50 backdrop-blur-xl z-50"
-            >
+            <DropdownMenuContent align="end" className="w-56 bg-card border-border/50 backdrop-blur-xl z-50">
               <DropdownMenuLabel className="font-normal">
                 <p className="text-sm font-medium text-foreground">{displayName}</p>
                 <p className="text-[10px] text-muted-foreground truncate">{user?.email}</p>
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/30" />
               <DropdownMenuItem onClick={() => navigate("/app/settings/profile")} className="gap-2 text-xs cursor-pointer">
-                <User className="h-3.5 w-3.5" /> Perfil
+                <User className="h-3.5 w-3.5" /> {t("sidebar.profile")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => navigate("/app/settings/profile")} className="gap-2 text-xs cursor-pointer">
-                <Lock className="h-3.5 w-3.5" /> Alterar Senha
+                <Lock className="h-3.5 w-3.5" /> {t("header.changePassword")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={toggleTheme} className="gap-2 text-xs cursor-pointer">
                 {theme === "dark" ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
-                {theme === "dark" ? "Tema Claro" : "Tema Escuro"}
+                {theme === "dark" ? t("header.lightTheme") : t("header.darkTheme")}
               </DropdownMenuItem>
               <DropdownMenuItem onClick={onToggleKiosk} className="gap-2 text-xs cursor-pointer">
-                <Monitor className="h-3.5 w-3.5" /> Modo Kiosk
+                <Monitor className="h-3.5 w-3.5" /> {t("header.kioskMode")}
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border/30" />
               <DropdownMenuItem onClick={handleSignOut} className="gap-2 text-xs cursor-pointer text-destructive focus:text-destructive">
-                <LogOut className="h-3.5 w-3.5" /> Sair
+                <LogOut className="h-3.5 w-3.5" /> {t("header.signOut")}
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
       </header>
 
-      {/* ── Search overlay (Ctrl+K) ── */}
       <AnimatePresence>
         {searchOpen && (
           <motion.div
@@ -184,7 +172,7 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
                 <Search className="h-4 w-4 text-muted-foreground shrink-0" />
                 <input
                   autoFocus
-                  placeholder="Buscar módulos, dashboards, hosts..."
+                  placeholder={t("header.searchPlaceholder")}
                   className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50
                     outline-none border-none"
                 />
@@ -193,13 +181,13 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
                 </button>
               </div>
               <div className="border-t border-border/20 px-3 py-3">
-                <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wider mb-2">Acesso rápido</p>
+                <p className="text-[10px] text-muted-foreground/50 uppercase tracking-wider mb-2">{t("header.quickAccess")}</p>
                 {[
-                  { label: "Central de Operações", path: "/app/operations/home" },
-                  { label: "FlowMap", path: "/app/operations/flowmap" },
-                  { label: "Dashboards", path: "/app/monitoring/dashboards" },
-                  { label: "Incidentes", path: "/app/operations/incidents" },
-                  { label: "Inventário", path: "/app/engineering/inventory" },
+                  { label: t("header.operationsCenter"), path: "/app/operations/home" },
+                  { label: t("sidebar.flowmap"), path: "/app/operations/flowmap" },
+                  { label: t("sidebar.dashboards"), path: "/app/monitoring/dashboards" },
+                  { label: t("sidebar.incidents"), path: "/app/operations/incidents" },
+                  { label: t("sidebar.inventory"), path: "/app/engineering/inventory" },
                 ].map((item) => (
                   <button
                     key={item.path}

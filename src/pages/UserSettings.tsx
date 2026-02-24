@@ -1,5 +1,6 @@
 import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import {
   User, Camera, Lock, Globe2, Palette, Save, RotateCcw,
   Eye, EyeOff, Check, Shield, ZoomIn, ZoomOut, Briefcase, Phone,
@@ -13,16 +14,16 @@ import { toast } from "sonner";
 import { Slider } from "@/components/ui/slider";
 
 /* ─── Password strength ── */
-function getStrength(pw: string): { score: number; label: string; color: string } {
+function getStrength(pw: string, t: (key: string) => string): { score: number; label: string; color: string } {
   let score = 0;
   if (pw.length >= 8) score++;
   if (pw.length >= 12) score++;
   if (/[A-Z]/.test(pw)) score++;
   if (/[0-9]/.test(pw)) score++;
   if (/[^A-Za-z0-9]/.test(pw)) score++;
-  if (score <= 1) return { score, label: "Fraca", color: "bg-destructive" };
-  if (score <= 3) return { score, label: "Média", color: "bg-[hsl(var(--neon-amber))]" };
-  return { score, label: "Forte", color: "bg-[hsl(var(--neon-green))]" };
+  if (score <= 1) return { score, label: t("settings.strengthWeak"), color: "bg-destructive" };
+  if (score <= 3) return { score, label: t("settings.strengthMedium"), color: "bg-[hsl(var(--neon-amber))]" };
+  return { score, label: t("settings.strengthStrong"), color: "bg-[hsl(var(--neon-green))]" };
 }
 
 const LANGUAGES = [
@@ -46,6 +47,7 @@ export default function UserSettings() {
   const { user } = useAuth();
   const { profile, refresh: refreshProfile } = useProfile();
   const { theme, setTheme } = useTheme();
+  const { t, i18n } = useTranslation();
   const fileRef = useRef<HTMLInputElement>(null);
 
   // Profile state
@@ -64,7 +66,7 @@ export default function UserSettings() {
   const [confirmPw, setConfirmPw] = useState("");
   const [showPw, setShowPw] = useState(false);
   const [changingPw, setChangingPw] = useState(false);
-  const strength = getStrength(newPw);
+  const strength = getStrength(newPw, t);
 
   // Load profile
   useEffect(() => {
@@ -73,8 +75,9 @@ export default function UserSettings() {
     setAvatarUrl(profile.avatar_url);
     setJobTitle(profile.job_title || "");
     setPhone(profile.phone || "");
-    const savedLang = localStorage.getItem("flowpulse-lang");
-    if (savedLang) setLanguage(savedLang);
+    const lang = profile.language || localStorage.getItem("flowpulse-lang") || "pt-BR";
+    setLanguage(lang);
+    if (i18n.language !== lang) i18n.changeLanguage(lang);
   }, [profile, user]);
 
   const initials = displayName.slice(0, 2).toUpperCase() || "??";
@@ -88,7 +91,7 @@ export default function UserSettings() {
     try {
       if (!ALLOWED_AVATAR_MIME.includes(file.type)) {
         console.error("[avatar] MIME não permitido", { type: file.type, size: file.size, name: file.name });
-        toast.error("Formato inválido. Use JPEG, PNG ou WEBP");
+        toast.error(t("settings.invalidFormat"));
         return;
       }
 
@@ -158,10 +161,10 @@ export default function UserSettings() {
       setAvatarUrl(nextAvatarUrl);
       setAvatarZoom(1);
       await refreshProfile();
-      toast.success("Avatar atualizado");
+      toast.success(t("settings.avatarUpdated"));
     } catch (err) {
       console.error("[avatar] falha no fluxo de substituição", err);
-      toast.error("Falha ao trocar avatar. Veja o console para detalhes.");
+      toast.error(t("settings.avatarError"));
       setAvatarZoom(1);
     } finally {
       setAvatarLoading(false);
@@ -217,10 +220,10 @@ export default function UserSettings() {
       setAvatarUrl(null);
       setAvatarZoom(1);
       await refreshProfile();
-      toast.success("Avatar removido");
+      toast.success(t("settings.avatarRemoved"));
     } catch (err) {
       console.error("[avatar] falha ao remover avatar", err);
-      toast.error("Falha ao remover avatar. Veja o console para detalhes.");
+      toast.error(t("settings.avatarRemoveError"));
     } finally {
       setAvatarLoading(false);
       if (fileRef.current) fileRef.current.value = "";
@@ -235,29 +238,31 @@ export default function UserSettings() {
       display_name: displayName,
       job_title: jobTitle || null,
       phone: phone || null,
-    }).eq("id", user.id);
-    if (error) { toast.error("Erro ao salvar perfil"); }
+      language,
+    } as any).eq("id", user.id);
+    if (error) { toast.error(t("settings.profileError")); }
     else {
       localStorage.setItem("flowpulse-lang", language);
+      i18n.changeLanguage(language);
       await refreshProfile();
-      toast.success("Perfil salvo com sucesso");
+      toast.success(t("settings.profileSaved"));
     }
     setSaving(false);
-  }, [user, displayName, jobTitle, phone, language, refreshProfile]);
+  }, [user, displayName, jobTitle, phone, language, refreshProfile, t, i18n]);
 
   // Change password
   const handleChangePassword = useCallback(async () => {
-    if (newPw !== confirmPw) { toast.error("As senhas não coincidem"); return; }
-    if (newPw.length < 8) { toast.error("A senha deve ter pelo menos 8 caracteres"); return; }
+    if (newPw !== confirmPw) { toast.error(t("settings.passwordMismatch")); return; }
+    if (newPw.length < 8) { toast.error(t("settings.passwordTooShort")); return; }
     setChangingPw(true);
     const { error } = await supabase.auth.updateUser({ password: newPw });
     if (error) { toast.error(error.message); }
     else {
-      toast.success("Senha alterada com sucesso");
+      toast.success(t("settings.passwordChanged"));
       setCurrentPw(""); setNewPw(""); setConfirmPw("");
     }
     setChangingPw(false);
-  }, [newPw, confirmPw]);
+  }, [newPw, confirmPw, t]);
 
   return (
     <div className="p-4 md:p-6 max-w-[1000px] mx-auto space-y-6">
@@ -267,7 +272,7 @@ export default function UserSettings() {
           <User className="h-5 w-5 text-primary" />
         </div>
         <div>
-          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Configurações</h1>
+          <h1 className="text-xl font-bold text-foreground font-display tracking-tight">{t("settings.title")}</h1>
           <p className="text-xs text-muted-foreground">{user?.email}</p>
         </div>
       </motion.div>
@@ -277,7 +282,7 @@ export default function UserSettings() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
           className="glass-card rounded-xl p-6 space-y-6">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <User className="h-4 w-4 text-primary" /> Identidade
+            <User className="h-4 w-4 text-primary" /> {t("settings.identity")}
           </h2>
 
           {/* Avatar */}
@@ -317,7 +322,7 @@ export default function UserSettings() {
                   onClick={handleResetAvatar}
                   className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-destructive text-destructive-foreground
                     flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity shadow-md"
-                  title="Remover foto"
+                  title={t("settings.removePhoto")}
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                 </button>
@@ -344,19 +349,19 @@ export default function UserSettings() {
 
           {/* Name */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Nome Completo</label>
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{t("settings.fullName")}</label>
             <input
               value={displayName}
               onChange={e => setDisplayName(e.target.value)}
               className="w-full px-3 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground
                 placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
-              placeholder="Seu nome"
+              placeholder={t("settings.namePlaceholder")}
             />
           </div>
 
           {/* Email (read-only) */}
           <div className="space-y-1.5">
-            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">E-mail</label>
+            <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{t("settings.email")}</label>
             <input
               value={user?.email || ""}
               readOnly
@@ -368,19 +373,19 @@ export default function UserSettings() {
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <Briefcase className="h-3 w-3" /> Cargo
+                <Briefcase className="h-3 w-3" /> {t("settings.jobTitle")}
               </label>
               <input
                 value={jobTitle}
                 onChange={e => setJobTitle(e.target.value)}
                 className="w-full px-3 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground
                   placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
-                placeholder="Ex: Engenheiro NOC"
+                placeholder={t("settings.jobTitlePlaceholder")}
               />
             </div>
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <Phone className="h-3 w-3" /> Telefone
+                <Phone className="h-3 w-3" /> {t("settings.phone")}
               </label>
               <input
                 value={phone}
@@ -397,7 +402,7 @@ export default function UserSettings() {
             {/* Language with flags */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <Globe2 className="h-3 w-3" /> Idioma
+                <Globe2 className="h-3 w-3" /> {t("settings.language")}
               </label>
               <div className="flex gap-2">
                 {LANGUAGES.map(l => (
@@ -420,7 +425,7 @@ export default function UserSettings() {
             {/* Theme visual cards */}
             <div className="space-y-1.5">
               <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <Palette className="h-3 w-3" /> Tema
+                <Palette className="h-3 w-3" /> {t("settings.theme")}
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <button
@@ -435,7 +440,7 @@ export default function UserSettings() {
                     <Moon className="h-4 w-4 text-[hsl(var(--neon-cyan))]" />
                   </div>
                   <span className="text-xs font-medium text-foreground">Deep Space</span>
-                  <span className="text-[9px] text-muted-foreground">Modo escuro</span>
+                  <span className="text-[9px] text-muted-foreground">{t("settings.darkMode")}</span>
                   {theme === "dark" && (
                     <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                       <Check className="h-2.5 w-2.5 text-primary-foreground" />
@@ -454,7 +459,7 @@ export default function UserSettings() {
                     <Sun className="h-4 w-4 text-amber-500" />
                   </div>
                   <span className="text-xs font-medium text-foreground">Arctic Frost</span>
-                  <span className="text-[9px] text-muted-foreground">Modo claro</span>
+                  <span className="text-[9px] text-muted-foreground">{t("settings.lightMode")}</span>
                   {theme === "light" && (
                     <div className="absolute top-2 right-2 w-4 h-4 rounded-full bg-primary flex items-center justify-center">
                       <Check className="h-2.5 w-2.5 text-primary-foreground" />
@@ -473,7 +478,7 @@ export default function UserSettings() {
               hover:bg-primary/90 transition-colors disabled:opacity-50"
           >
             {saving ? <RotateCcw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-            {saving ? "Salvando..." : "Salvar Perfil"}
+            {saving ? t("settings.saving") : t("settings.saveProfile")}
           </button>
         </motion.div>
 
@@ -481,12 +486,12 @@ export default function UserSettings() {
         <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="glass-card rounded-xl p-6 space-y-6">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Shield className="h-4 w-4 text-primary" /> Segurança
+            <Shield className="h-4 w-4 text-primary" /> {t("settings.security")}
           </h2>
 
           <div className="space-y-4">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Senha Atual</label>
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{t("settings.currentPassword")}</label>
               <div className="relative">
                 <input
                   type={showPw ? "text" : "password"}
@@ -503,12 +508,12 @@ export default function UserSettings() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Nova Senha</label>
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{t("settings.newPassword")}</label>
               <input
                 type={showPw ? "text" : "password"}
                 value={newPw}
                 onChange={e => setNewPw(e.target.value)}
-                placeholder="Mínimo 8 caracteres"
+                placeholder={t("settings.minChars")}
                 className="w-full px-3 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground
                   placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
               />
@@ -524,13 +529,13 @@ export default function UserSettings() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">Confirmar Nova Senha</label>
+              <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider">{t("settings.confirmPassword")}</label>
               <div className="relative">
                 <input
                   type={showPw ? "text" : "password"}
                   value={confirmPw}
                   onChange={e => setConfirmPw(e.target.value)}
-                  placeholder="Repita a nova senha"
+                  placeholder={t("settings.repeatPassword")}
                   className="w-full px-3 py-2.5 rounded-lg bg-muted/30 border border-border text-sm text-foreground
                     placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20 transition-all"
                 />
@@ -549,7 +554,7 @@ export default function UserSettings() {
               hover:bg-primary/10 transition-colors disabled:opacity-50"
           >
             <Lock className="h-4 w-4" />
-            {changingPw ? "Alterando..." : "Alterar Senha"}
+            {changingPw ? t("settings.changingPassword") : t("settings.changePassword")}
           </button>
         </motion.div>
       </div>

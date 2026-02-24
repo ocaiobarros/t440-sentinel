@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { motion } from "framer-motion";
+import { useTranslation } from "react-i18next";
 import {
   Server, Cpu, HardDrive, MemoryStick, Activity,
   Database, Clock, RefreshCw, Loader2, MonitorCheck,
@@ -26,7 +27,6 @@ interface SystemData {
   collected_at: string;
 }
 
-/* ─── Helpers ─── */
 function fmtUptime(seconds: number) {
   const d = Math.floor(seconds / 86400);
   const h = Math.floor((seconds % 86400) / 3600);
@@ -40,8 +40,8 @@ function barColor(pct: number) {
   return "bg-destructive";
 }
 
-/* ─── Page ─── */
 export default function SystemStatus() {
+  const { t } = useTranslation();
   const [data, setData] = useState<SystemData | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -52,11 +52,11 @@ export default function SystemStatus() {
       if (error) throw error;
       setData(resp as SystemData);
     } catch {
-      toast.error("Erro ao buscar status do sistema");
+      toast.error(t("systemStatus.fetchError"));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchStatus();
@@ -76,15 +76,14 @@ export default function SystemStatus() {
 
   return (
     <div className="p-4 md:p-6 max-w-[1200px] mx-auto space-y-6">
-      {/* Header */}
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
             <Server className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h1 className="text-xl font-bold text-foreground font-display tracking-tight">Status do Host</h1>
-            <p className="text-xs text-muted-foreground">Saúde do sistema em tempo real</p>
+            <h1 className="text-xl font-bold text-foreground font-display tracking-tight">{t("systemStatus.title")}</h1>
+            <p className="text-xs text-muted-foreground">{t("systemStatus.subtitle")}</p>
           </div>
         </div>
         <button
@@ -93,64 +92,36 @@ export default function SystemStatus() {
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-xs text-muted-foreground hover:text-foreground hover:border-primary/40 transition-colors disabled:opacity-50"
         >
           <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
-          Atualizar
+          {t("systemStatus.refresh")}
         </button>
       </motion.div>
 
-      {/* ── Top Cards ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}
         className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <InfoCard icon={MonitorCheck} label="Sistema Operacional" value={data.os.name} sub={`Kernel ${data.os.kernel}`} />
-        <InfoCard icon={Activity} label="Uptime do Sistema" value={fmtUptime(data.uptime.system_seconds)} sub={`App: ${fmtUptime(data.uptime.app_seconds)}`} />
-        <InfoCard icon={Database} label="Banco de Dados" value={`${data.database.size_mb} MB`} sub={data.database.engine} />
-        <InfoCard icon={Cpu} label="FLOWPULSE" value={`v${data.app_version}`} sub={`Porta 3060 • ${data.os.arch}`} />
+        <InfoCard icon={MonitorCheck} label={t("systemStatus.os")} value={data.os.name} sub={`Kernel ${data.os.kernel}`} />
+        <InfoCard icon={Activity} label={t("systemStatus.systemUptime")} value={fmtUptime(data.uptime.system_seconds)} sub={`App: ${fmtUptime(data.uptime.app_seconds)}`} />
+        <InfoCard icon={Database} label={t("systemStatus.database")} value={`${data.database.size_mb} MB`} sub={data.database.engine} />
+        <InfoCard icon={Cpu} label="FLOWPULSE" value={`v${data.app_version}`} sub={`${t("common.port")} 3060 • ${data.os.arch}`} />
       </motion.div>
 
-      {/* ── Resource Bars ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}
         className="glass-card rounded-xl p-6 space-y-5">
         <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-          <Activity className="h-4 w-4 text-primary" /> Monitoramento de Recursos
+          <Activity className="h-4 w-4 text-primary" /> {t("systemStatus.resourceMonitoring")}
         </h2>
-
-        {/* CPU */}
-        <ResourceBar
-          label="CPU"
-          detail={`${data.cpu.usage_percent}% • ${data.cpu.frequency_mhz} MHz`}
-          percent={data.cpu.usage_percent}
-        />
-
-        {/* RAM */}
-        <ResourceBar
-          label="Memória RAM"
-          detail={`${data.memory.used_gb} GB / ${data.memory.total_gb} GB (${data.memory.percent}%)`}
-          percent={data.memory.percent}
-        />
-
-        {/* Swap */}
-        <ResourceBar
-          label="Swap"
-          detail={`${data.swap.used_gb} GB / ${data.swap.total_gb} GB (${data.swap.percent}%)`}
-          percent={data.swap.percent}
-        />
-
-        {/* Disks */}
+        <ResourceBar label={t("systemStatus.cpu")} detail={`${data.cpu.usage_percent}% • ${data.cpu.frequency_mhz} MHz`} percent={data.cpu.usage_percent} />
+        <ResourceBar label={t("systemStatus.ram")} detail={`${data.memory.used_gb} GB / ${data.memory.total_gb} GB (${data.memory.percent}%)`} percent={data.memory.percent} />
+        <ResourceBar label={t("systemStatus.swap")} detail={`${data.swap.used_gb} GB / ${data.swap.total_gb} GB (${data.swap.percent}%)`} percent={data.swap.percent} />
         {data.disks.map((d) => (
-          <ResourceBar
-            key={d.mount}
-            label={`Disco ${d.mount}`}
-            detail={`${d.usedGb} GB / ${d.totalGb} GB (${d.percent}%)`}
-            percent={d.percent}
-          />
+          <ResourceBar key={d.mount} label={`${t("systemStatus.disk")} ${d.mount}`} detail={`${d.usedGb} GB / ${d.totalGb} GB (${d.percent}%)`} percent={d.percent} />
         ))}
       </motion.div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* ── CPU Cores Grid ── */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }}
           className="glass-card rounded-xl p-6 space-y-4">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Cpu className="h-4 w-4 text-primary" /> Detalhes da CPU
+            <Cpu className="h-4 w-4 text-primary" /> {t("systemStatus.cpuDetails")}
           </h2>
           <p className="text-[10px] text-muted-foreground font-mono">{data.cpu.model}</p>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
@@ -162,13 +133,9 @@ export default function SystemStatus() {
                 <div className="relative mx-auto w-12 h-12">
                   <svg viewBox="0 0 36 36" className="w-12 h-12 -rotate-90">
                     <circle cx="18" cy="18" r="15.5" fill="none" className="stroke-muted/40" strokeWidth="3" />
-                    <circle
-                      cx="18" cy="18" r="15.5" fill="none"
+                    <circle cx="18" cy="18" r="15.5" fill="none"
                       className={c.usage < 60 ? "stroke-[hsl(var(--neon-green))]" : c.usage < 85 ? "stroke-[hsl(var(--neon-amber))]" : "stroke-destructive"}
-                      strokeWidth="3"
-                      strokeDasharray={`${(c.usage / 100) * 97.4} 97.4`}
-                      strokeLinecap="round"
-                    />
+                      strokeWidth="3" strokeDasharray={`${(c.usage / 100) * 97.4} 97.4`} strokeLinecap="round" />
                   </svg>
                   <span className="absolute inset-0 flex items-center justify-center text-[11px] font-bold font-mono text-foreground">
                     {c.usage}%
@@ -179,11 +146,10 @@ export default function SystemStatus() {
           </div>
         </motion.div>
 
-        {/* ── Services ── */}
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}
           className="glass-card rounded-xl p-6 space-y-4">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <HardDrive className="h-4 w-4 text-primary" /> Status de Serviços
+            <HardDrive className="h-4 w-4 text-primary" /> {t("systemStatus.serviceStatus")}
           </h2>
           <div className="space-y-3">
             {data.services.map((svc) => (
@@ -201,16 +167,15 @@ export default function SystemStatus() {
                   <span className={`text-[10px] font-mono font-semibold uppercase ${
                     svc.status === "running" ? "text-[hsl(var(--neon-green))]" : "text-destructive"
                   }`}>
-                    {svc.status === "running" ? "ATIVO" : "INATIVO"}
+                    {svc.status === "running" ? t("systemStatus.active") : t("systemStatus.inactive")}
                   </span>
                 </div>
               </div>
             ))}
           </div>
-
           <div className="pt-2 border-t border-border/50">
             <p className="text-[10px] text-muted-foreground font-mono">
-              Última coleta: {new Date(data.collected_at).toLocaleString("pt-BR")}
+              {t("systemStatus.lastCollection")}: {new Date(data.collected_at).toLocaleString()}
             </p>
           </div>
         </motion.div>
@@ -218,8 +183,6 @@ export default function SystemStatus() {
     </div>
   );
 }
-
-/* ─── Sub-components ─── */
 
 function InfoCard({ icon: Icon, label, value, sub }: {
   icon: React.ComponentType<{ className?: string }>;

@@ -8,6 +8,7 @@ export interface Profile {
   email: string | null;
   job_title: string | null;
   phone: string | null;
+  language: string | null;
 }
 
 /**
@@ -30,7 +31,7 @@ export function useProfile() {
     if (!user) return;
     const { data } = await supabase
       .from("profiles")
-      .select("display_name, avatar_url, email, job_title, phone")
+      .select("display_name, avatar_url, email, job_title, phone, language")
       .eq("id", user.id)
       .single();
     if (data) {
