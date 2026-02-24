@@ -57,6 +57,7 @@ const settingsItems = [
 ];
 
 const systemItems = [
+  { title: "Status do Host", url: "/app/system/status", icon: Server },
   { title: "Atualizações", url: "/app/system/updates", icon: RefreshCw },
 ];
 

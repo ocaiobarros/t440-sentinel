@@ -33,6 +33,7 @@ import TenantsPage from "./pages/TenantsPage";
 import SLAGovernance from "./pages/SLAGovernance";
 import ViabilityPage from "./pages/ViabilityPage";
 import SystemUpdates from "./pages/SystemUpdates";
+import SystemStatus from "./pages/SystemStatus";
 import TelegramSettings from "./pages/TelegramSettings";
 import IncidentsPage from "./pages/IncidentsPage";
 import ServerMonitorList from "./pages/monitoring/ServerMonitorList";
@@ -122,6 +123,9 @@ const App = () => (
                       {/* System */}
                       <Route path="system/updates" element={
                         <ProtectedRoute roles={["admin"]}><SystemUpdates /></ProtectedRoute>
+                      } />
+                      <Route path="system/status" element={
+                        <ProtectedRoute roles={["admin"]}><SystemStatus /></ProtectedRoute>
                       } />
 
                       <Route path="*" element={<NotFound />} />
