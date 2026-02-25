@@ -97,10 +97,10 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
                 {t("header.helpResources")}
               </DropdownMenuLabel>
               <DropdownMenuSeparator className="bg-border/30" />
-              <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
+              <DropdownMenuItem onClick={() => navigate("/app/docs")} className="gap-2 text-xs cursor-pointer">
                 <BookOpen className="h-3.5 w-3.5" /> {t("header.documentation")}
               </DropdownMenuItem>
-              <DropdownMenuItem className="gap-2 text-xs cursor-pointer">
+              <DropdownMenuItem onClick={() => navigate("/app/docs")} className="gap-2 text-xs cursor-pointer">
                 <MessageCircle className="h-3.5 w-3.5" /> {t("header.support")}
               </DropdownMenuItem>
               <DropdownMenuItem className="gap-2 text-xs cursor-pointer">

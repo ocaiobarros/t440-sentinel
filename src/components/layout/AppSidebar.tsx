@@ -111,9 +111,7 @@ export function AppSidebar() {
   const { operationsItems, monitoringItems, engineeringItems, governanceItems, settingsItems, systemItems } = useSidebarItems();
   const [supportOpen, setSupportOpen] = useState(false);
 
-  const helpItems = [
-    { title: t("sidebar.docs"), url: "/app/docs", icon: BookOpen },
-  ];
+  const helpItems: { title: string; url: string; icon: React.ComponentType<{ className?: string }> }[] = [];
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border sidebar-deep-space">
@@ -133,7 +131,6 @@ export function AppSidebar() {
         <NavGroup label={t("sidebar.monitoring")} items={monitoringItems} collapsed={collapsed} />
         <NavGroup label={t("sidebar.engineering")} items={engineeringItems} collapsed={collapsed} />
         <NavGroup label={t("sidebar.governance")} items={governanceItems} collapsed={collapsed} />
-        <NavGroup label={t("sidebar.help")} items={helpItems} collapsed={collapsed} />
 
         {/* Support button */}
         <SidebarGroup>
