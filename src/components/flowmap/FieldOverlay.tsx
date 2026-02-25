@@ -105,7 +105,7 @@ export default function FieldOverlay({ mapRef, hosts, ctos = [], statusMap, link
     const handler = (e: Event) => {
       const hostId = (e as CustomEvent).detail;
       const host = hosts.find((h) => h.id === hostId);
-      console.log("[FieldOverlay] field-host-tap received, hostId:", hostId, "found:", !!host);
+      // field-host-tap received
       if (host) { setSelectedHost(host); setSelectedCTO(null); }
     };
     window.addEventListener("field-host-tap", handler);

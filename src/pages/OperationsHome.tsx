@@ -5,7 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   AlertTriangle, ShieldCheck, Activity, Wifi,
   Server, MapPin, TrendingUp, Clock, Zap,
-  ChevronRight, BarChart3, Globe2
+  ChevronRight, BarChart3, Globe2, BookOpen, Send
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
@@ -278,6 +278,31 @@ export default function OperationsHome() {
           </div>
         </motion.div>
       </div>
+
+      {/* ── Announcement Banner ── */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.4 }}
+        className="glass-card rounded-xl p-4 border-primary/20 bg-primary/[0.03] flex items-center gap-4 cursor-pointer hover:border-primary/40 transition-all"
+        onClick={() => navigate("/app/docs")}
+      >
+        <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+          <BookOpen className="h-5 w-5 text-primary" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-foreground">{t("operations.helpCenterTitle")}</p>
+          <p className="text-[11px] text-muted-foreground">{t("operations.helpCenterDesc")}</p>
+        </div>
+        <button
+          onClick={(e) => { e.stopPropagation(); navigate("/app/docs"); }}
+          className="hidden sm:flex items-center gap-1.5 text-[10px] text-primary font-semibold shrink-0 hover:underline"
+        >
+          <Send className="h-3 w-3" />
+          {t("operations.botManual")}
+        </button>
+        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+      </motion.div>
 
       {/* ── BGP Health + Quick Links row ── */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

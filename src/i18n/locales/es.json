@@ -139,7 +139,10 @@
     "noRecentActivity": "Sin actividad reciente",
     "accessModule": "Acceder módulo",
     "inventory": "Inventario",
-    "connections": "Conexiones"
+    "connections": "Conexiones",
+    "helpCenterTitle": "🆕 ¡Nuevo Centro de Ayuda disponible!",
+    "helpCenterDesc": "Accede a guías de instalación, BGP Flow, Bot Telegram y más en Ayuda > Documentación.",
+    "botManual": "Manual del Bot"
   },
   "flowmap": {
     "title": "FLOWMAP",
@@ -487,6 +490,8 @@
     "fix": "Corrección",
     "improvement": "Mejora",
     "modules": {
+      "install": "Instalación",
+      "installDesc": "Guía de instalación del paquete .deb vía Google Drive y permisos sudoers",
       "flowmap": "FlowMap",
       "flowmapDesc": "Topología geoespacial NOC con estado en tiempo real y detección de anillo",
       "bgp": "BGP Flow Monitor",

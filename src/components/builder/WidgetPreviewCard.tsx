@@ -1,24 +1,35 @@
-import React from "react";
+import React, { useState } from "react";
 import type { WidgetConfig } from "@/types/builder";
 import DynamicIcon from "./DynamicIcon";
 import { buildWidgetCSS, getGlassClass } from "@/lib/widget-style-utils";
+import { MoreVertical, Copy, Settings2, Trash2 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 interface Props {
   widget: WidgetConfig;
   isSelected: boolean;
   onClick: (e?: React.MouseEvent) => void;
   isPreview?: boolean;
+  onDuplicate?: (widget: WidgetConfig) => void;
+  onEdit?: (widget: WidgetConfig) => void;
+  onDelete?: (id: string) => void;
 }
 
 /** Use themed primary color, fallback to explicit style color */
 const PRIMARY_CSS = "hsl(var(--primary))";
 
-const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSelected, onClick, isPreview }: Props) {
+const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSelected, onClick, isPreview, onDuplicate, onEdit, onDelete }: Props) {
   const s = widget.style;
   const inlineCSS = buildWidgetCSS(s as any);
-
   const glassClass = getGlassClass(s as any);
   const selectedClass = isSelected ? "ring-2 ring-primary ring-offset-1 ring-offset-background" : "";
+  const isEditable = !isPreview && (onDuplicate || onEdit || onDelete);
 
   return (
     <div
@@ -26,14 +37,14 @@ const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSele
         e.stopPropagation();
         onClick(e);
       }}
-      className={`h-full w-full rounded-lg border border-border/50 overflow-hidden cursor-pointer transition-all ${glassClass} ${selectedClass} ${isPreview ? "" : "hover:border-primary/30"}`}
+      className={`h-full w-full rounded-lg border border-border/50 overflow-hidden cursor-pointer transition-all group/widget ${glassClass} ${selectedClass} ${isPreview ? "" : "hover:border-primary/30"}`}
       style={{
         ...inlineCSS,
         borderStyle: "solid",
       }}
     >
       {/* Title bar */}
-      <div className="flex items-center gap-1.5 mb-1 widget-drag-handle cursor-grab active:cursor-grabbing" style={{ padding: `${(s.padding ?? 16) * 0.5}px ${s.padding ?? 16}px 0` }}>
+      <div className="flex items-center gap-1.5 mb-1 widget-drag-handle cursor-grab active:cursor-grabbing relative" style={{ padding: `${(s.padding ?? 16) * 0.5}px ${s.padding ?? 16}px 0` }}>
         {s.icon && (
           <DynamicIcon
             name={s.icon}
@@ -42,7 +53,7 @@ const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSele
           />
         )}
         <span
-          className="text-[10px] uppercase tracking-wider truncate font-semibold"
+          className="text-[10px] uppercase tracking-wider truncate font-semibold flex-1"
           style={{
             fontFamily: s.titleFont || "'Orbitron', sans-serif",
             color: s.labelColor || s.textColor || "hsl(var(--muted-foreground))",
@@ -50,6 +61,51 @@ const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSele
         >
           {widget.title}
         </span>
+
+        {/* Context menu — edit mode only */}
+        {isEditable && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                className="opacity-0 group-hover/widget:opacity-100 transition-opacity h-5 w-5 rounded flex items-center justify-center
+                  hover:bg-muted/40 text-muted-foreground hover:text-foreground z-20"
+                onClick={(e) => e.stopPropagation()}
+                onMouseDown={(e) => e.stopPropagation()}
+              >
+                <MoreVertical className="w-3 h-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              className="w-44 bg-card/95 backdrop-blur-xl border-border/50 z-50"
+              onClick={(e) => e.stopPropagation()}
+              onMouseDown={(e) => e.stopPropagation()}
+            >
+              {onDuplicate && (
+                <DropdownMenuItem onClick={() => onDuplicate(widget)} className="gap-2 text-xs cursor-pointer">
+                  <Copy className="h-3.5 w-3.5" />
+                  Duplicar
+                  <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">Ctrl+D</span>
+                </DropdownMenuItem>
+              )}
+              {onEdit && (
+                <DropdownMenuItem onClick={() => onEdit(widget)} className="gap-2 text-xs cursor-pointer">
+                  <Settings2 className="h-3.5 w-3.5" />
+                  Editar
+                  <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">Enter</span>
+                </DropdownMenuItem>
+              )}
+              {(onDuplicate || onEdit) && onDelete && <DropdownMenuSeparator className="bg-border/30" />}
+              {onDelete && (
+                <DropdownMenuItem onClick={() => onDelete(widget.id)} className="gap-2 text-xs cursor-pointer text-destructive focus:text-destructive">
+                  <Trash2 className="h-3.5 w-3.5" />
+                  Excluir
+                  <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">Del</span>
+                </DropdownMenuItem>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
       </div>
 
       {/* Content area - type-specific preview */}

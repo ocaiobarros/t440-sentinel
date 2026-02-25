@@ -158,7 +158,7 @@ export function useIdracLive(): UseIdracLiveReturn {
           }) as Array<{ inventory?: Record<string, string> }>;
           if (invResult?.[0]?.inventory) {
             inventory = invResult[0].inventory;
-            console.log("[Inventory]", JSON.stringify(inventory));
+            // Inventory loaded
           }
         } catch (e) {
           console.warn("Failed to fetch host inventory:", e);

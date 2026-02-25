@@ -139,7 +139,10 @@
     "noRecentActivity": "No recent activity",
     "accessModule": "Access module",
     "inventory": "Inventory",
-    "connections": "Connections"
+    "connections": "Connections",
+    "helpCenterTitle": "🆕 New Help Center available!",
+    "helpCenterDesc": "Access installation guides, BGP Flow, Telegram Bot manuals and more in Help > Documentation.",
+    "botManual": "Bot Manual"
   },
   "flowmap": {
     "title": "FLOWMAP",
@@ -487,6 +490,8 @@
     "fix": "Fix",
     "improvement": "Improvement",
     "modules": {
+      "install": "Installation",
+      "installDesc": "Installation guide for .deb package via Google Drive and sudoers permissions",
       "flowmap": "FlowMap",
       "flowmapDesc": "Geospatial NOC topology with real-time status and ring detection",
       "bgp": "BGP Flow Monitor",

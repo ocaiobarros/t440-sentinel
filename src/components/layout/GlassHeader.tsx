@@ -110,7 +110,7 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-border/30" />
               <DropdownMenuItem disabled className="gap-2 text-[10px] text-muted-foreground/50">
-                <Info className="h-3 w-3" /> FlowPulse v1.0-Alpha
+                <Info className="h-3 w-3" /> FlowPulse v1.1.0-Alpha | @flowpulselabsbot
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>

@@ -187,6 +187,18 @@ export default function DashboardBuilder() {
     }
   }, [selectedWidgetId, pushHistory]);
 
+  const duplicateWidget = useCallback((widget: WidgetConfig) => {
+    pushHistory();
+    const cloned: WidgetConfig = {
+      ...JSON.parse(JSON.stringify(widget)),
+      id: crypto.randomUUID(),
+      x: widget.x + 2,
+      y: widget.y + 1,
+      title: `${widget.title} (cópia)`,
+    };
+    setConfig((prev) => ({ ...prev, widgets: [...prev.widgets, cloned] }));
+  }, [pushHistory]);
+
   // ─── Drag / Resize handling ───
   // CRITICAL: We ONLY update widget positions on drag/resize STOP events.
   // We do NOT use onLayoutChange because it fires on every width recalculation
@@ -490,6 +502,13 @@ export default function DashboardBuilder() {
                       widget={widget}
                       isSelected={selectedWidgetId === widget.id}
                       onClick={(e) => handleWidgetClick(widget.id, e!)}
+                      onDuplicate={duplicateWidget}
+                      onEdit={(w) => {
+                        setSelectedWidgetId(w.id);
+                        setSidebarMode("config");
+                        setSidebarOpen(true);
+                      }}
+                      onDelete={deleteWidget}
                     />
                   </div>
                 ))}
