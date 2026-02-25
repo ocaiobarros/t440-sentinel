@@ -42,6 +42,8 @@ import VirtualMachinesList from "./pages/monitoring/VirtualMachinesList";
 import BgpFlowList from "./pages/monitoring/BgpFlowList";
 import FleetIntelligenceList from "./pages/monitoring/FleetIntelligenceList";
 import DashboardsList from "./pages/monitoring/DashboardsList";
+import PrinterList from "./pages/monitoring/PrinterList";
+import PrinterIntelligence from "./pages/PrinterIntelligence";
 import UserSettings from "./pages/UserSettings";
 import DocsPage from "./pages/DocsPage";
 
@@ -98,6 +100,9 @@ const App = () => (
                       <Route path="monitoring/fleet" element={<FleetIntelligenceList />} />
                       <Route path="monitoring/fleet/new" element={<FleetIntelligence />} />
                       <Route path="monitoring/fleet/:dashboardId" element={<FleetIntelligence />} />
+                      <Route path="monitoring/printers" element={<PrinterList />} />
+                      <Route path="monitoring/printers/new" element={<PrinterIntelligence />} />
+                      <Route path="monitoring/printers/:dashboardId" element={<PrinterIntelligence />} />
 
                       {/* Governance */}
                       <Route path="governance/sla" element={<SLAGovernance />} />

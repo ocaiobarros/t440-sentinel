@@ -6,6 +6,7 @@ import {
   FileText, Clock, Settings, Users, Building2, Zap, ChevronRight,
   Server, Box, MonitorCheck, Fuel, Globe, LayoutDashboard,
   RefreshCw, Send, UserCog, BookOpen, HelpCircle, Home, ExternalLink, Eye,
+  Printer,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -45,6 +46,7 @@ function useSidebarItems() {
     { title: t("sidebar.virtualMachines"), url: "/app/monitoring/virtual-machines", icon: MonitorCheck },
     { title: t("sidebar.bgpFlow"), url: "/app/monitoring/bgp", icon: Globe },
     { title: t("sidebar.fleetIntelligence"), url: "/app/monitoring/fleet", icon: Fuel },
+    { title: t("sidebar.printers"), url: "/app/monitoring/printers", icon: Printer },
   ];
 
   const engineeringItems = [
