@@ -1,6 +1,6 @@
 -- ╔══════════════════════════════════════════════════════════════════╗
 -- ║  FLOWPULSE INTELLIGENCE — Schema On-Premise (PostgreSQL Puro)  ║
--- ║  © 2026 CBLabs — Versão 1.0                                    ║
+-- ║  © 2026 CBLabs — Versão 1.1                                    ║
 -- ╚══════════════════════════════════════════════════════════════════╝
 
 -- Executar como superusuário no banco "flowpulse"
@@ -133,9 +133,10 @@ CREATE TABLE IF NOT EXISTS zabbix_connections (
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   name TEXT NOT NULL,
   url TEXT NOT NULL,
-  token_ciphertext TEXT NOT NULL,
-  token_iv TEXT NOT NULL,
-  token_tag TEXT NOT NULL,
+  username TEXT NOT NULL DEFAULT '',
+  password_ciphertext TEXT NOT NULL,
+  password_iv TEXT NOT NULL,
+  password_tag TEXT NOT NULL,
   encryption_version INT DEFAULT 1,
   is_active BOOLEAN DEFAULT true,
   created_by UUID,
@@ -561,6 +562,8 @@ CREATE INDEX IF NOT EXISTS idx_flow_map_ctos_map ON flow_map_ctos(map_id, tenant
 CREATE INDEX IF NOT EXISTS idx_alert_instances_tenant ON alert_instances(tenant_id, status);
 CREATE INDEX IF NOT EXISTS idx_alert_events_alert ON alert_events(alert_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant ON audit_logs(tenant_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_printer_configs_tenant ON printer_configs(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_billing_logs_tenant ON billing_logs(tenant_id, period);
 
 -- ═══════════════════════════════════════════════════
 -- ─── FUNÇÕES UTILITÁRIAS ──────────────────────────
@@ -583,7 +586,8 @@ BEGIN
     'profiles','dashboards','widgets','flow_maps','flow_map_hosts',
     'flow_map_links','flow_map_ctos','flow_map_cables','alert_rules',
     'alert_instances','zabbix_connections','rms_connections',
-    'maintenance_windows','sla_policies','escalation_policies'
+    'maintenance_windows','sla_policies','escalation_policies',
+    'printer_configs'
   ]) LOOP
     EXECUTE format(
       'DROP TRIGGER IF EXISTS trg_updated_at ON %I; CREATE TRIGGER trg_updated_at BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION update_updated_at()',
@@ -628,6 +632,6 @@ END $$;
 COMMIT;
 
 -- ═══════════════════════════════════════════════════
--- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v1.0
+-- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v1.1
 -- © 2026 CBLabs
 -- ═══════════════════════════════════════════════════

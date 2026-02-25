@@ -2,8 +2,8 @@
 /**
  * ╔══════════════════════════════════════════════════════════════════╗
  * │  FLOWPULSE INTELLIGENCE — Servidor On-Premise (Supabase-Compat) │
- * │  Emula PostgREST + GoTrue para que o frontend funcione sem      │
- * │  alterações — basta apontar VITE_SUPABASE_URL para este server  │
+ * │  Emula PostgREST + GoTrue + Edge Functions para que o frontend  │
+ * │  funcione sem alterações — basta apontar VITE_SUPABASE_URL      │
  * │  © 2026 CBLabs                                                  │
  * ╚══════════════════════════════════════════════════════════════════╝
  */
@@ -16,6 +16,7 @@ const cors = require("cors");
 const multer = require("multer");
 const path = require("path");
 const fs = require("fs");
+const crypto = require("crypto");
 
 /* ─── ENV ─────────────────────────────────────────── */
 require("dotenv").config({ path: path.join(__dirname, ".env") });
@@ -26,6 +27,7 @@ const JWT_EXPIRY = process.env.JWT_EXPIRY || "24h";
 const STORAGE_DIR = process.env.STORAGE_DIR || "/var/lib/flowpulse/data";
 const STATIC_DIR = process.env.STATIC_DIR || path.join(__dirname, "dist");
 const ANON_KEY = process.env.ANON_KEY || "flowpulse-anon-key";
+const ZABBIX_ENCRYPTION_KEY = process.env.ZABBIX_ENCRYPTION_KEY || "flowpulse-zabbix-key-change-me";
 
 const pool = new Pool({
   host: process.env.DB_HOST || "127.0.0.1",
@@ -81,15 +83,12 @@ function requireAuth(req, res, next) {
 
 /* ═══════════════════════════════════════════════════════════
    GoTrue-COMPATIBLE AUTH ROUTES (/auth/v1/*)
-   O Supabase client chama estas rotas automaticamente
    ═══════════════════════════════════════════════════════════ */
 
-// POST /auth/v1/token?grant_type=password  (supabase.auth.signInWithPassword)
 app.post("/auth/v1/token", async (req, res) => {
   try {
     const grantType = req.query.grant_type;
     if (grantType === "refresh_token") {
-      // Refresh: decode old token and re-issue
       const oldToken = req.body.refresh_token;
       try {
         const decoded = jwt.verify(oldToken, JWT_SECRET, { ignoreExpiration: true });
@@ -110,7 +109,6 @@ app.post("/auth/v1/token", async (req, res) => {
       }
     }
 
-    // password grant
     const { email, password } = req.body;
     const resolvedEmail = email.includes("@") ? email : `${email}@flowpulse.local`;
 
@@ -137,7 +135,6 @@ app.post("/auth/v1/token", async (req, res) => {
   }
 });
 
-// GET /auth/v1/user  (supabase.auth.getUser)
 app.get("/auth/v1/user", requireAuth, async (req, res) => {
   try {
     const { rows } = await pool.query(
@@ -157,10 +154,8 @@ app.get("/auth/v1/user", requireAuth, async (req, res) => {
   }
 });
 
-// POST /auth/v1/logout  (supabase.auth.signOut)
 app.post("/auth/v1/logout", (_req, res) => res.json({}));
 
-// PUT /auth/v1/user  (supabase.auth.updateUser — e.g. change password)
 app.put("/auth/v1/user", requireAuth, async (req, res) => {
   try {
     const { password, data } = req.body;
@@ -169,7 +164,6 @@ app.put("/auth/v1/user", requireAuth, async (req, res) => {
       await pool.query(`UPDATE auth_users SET encrypted_password = $1 WHERE id = $2`, [hash, req.user.sub]);
     }
     if (data) {
-      // Update profile fields
       const updates = [];
       const vals = [];
       let idx = 1;
@@ -184,7 +178,6 @@ app.put("/auth/v1/user", requireAuth, async (req, res) => {
         await pool.query(`UPDATE profiles SET ${updates.join(", ")} WHERE id = $${idx}`, vals);
       }
     }
-    // Return updated user
     const { rows } = await pool.query(
       `SELECT p.id, p.email, p.display_name, p.tenant_id, p.avatar_url, p.language, p.phone, p.job_title, ur.role
        FROM profiles p LEFT JOIN user_roles ur ON ur.user_id = p.id AND ur.tenant_id = p.tenant_id
@@ -229,18 +222,15 @@ function buildSessionResponse(u, token) {
     access_token: token,
     token_type: "bearer",
     expires_in: 86400,
-    refresh_token: token, // simplificado: usa o mesmo token
+    refresh_token: token,
     user: buildUserObject(u),
   };
 }
 
 /* ═══════════════════════════════════════════════════════════
    PostgREST-COMPATIBLE REST ROUTES (/rest/v1/*)
-   O Supabase client chama: supabase.from('table').select()
-   que gera GET /rest/v1/table?select=*&col=eq.value
    ═══════════════════════════════════════════════════════════ */
 
-// Whitelist de tabelas permitidas
 const ALLOWED_TABLES = new Set([
   "tenants", "profiles", "user_roles", "dashboards", "widgets",
   "zabbix_connections", "flow_maps", "flow_map_hosts", "flow_map_links",
@@ -254,17 +244,8 @@ const ALLOWED_TABLES = new Set([
   "printer_configs", "billing_logs", "rms_connections",
 ]);
 
-// Tabelas que NÃO filtram por tenant_id (ou usam outro mecanismo)
 const NO_TENANT_FILTER = new Set(["widgets"]);
-// Tabelas onde tenant_id vem via join (widgets -> dashboards)
-const TENANT_VIA_JOIN = {
-  widgets: { join: "dashboards", on: "dashboard_id", fk: "id" },
-};
 
-/**
- * Parseia filtros PostgREST da query string
- * Ex: ?name=eq.MeuMapa&status=in.(open,ack)&order=created_at.desc&limit=100
- */
 function parsePostgrestFilters(query, tenantId, table) {
   const conditions = [];
   const values = [];
@@ -274,7 +255,6 @@ function parsePostgrestFilters(query, tenantId, table) {
   let selectCols = "*";
   let idx = 1;
 
-  // Tenant isolation (exceto tabelas sem tenant_id)
   if (!NO_TENANT_FILTER.has(table) && tenantId) {
     conditions.push(`"${table}".tenant_id = $${idx++}`);
     values.push(tenantId);
@@ -282,7 +262,6 @@ function parsePostgrestFilters(query, tenantId, table) {
 
   for (const [key, val] of Object.entries(query)) {
     if (key === "order") {
-      // order=created_at.desc ou order=name.asc
       const parts = val.split(".");
       const col = parts[0].replace(/[^a-z_]/g, "");
       const dir = parts[1]?.toUpperCase() === "ASC" ? "ASC" : "DESC";
@@ -298,7 +277,6 @@ function parsePostgrestFilters(query, tenantId, table) {
     const col = key.replace(/[^a-z_]/g, "");
     if (!col) continue;
 
-    // PostgREST operators
     if (typeof val === "string") {
       if (val.startsWith("eq.")) {
         conditions.push(`"${table}"."${col}" = $${idx++}`);
@@ -330,19 +308,16 @@ function parsePostgrestFilters(query, tenantId, table) {
         else if (v === "true") conditions.push(`"${table}"."${col}" IS TRUE`);
         else if (v === "false") conditions.push(`"${table}"."${col}" IS FALSE`);
       } else if (val.startsWith("in.")) {
-        // in.(val1,val2,val3)
-        const inner = val.slice(4, -1); // remove "in.(" and ")"
+        const inner = val.slice(4, -1);
         const items = inner.split(",");
         const placeholders = items.map((_item, i) => `$${idx + i}`);
         conditions.push(`"${table}"."${col}" IN (${placeholders.join(",")})`);
         items.forEach(item => values.push(item));
         idx += items.length;
       } else if (val.startsWith("cs.")) {
-        // contains (array)
         conditions.push(`"${table}"."${col}" @> $${idx++}`);
         values.push(val.slice(3));
       } else if (val.startsWith("not.")) {
-        // not.eq.value, not.is.null, etc.
         const rest = val.slice(4);
         if (rest.startsWith("eq.")) {
           conditions.push(`"${table}"."${col}" != $${idx++}`);
@@ -358,7 +333,7 @@ function parsePostgrestFilters(query, tenantId, table) {
   return { where, values, orderBy, limit: limitVal, offset: offsetVal, selectCols };
 }
 
-// GET /rest/v1/:table — SELECT
+// GET /rest/v1/:table
 app.get("/rest/v1/:table", requireAuth, async (req, res) => {
   try {
     const table = req.params.table;
@@ -367,7 +342,6 @@ app.get("/rest/v1/:table", requireAuth, async (req, res) => {
     const tenantId = req.user.app_metadata?.tenant_id;
     const { where, values, orderBy, limit, offset } = parsePostgrestFilters(req.query, tenantId, table);
 
-    // Handle widgets (tenant via join)
     let query;
     if (table === "widgets" && tenantId) {
       const extraWhere = where ? `${where} AND "dashboards"."tenant_id" = $${values.length + 1}` : `WHERE "dashboards"."tenant_id" = $1`;
@@ -378,9 +352,6 @@ app.get("/rest/v1/:table", requireAuth, async (req, res) => {
     }
 
     const { rows } = await pool.query(query, values);
-
-    // Supabase client expects array response
-    // Set content-range header for count
     res.setHeader("Content-Range", `0-${rows.length}/*`);
     return res.json(rows);
   } catch (err) {
@@ -389,7 +360,7 @@ app.get("/rest/v1/:table", requireAuth, async (req, res) => {
   }
 });
 
-// POST /rest/v1/:table — INSERT
+// POST /rest/v1/:table
 app.post("/rest/v1/:table", requireAuth, async (req, res) => {
   try {
     const table = req.params.table;
@@ -399,16 +370,13 @@ app.post("/rest/v1/:table", requireAuth, async (req, res) => {
     const prefer = req.headers.prefer || "";
     const returnRep = prefer.includes("return=representation");
 
-    // Handle single or array insert
     const items = Array.isArray(req.body) ? req.body : [req.body];
     const results = [];
 
     for (const item of items) {
-      // Inject tenant_id if table has it and not widgets
       if (!NO_TENANT_FILTER.has(table) && tenantId && !item.tenant_id) {
         item.tenant_id = tenantId;
       }
-      // Inject created_by
       if (req.user.sub && !item.created_by && table !== "profiles" && table !== "user_roles") {
         item.created_by = req.user.sub;
       }
@@ -418,11 +386,10 @@ app.post("/rest/v1/:table", requireAuth, async (req, res) => {
       const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
       const columns = keys.map(k => `"${k}"`).join(", ");
 
-      // Handle upsert (Prefer: resolution=merge-duplicates)
       let sql;
       if (prefer.includes("resolution=merge-duplicates")) {
         const onConflict = req.query.on_conflict || "id";
-        const updateSet = keys.filter(k => k !== onConflict).map((k, i) => `"${k}" = EXCLUDED."${k}"`).join(", ");
+        const updateSet = keys.filter(k => k !== onConflict).map((k) => `"${k}" = EXCLUDED."${k}"`).join(", ");
         sql = `INSERT INTO "${table}" (${columns}) VALUES (${placeholders}) ON CONFLICT ("${onConflict}") DO UPDATE SET ${updateSet} RETURNING *`;
       } else {
         sql = `INSERT INTO "${table}" (${columns}) VALUES (${placeholders}) RETURNING *`;
@@ -432,15 +399,14 @@ app.post("/rest/v1/:table", requireAuth, async (req, res) => {
       results.push(rows[0]);
     }
 
-    const status = returnRep ? 201 : 201;
-    return res.status(status).json(returnRep ? (Array.isArray(req.body) ? results : results[0]) : {});
+    return res.status(201).json(returnRep ? (Array.isArray(req.body) ? results : results[0]) : {});
   } catch (err) {
     console.error(`[REST POST /${req.params.table}]`, err);
     return res.status(400).json({ message: err.message, code: "PGRST000" });
   }
 });
 
-// PATCH /rest/v1/:table — UPDATE
+// PATCH /rest/v1/:table
 app.patch("/rest/v1/:table", requireAuth, async (req, res) => {
   try {
     const table = req.params.table;
@@ -472,7 +438,7 @@ app.patch("/rest/v1/:table", requireAuth, async (req, res) => {
   }
 });
 
-// DELETE /rest/v1/:table — DELETE
+// DELETE /rest/v1/:table
 app.delete("/rest/v1/:table", requireAuth, async (req, res) => {
   try {
     const table = req.params.table;
@@ -494,17 +460,25 @@ app.delete("/rest/v1/:table", requireAuth, async (req, res) => {
 
 /* ═══════════════════════════════════════════════════════════
    RPC ROUTES (/rest/v1/rpc/*)
-   supabase.rpc('function_name', { args })
    ═══════════════════════════════════════════════════════════ */
 
-// POST /rest/v1/rpc/:fn
 app.post("/rest/v1/rpc/:fn", requireAuth, async (req, res) => {
   try {
     const fn = req.params.fn.replace(/[^a-z_]/g, "");
     const tenantId = req.user.app_metadata?.tenant_id;
 
-    // Whitelist de funções permitidas
     const RPC_HANDLERS = {
+      is_super_admin: async () => {
+        const userId = req.body.p_user_id || req.user.sub;
+        const { rows } = await pool.query(
+          `SELECT EXISTS (
+            SELECT 1 FROM profiles
+            WHERE id = $1 AND email IN ('caio.barros@madeplant.com.br', 'admin@flowpulse.local')
+          ) AS result`,
+          [userId]
+        );
+        return rows[0]?.result ?? false;
+      },
       get_user_tenant_id: async () => {
         const { rows } = await pool.query(`SELECT tenant_id FROM profiles WHERE id = $1`, [req.user.sub]);
         return rows[0]?.tenant_id || null;
@@ -531,7 +505,6 @@ app.post("/rest/v1/rpc/:fn", requireAuth, async (req, res) => {
       },
       get_map_effective_status: async () => {
         const { map_id } = req.body;
-        // Simplified version — returns hosts with their status
         const { rows } = await pool.query(
           `SELECT h.id AS host_id, h.current_status::TEXT AS effective_status,
                   (h.current_status = 'DOWN') AS is_root_cause, 0 AS depth
@@ -542,7 +515,6 @@ app.post("/rest/v1/rpc/:fn", requireAuth, async (req, res) => {
       },
       alert_transition: async () => {
         const { p_alert_id, p_to, p_user_id, p_message, p_payload } = req.body;
-        // Get current state
         const { rows: [alert] } = await pool.query(
           `SELECT status, tenant_id FROM alert_instances WHERE id = $1 AND tenant_id = $2`,
           [p_alert_id, tenantId]
@@ -593,54 +565,427 @@ app.post("/rest/v1/rpc/:fn", requireAuth, async (req, res) => {
 });
 
 /* ═══════════════════════════════════════════════════════════
-   STORAGE ROUTES (/storage/v1/*)
-   Emula Supabase Storage API
+   ZABBIX PROXY — AES-GCM Decryption + Zabbix JSON-RPC
+   Emula a Edge Function "zabbix-proxy"
    ═══════════════════════════════════════════════════════════ */
 
-// POST /storage/v1/object/:bucket  (upload)
+// Zabbix auth token cache (connectionId → { token, expiresAt })
+const zabbixTokenCache = new Map();
+
+async function decryptAesGcm(ciphertext, iv, tag, keyStr) {
+  // Derive 256-bit key from any input
+  let keyBuffer;
+  if (/^[0-9a-fA-F]{64}$/.test(keyStr)) {
+    keyBuffer = Buffer.from(keyStr, "hex");
+  } else {
+    keyBuffer = crypto.createHash("sha256").update(keyStr).digest();
+  }
+  const decipher = crypto.createDecipheriv("aes-256-gcm", keyBuffer, Buffer.from(iv, "hex"));
+  decipher.setAuthTag(Buffer.from(tag, "hex"));
+  let decrypted = decipher.update(Buffer.from(ciphertext, "hex"), undefined, "utf8");
+  decrypted += decipher.final("utf8");
+  return decrypted;
+}
+
+function buildZabbixApiUrl(base) {
+  const trimmed = base.replace(/\/+$/, "");
+  if (trimmed.endsWith("/api_jsonrpc.php")) return trimmed;
+  return `${trimmed}/api_jsonrpc.php`;
+}
+
+async function zabbixLogin(url, username, password) {
+  const endpoint = buildZabbixApiUrl(url);
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", method: "user.login", params: { username, password }, id: 1 }),
+    signal: AbortSignal.timeout(30000),
+  });
+  const data = await resp.json();
+  if (data.error) throw new Error(`Zabbix login failed: ${JSON.stringify(data.error)}`);
+  return data.result;
+}
+
+async function zabbixCall(url, authToken, method, params = {}) {
+  const allowed = [
+    "host.get", "hostgroup.get", "item.get", "history.get", "trigger.get",
+    "problem.get", "event.get", "template.get", "application.get",
+    "graph.get", "trend.get", "dashboard.get",
+  ];
+  if (!allowed.includes(method)) throw new Error(`Method "${method}" not allowed`);
+
+  const endpoint = buildZabbixApiUrl(url);
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ jsonrpc: "2.0", method, params, auth: authToken, id: 2 }),
+    signal: AbortSignal.timeout(30000),
+  });
+  if (!resp.ok) throw new Error(`Zabbix HTTP ${resp.status}`);
+  const data = await resp.json();
+  if (data.error) throw new Error(`Zabbix API error (${method}): ${JSON.stringify(data.error)}`);
+  return data.result;
+}
+
+async function getZabbixAuthToken(url, username, password, connectionId) {
+  const cached = zabbixTokenCache.get(connectionId);
+  if (cached && cached.expiresAt > Date.now()) return cached.token;
+  const token = await zabbixLogin(url, username, password);
+  zabbixTokenCache.set(connectionId, { token, expiresAt: Date.now() + 10 * 60 * 1000 });
+  return token;
+}
+
+/** Core function to perform a Zabbix API call given a connection_id */
+async function executeZabbixProxy(connectionId, method, params, tenantId) {
+  const { rows } = await pool.query(
+    `SELECT id, url, username, password_ciphertext, password_iv, password_tag, is_active
+     FROM zabbix_connections WHERE id = $1 AND tenant_id = $2`,
+    [connectionId, tenantId]
+  );
+  if (rows.length === 0) throw new Error("Connection not found or access denied");
+  const conn = rows[0];
+  if (!conn.is_active) throw new Error("Connection is disabled");
+
+  const password = await decryptAesGcm(conn.password_ciphertext, conn.password_iv, conn.password_tag, ZABBIX_ENCRYPTION_KEY);
+  const authToken = await getZabbixAuthToken(conn.url, conn.username, password, conn.id);
+  return await zabbixCall(conn.url, authToken, method, params);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EDGE FUNCTIONS (/functions/v1/*)
+   Implementação local das Edge Functions do Supabase
+   ═══════════════════════════════════════════════════════════ */
+
+const EDGE_FUNCTION_HANDLERS = {
+  /* ── zabbix-proxy ────────────────────────────── */
+  "zabbix-proxy": async (req, res) => {
+    try {
+      const { connection_id, method, params } = req.body;
+      if (!connection_id || !method) return res.status(400).json({ error: "connection_id and method are required" });
+      const tenantId = req.user.app_metadata?.tenant_id;
+      const result = await executeZabbixProxy(connection_id, method, params || {}, tenantId);
+      return res.json({ result });
+    } catch (err) {
+      console.error("[zabbix-proxy]", err);
+      if (err.message.includes("login failed")) zabbixTokenCache.clear();
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  /* ── printer-status ──────────────────────────── */
+  "printer-status": async (req, res) => {
+    try {
+      const tenantId = req.body.tenant_id || req.user.app_metadata?.tenant_id;
+      const action = req.body.action;
+      if (!tenantId) return res.status(400).json({ error: "missing tenant_id" });
+
+      // Get active zabbix connection
+      const { rows: connRows } = await pool.query(
+        `SELECT id FROM zabbix_connections WHERE tenant_id = $1 AND is_active = true LIMIT 1`,
+        [tenantId]
+      );
+      const connectionId = connRows[0]?.id;
+
+      // Get printer configs
+      const { rows: configs } = await pool.query(
+        `SELECT zabbix_host_id, host_name, base_counter FROM printer_configs WHERE tenant_id = $1`,
+        [tenantId]
+      );
+      // Sanitize base_counter
+      const printerConfigs = configs.map(c => ({
+        ...c,
+        base_counter: typeof c.base_counter === "number" && !isNaN(c.base_counter) ? c.base_counter : 0,
+      }));
+
+      if (!connectionId || printerConfigs.length === 0) {
+        return res.json({ printers: [], total: 0, grid: [], peak: null, message: "Nenhuma impressora configurada." });
+      }
+
+      const hostIds = printerConfigs.map(c => c.zabbix_host_id);
+
+      // Counter keys
+      const COUNTER_KEYS = ["kyocera.counter.total", "number.of.printed.pages", ".1.3.6.1.2.1.43.10.2.1.4.1.1"];
+      const TONER_KEYS = ["kyocera.toner.percent", "black", "cyan", "magenta", "yellow"];
+
+      // Fetch printer items from Zabbix
+      const items = await executeZabbixProxy(connectionId, "item.get", {
+        output: ["itemid", "key_", "name", "lastvalue", "units", "hostid", "value_type"],
+        hostids: hostIds,
+        search: {
+          key_: "kyocera.counter.total,number.of.printed.pages,.1.3.6.1.2.1.43.10.2.1.4.1.1,kyocera.toner.percent,black,cyan,magenta,yellow,cosumablecalculated,consumablecalculated,kyocera.serial,.1.3.6.1.2.1.43.5.1.1.17.1",
+        },
+        searchByAny: true,
+        searchWildcardsEnabled: true,
+        limit: 2000,
+      }, tenantId);
+
+      // Get host names
+      const hosts = await executeZabbixProxy(connectionId, "host.get", {
+        output: ["hostid", "host", "name"],
+        hostids: hostIds,
+      }, tenantId);
+      const hostMap = new Map((hosts || []).map(h => [h.hostid, h]));
+
+      const getCounterValue = (hostId) => {
+        for (const key of COUNTER_KEYS) {
+          const item = (items || []).find(i => i.hostid === hostId && i.key_.toLowerCase().includes(key.toLowerCase()));
+          if (item) { const v = parseInt(item.lastvalue); if (!isNaN(v)) return v; }
+        }
+        return 0;
+      };
+
+      const getSerialNumber = (hostId) => {
+        const serKeys = ["kyocera.serial", ".1.3.6.1.2.1.43.5.1.1.17.1"];
+        for (const key of serKeys) {
+          const item = (items || []).find(i => i.hostid === hostId && i.key_.toLowerCase().includes(key.toLowerCase()));
+          if (item?.lastvalue) return item.lastvalue;
+        }
+        return "";
+      };
+
+      const getTonerLevels = (hostId) => {
+        const levels = [];
+        const hostItems = (items || []).filter(i => i.hostid === hostId);
+        for (const item of hostItems) {
+          const k = item.key_.toLowerCase();
+          if (TONER_KEYS.some(tk => k === tk || k.includes(tk)) || k.startsWith("cosumablecalculated") || k.startsWith("consumablecalculated")) {
+            const v = parseFloat(item.lastvalue);
+            if (!isNaN(v)) levels.push({ key: item.name || item.key_, value: v > 100 ? 100 : v });
+          }
+        }
+        return levels;
+      };
+
+      if (action === "counters") {
+        const printers = printerConfigs.map(cfg => {
+          const zabbixCounter = getCounterValue(cfg.zabbix_host_id);
+          const billingCounter = cfg.base_counter + zabbixCounter;
+          const serial = getSerialNumber(cfg.zabbix_host_id);
+          const host = hostMap.get(cfg.zabbix_host_id);
+          return { hostId: cfg.zabbix_host_id, name: cfg.host_name || host?.name || host?.host || cfg.zabbix_host_id, ip: host?.host ?? "", zabbixCounter, baseCounter: cfg.base_counter, billingCounter, serial };
+        });
+        return res.json({ printers, total: printers.reduce((s, p) => s + p.billingCounter, 0) });
+      }
+
+      if (action === "low_toner") {
+        const lowPrinters = [];
+        for (const cfg of printerConfigs) {
+          const levels = getTonerLevels(cfg.zabbix_host_id);
+          const lowLevels = levels.filter(l => l.value < 10);
+          if (lowLevels.length > 0) {
+            const host = hostMap.get(cfg.zabbix_host_id);
+            lowPrinters.push({ name: cfg.host_name || host?.name || host?.host || cfg.zabbix_host_id, supplies: lowLevels.map(l => ({ name: l.key, level: Math.round(l.value) })) });
+          }
+        }
+        return res.json({ printers: lowPrinters });
+      }
+
+      if (action === "monthly_snapshot") {
+        const now = new Date();
+        const period = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+        const entries = printerConfigs.map(cfg => {
+          const zabbixCounter = getCounterValue(cfg.zabbix_host_id);
+          const billingCounter = cfg.base_counter + zabbixCounter;
+          const serial = getSerialNumber(cfg.zabbix_host_id);
+          const host = hostMap.get(cfg.zabbix_host_id);
+          return { hostId: cfg.zabbix_host_id, name: cfg.host_name || host?.name || host?.host || "", ip: host?.host ?? "", zabbixCounter, baseCounter: cfg.base_counter, billingCounter, serial };
+        });
+        const totalPages = entries.reduce((s, e) => s + e.billingCounter, 0);
+        await pool.query(
+          `INSERT INTO billing_logs (tenant_id, period, entries, total_pages) VALUES ($1, $2, $3, $4)`,
+          [tenantId, period, JSON.stringify(entries), totalPages]
+        );
+        return res.json({ ok: true, period, totalPages, count: entries.length });
+      }
+
+      if (action === "supply_forecast") {
+        const nowTs = Math.floor(Date.now() / 1000);
+        const fifteenDaysAgo = nowTs - 15 * 86400;
+        const oneDayAgo = nowTs - 86400;
+
+        const forecasts = [];
+        for (const cfg of printerConfigs) {
+          const hostItems = (items || []).filter(i => i.hostid === cfg.zabbix_host_id);
+          const tonerItems = hostItems.filter(i => {
+            const k = i.key_.toLowerCase();
+            return TONER_KEYS.some(tk => k === tk || k.includes(tk)) || k.startsWith("cosumablecalculated") || k.startsWith("consumablecalculated");
+          });
+          if (tonerItems.length === 0) continue;
+
+          const host = hostMap.get(cfg.zabbix_host_id);
+          const printerName = cfg.host_name || host?.name || host?.host || cfg.zabbix_host_id;
+          const supplies = [];
+
+          for (const item of tonerItems) {
+            const currentLevel = parseFloat(item.lastvalue);
+            if (isNaN(currentLevel)) continue;
+            const clampedCurrent = Math.min(100, Math.max(0, currentLevel));
+
+            try {
+              const historyType = item.value_type === "3" ? 3 : 0;
+              const history = await executeZabbixProxy(connectionId, "history.get", {
+                output: ["clock", "value"], itemids: [item.itemid], history: historyType,
+                time_from: fifteenDaysAgo, time_till: nowTs, sortfield: "clock", sortorder: "ASC", limit: 500,
+              }, tenantId);
+
+              if (!history || history.length < 2) {
+                supplies.push({ name: item.name || item.key_, currentLevel: clampedCurrent, dailyConsumption: 0, daysRemaining: null, estimatedDate: null, dataInsufficient: true });
+                continue;
+              }
+              const latestClock = parseInt(history[history.length - 1].clock);
+              if (latestClock < oneDayAgo) {
+                supplies.push({ name: item.name || item.key_, currentLevel: clampedCurrent, dailyConsumption: 0, daysRemaining: null, estimatedDate: null, dataInsufficient: true });
+                continue;
+              }
+              const earliestVal = parseFloat(history[0].value);
+              const latestVal = parseFloat(history[history.length - 1].value);
+              const earliestClock = parseInt(history[0].clock);
+              const timeSpanDays = (latestClock - earliestClock) / 86400;
+              if (timeSpanDays < 1) {
+                supplies.push({ name: item.name || item.key_, currentLevel: clampedCurrent, dailyConsumption: 0, daysRemaining: null, estimatedDate: null, dataInsufficient: true });
+                continue;
+              }
+              const consumption = earliestVal - latestVal;
+              const dailyConsumption = consumption > 0 ? consumption / timeSpanDays : 0;
+              let daysRemaining = null, estimatedDate = null;
+              if (dailyConsumption > 0.01) {
+                daysRemaining = Math.round(clampedCurrent / dailyConsumption);
+                estimatedDate = new Date(Date.now() + daysRemaining * 86400 * 1000).toISOString().slice(0, 10);
+              }
+              supplies.push({ name: item.name || item.key_, currentLevel: clampedCurrent, dailyConsumption: Math.round(dailyConsumption * 100) / 100, daysRemaining, estimatedDate, dataInsufficient: false });
+            } catch (histErr) {
+              console.warn(`[printer-status/forecast] history error for item ${item.itemid}:`, histErr.message);
+              supplies.push({ name: item.name || item.key_, currentLevel: clampedCurrent, dailyConsumption: 0, daysRemaining: null, estimatedDate: null, dataInsufficient: true });
+            }
+          }
+          if (supplies.length > 0) forecasts.push({ name: printerName, hostId: cfg.zabbix_host_id, supplies });
+        }
+        return res.json({ printers: forecasts });
+      }
+
+      if (action === "usage_heatmap") {
+        const hostId = req.body.host_id;
+        // Fetch history for counter items over the last 7 days
+        const nowTs = Math.floor(Date.now() / 1000);
+        const sevenDaysAgo = nowTs - 7 * 86400;
+
+        const targetHostIds = hostId ? [hostId] : hostIds;
+        const grid = [];
+        const hourlyTotals = new Map(); // "day-hour" → value
+
+        for (const hid of targetHostIds) {
+          // Find counter item for this host
+          const counterItem = (items || []).find(i => {
+            if (i.hostid !== hid) return false;
+            const k = i.key_.toLowerCase();
+            return COUNTER_KEYS.some(ck => k.includes(ck.toLowerCase()));
+          });
+          if (!counterItem) continue;
+
+          try {
+            const historyType = counterItem.value_type === "3" ? 3 : 0;
+            const history = await executeZabbixProxy(connectionId, "history.get", {
+              output: ["clock", "value"], itemids: [counterItem.itemid], history: historyType,
+              time_from: sevenDaysAgo, time_till: nowTs, sortfield: "clock", sortorder: "ASC", limit: 5000,
+            }, tenantId);
+
+            if (!history || history.length < 2) continue;
+
+            // Calculate delta per hour bucket
+            for (let i = 1; i < history.length; i++) {
+              const prevVal = parseInt(history[i - 1].value) || 0;
+              const currVal = parseInt(history[i].value) || 0;
+              const delta = currVal - prevVal;
+              if (delta <= 0) continue;
+
+              const ts = new Date(parseInt(history[i].clock) * 1000);
+              const day = (ts.getDay() + 6) % 7; // Monday=0
+              const hour = ts.getHours();
+              const key = `${day}-${hour}`;
+              hourlyTotals.set(key, (hourlyTotals.get(key) || 0) + delta);
+            }
+          } catch (e) {
+            console.warn(`[printer-status/heatmap] history error for host ${hid}:`, e.message);
+          }
+        }
+
+        // Build grid
+        let peak = null;
+        for (let day = 0; day < 7; day++) {
+          for (let hour = 0; hour < 24; hour++) {
+            const value = hourlyTotals.get(`${day}-${hour}`) || 0;
+            grid.push({ day, hour, value });
+            if (!peak || value > peak.value) peak = { day, hour, value };
+          }
+        }
+
+        return res.json({ grid, peak: peak && peak.value > 0 ? peak : null });
+      }
+
+      return res.status(400).json({ error: "unknown action" });
+    } catch (err) {
+      console.error("[printer-status]", err);
+      return res.status(500).json({ error: err.message });
+    }
+  },
+
+  /* ── zabbix-connections (test) ───────────────── */
+  "zabbix-connections": async (req, res) => {
+    return res.json({ message: "Use REST API for zabbix_connections" });
+  },
+
+  /* ── system-status ───────────────────────────── */
+  "system-status": async (req, res) => {
+    const uptime = process.uptime();
+    return res.json({
+      status: "healthy",
+      uptime_seconds: Math.round(uptime),
+      mode: "on-premise",
+      version: "1.0.0",
+      database: "connected",
+    });
+  },
+};
+
+// Route edge function calls
+app.all("/functions/v1/:fn", requireAuth, async (req, res) => {
+  const fn = req.params.fn;
+  const handler = EDGE_FUNCTION_HANDLERS[fn];
+  if (handler) return handler(req, res);
+  console.warn(`[Edge Function] "${fn}" not implemented — returning empty result`);
+  return res.json({ message: `Edge function "${fn}" not implemented in on-premise mode`, result: null });
+});
+
+/* ═══════════════════════════════════════════════════════════
+   STORAGE ROUTES (/storage/v1/*)
+   ═══════════════════════════════════════════════════════════ */
+
 app.post("/storage/v1/object/:bucket", requireAuth, upload.single("file"), (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file" });
   const key = `${req.params.bucket}/${req.file.filename}`;
   return res.json({ Key: key, Id: req.file.filename });
 });
 
-// GET /storage/v1/object/public/:bucket/:filename
 app.get("/storage/v1/object/public/:bucket/*", (req, res) => {
   const bucket = req.params.bucket;
-  const filePath = req.params[0]; // rest of path
+  const filePath = req.params[0];
   const fullPath = path.join(STORAGE_DIR, bucket, filePath);
   if (!fs.existsSync(fullPath)) return res.status(404).json({ error: "Not found" });
   return res.sendFile(fullPath);
 });
 
-// Serve public storage URLs that the Supabase client generates
 app.get("/storage/v1/object/sign/:bucket/*", requireAuth, (req, res) => {
   const bucket = req.params.bucket;
   const filePath = req.params[0];
   return res.json({ signedURL: `/storage/v1/object/public/${bucket}/${filePath}` });
 });
 
-/* ═══════════════════════════════════════════════════════════
-   REALTIME STUB — O Supabase client tenta conectar via WS
-   Retornamos 200 em /realtime para evitar erros, mas sem WS
-   ═══════════════════════════════════════════════════════════ */
+/* ── REALTIME STUB ─────────────────────────────── */
 app.get("/realtime/v1/websocket", (_req, res) => {
   res.status(200).json({ message: "Realtime not available in on-premise mode" });
 });
 
-/* ═══════════════════════════════════════════════════════════
-   EDGE FUNCTIONS STUB (/functions/v1/*)
-   Rotas para Edge Functions que o frontend chama via
-   supabase.functions.invoke('fn-name')
-   ═══════════════════════════════════════════════════════════ */
-app.all("/functions/v1/:fn", requireAuth, async (req, res) => {
-  const fn = req.params.fn;
-  console.warn(`[Edge Function Stub] "${fn}" called — implement in server.js if needed`);
-  return res.json({ message: `Edge function "${fn}" not implemented in on-premise mode` });
-});
-
-/* ─── LEGACY COMPAT ROUTES ────────────────────────── */
-// POST /auth/login — rota legada (redirect para GoTrue)
+/* ── LEGACY COMPAT ─────────────────────────────── */
 app.post("/auth/login", (req, res) => {
   req.query.grant_type = "password";
   return app.handle(Object.assign(req, { url: "/auth/v1/token?grant_type=password", method: "POST" }), res);
@@ -667,6 +1012,11 @@ app.listen(PORT, "0.0.0.0", () => {
 ║   REST:    /rest/v1/*                                ║
 ║   Storage: /storage/v1/*                             ║
 ║   RPC:     /rest/v1/rpc/*                            ║
+║   Edge:    /functions/v1/*                           ║
+║                                                      ║
+║   ✔ zabbix-proxy (Zabbix JSON-RPC Gateway)           ║
+║   ✔ printer-status (Billing + Forecast + Heatmap)    ║
+║   ✔ system-status                                    ║
 ╚══════════════════════════════════════════════════════╝
   `);
 });
