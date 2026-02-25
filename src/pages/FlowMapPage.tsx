@@ -25,10 +25,12 @@ import { useAudioAlert } from "@/hooks/useAudioAlert";
 import { useIsMobile } from "@/hooks/use-mobile";
 import FieldOverlay from "@/components/flowmap/FieldOverlay";
 import OLTHealthPanel from "@/components/flowmap/OLTHealthPanel";
+import { useTranslation } from "react-i18next";
 
 /* ─────────── MAP LIST ─────────── */
 function MapListView() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { data: maps = [], isLoading } = useFlowMapList();
   const { deleteMap, createMap } = useFlowMapMutations();
   const { toast } = useToast();
@@ -48,7 +50,7 @@ function MapListView() {
       setShowWizard(false);
       navigate(`/app/operations/flowmap/${mapResult.id}`);
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Erro ao criar mapa", description: e.message });
+      toast({ variant: "destructive", title: t("flowmap.errorCreatingMap"), description: e.message });
     }
   };
 
@@ -61,16 +63,16 @@ function MapListView() {
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-3">
               <Zap className="w-6 h-6 text-neon-green" />
-              <span className="text-glow-green text-neon-green">FLOWMAP</span>
+              <span className="text-glow-green text-neon-green">{t("flowmap.title")}</span>
             </h1>
-            <p className="text-xs text-muted-foreground mt-1">Topologia Geoespacial NOC</p>
+            <p className="text-xs text-muted-foreground mt-1">{t("flowmap.subtitle")}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/app/monitoring/dashboards")}>
-              <ArrowLeft className="w-3.5 h-3.5" />Dashboards
+              <ArrowLeft className="w-3.5 h-3.5" />{t("dashboards.title")}
             </Button>
             <Button size="sm" className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowWizard(true)}>
-              <Plus className="w-3.5 h-3.5" />Novo Mapa
+              <Plus className="w-3.5 h-3.5" />{t("flowmap.newMap")}
             </Button>
           </div>
         </motion.header>
@@ -82,10 +84,10 @@ function MapListView() {
         ) : maps.length === 0 ? (
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="glass-card-elevated rounded-xl p-12 text-center max-w-md mx-auto">
             <Map className="w-12 h-12 text-neon-green mx-auto mb-4" />
-            <h2 className="text-lg font-display font-bold text-foreground mb-2">Crie seu primeiro FlowMap</h2>
-            <p className="text-sm text-muted-foreground mb-6">Mapas geoespaciais com topologia de rede, detecção de anel e status em tempo real via Zabbix.</p>
+            <h2 className="text-lg font-display font-bold text-foreground mb-2">{t("flowmap.createFirst")}</h2>
+            <p className="text-sm text-muted-foreground mb-6">{t("flowmap.createFirstDesc")}</p>
             <Button className="gap-2 bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowWizard(true)}>
-              <Plus className="w-4 h-4" />Criar Mapa
+              <Plus className="w-4 h-4" />{t("flowmap.createMap")}
             </Button>
           </motion.div>
         ) : (
@@ -104,7 +106,7 @@ function MapListView() {
                 </div>
                 <div className="flex items-center gap-1.5">
                   <Button variant="outline" size="sm" onClick={() => navigate(`/app/operations/flowmap/${m.id}`)} className="flex-1 gap-1 text-[10px] h-7">
-                    <Eye className="w-3 h-3" />Abrir
+                    <Eye className="w-3 h-3" />{t("flowmap.open")}
                   </Button>
                   <Button variant="ghost" size="icon" onClick={() => deleteMap.mutate(m.id)} className="h-7 w-7 text-muted-foreground hover:text-neon-red">
                     <Trash2 className="w-3 h-3" />
@@ -131,6 +133,7 @@ function MapListView() {
 /* ─────────── MAP EDITOR / VIEWER ─────────── */
 function MapEditorView({ mapId }: { mapId: string }) {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { toast } = useToast();
   const { data, isLoading } = useFlowMapDetail(mapId);
   const { addHost, removeHost, updateHost, addLink, updateLink, removeLink, addLinkItem, removeLinkItem, addCTO, updateCTO, removeCTO, addCable, updateCable, removeCable, addReserva, removeReserva } = useFlowMapMutations();
@@ -241,7 +244,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
         tenant_id: tenantId,
         ...hostData,
       });
-      toast({ title: "Host adicionado" });
+      toast({ title: t("flowmap.hostAdded") });
     },
     [tenantId, mapId, addHost, toast],
   );
@@ -254,7 +257,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
         setMode("connect-dest");
       } else if (mode === "connect-dest" && pendingOrigin) {
         if (pendingOrigin === hostId) {
-          toast({ variant: "destructive", title: "Origem e destino devem ser diferentes" });
+          toast({ variant: "destructive", title: t("flowmap.originDestDifferent") });
           return;
         }
         handleCreateLink({ origin_host_id: pendingOrigin, dest_host_id: hostId, link_type: "fiber", is_ring: false });
@@ -284,7 +287,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             });
             if (!routeError && routeData?.geometry?.coordinates?.length > 0) {
               geometry = { ...routeData.geometry, distance_km: routeData.distance_km, duration_min: routeData.duration_min };
-              toast({ title: routeData.routed ? `Rota calculada (${routeData.distance_km} km)` : "Sem rota — linha direta" });
+              toast({ title: routeData.routed ? `${t("flowmap.routeCalculated")} (${routeData.distance_km} km)` : t("flowmap.straightLine") });
             }
           } catch {
             // Fallback: straight line
@@ -301,9 +304,9 @@ function MapEditorView({ mapId }: { mapId: string }) {
         });
         setPendingOrigin(null);
         setMode("idle");
-        toast({ title: "Link criado" });
+        toast({ title: t("flowmap.linkCreated") });
       } catch (e: any) {
-        toast({ variant: "destructive", title: "Erro ao criar link", description: e.message });
+        toast({ variant: "destructive", title: t("flowmap.errorCreatingLink"), description: e.message });
       }
     },
     [tenantId, mapId, data, addLink, toast, supabase],
@@ -326,13 +329,13 @@ function MapEditorView({ mapId }: { mapId: string }) {
     setEditingLinkId(null);
     setRoutePoints([]);
     setMode("idle");
-    toast({ title: "Rota salva" });
+    toast({ title: t("flowmap.routeSaved") });
   }, [editingLinkId, routePoints, mapId, updateLink, toast]);
 
   const handleUpdateHostPosition = useCallback(
     async (hostId: string, lat: number, lon: number) => {
       await updateHost.mutateAsync({ id: hostId, map_id: mapId, lat, lon });
-      toast({ title: "Posição atualizada" });
+      toast({ title: t("flowmap.positionUpdated") });
     },
     [mapId, updateHost, toast],
   );
@@ -354,9 +357,9 @@ function MapEditorView({ mapId }: { mapId: string }) {
           ? { ...routeData.geometry, distance_km: routeData.distance_km, duration_min: routeData.duration_min }
           : { type: "LineString", coordinates: [[originHost.lon, originHost.lat], [destHost.lon, destHost.lat]] };
         await updateLink.mutateAsync({ id: linkId, map_id: mapId, geometry: geometry as any });
-        toast({ title: routeData?.routed ? `Rota recalculada (${routeData.distance_km} km)` : "Sem rota — linha direta" });
+        toast({ title: routeData?.routed ? `${t("flowmap.recalculated")} (${routeData.distance_km} km)` : t("flowmap.straightLine") });
       } catch (e: any) {
-        toast({ variant: "destructive", title: "Erro ao recalcular rota", description: e.message });
+        toast({ variant: "destructive", title: t("flowmap.errorRecalculating"), description: e.message });
       }
     },
     [data, mapId, updateLink, toast],
@@ -436,7 +439,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
   if (isLoading || !data) {
     return (
       <div className="h-screen flex items-center justify-center bg-background">
-        <div className="text-neon-green font-display animate-pulse">Carregando mapa...</div>
+        <div className="text-neon-green font-display animate-pulse">{t("flowmap.loadingMap")}</div>
       </div>
     );
   }
@@ -461,7 +464,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
             <div className="flex items-center gap-1 ml-2">
               <span className={`w-1.5 h-1.5 rounded-full ${activeConnectionId ? (statusError ? "bg-neon-red" : "bg-neon-green pulse-green") : "bg-muted-foreground/30"}`} />
               <span className="text-[9px] font-mono text-muted-foreground">
-              {!activeConnectionId ? "Sem Zabbix" : statusError ? "Erro" : statusLoading ? "Polling..." : "Live"}
+              {!activeConnectionId ? t("flowmap.noZabbix") : statusError ? t("common.error") : statusLoading ? "Polling..." : t("flowmap.live")}
               </span>
             </div>
             {/* Global incident counter */}
@@ -485,7 +488,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
               size="icon"
               className={`h-7 w-7 ${muted ? "text-muted-foreground" : "text-neon-amber"}`}
               onClick={toggleMute}
-              title={muted ? "Ativar som" : "Silenciar"}
+              title={muted ? t("flowmap.enableSound") : t("flowmap.muteSound")}
             >
               {muted ? <VolumeX className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
             </Button>
@@ -511,14 +514,14 @@ function MapEditorView({ mapId }: { mapId: string }) {
               className={`h-7 text-[10px] gap-1 ${showViability ? "bg-neon-cyan/20 text-neon-cyan border border-neon-cyan/30" : ""}`}
               onClick={() => { setShowViability((p) => !p); if (!showViability) { setShowBuilder(false); setShowNoc(false); } }}
             >
-              <Search className="w-3 h-3" />Viabilidade
+              <Search className="w-3 h-3" />{t("flowmap.viability")}
             </Button>
             <Button
               variant="ghost"
               size="icon"
               className="h-7 w-7 text-muted-foreground hover:text-neon-green"
               onClick={toggleWarRoom}
-              title="Modo War Room"
+              title={t("flowmap.warRoom")}
             >
               <Maximize className="w-3.5 h-3.5" />
             </Button>
@@ -599,7 +602,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 size="icon"
                 className={`h-8 w-8 bg-background/50 backdrop-blur-xl border border-border/30 ${showNoc ? "text-neon-green" : "text-muted-foreground"}`}
                 onClick={() => setShowNoc((p) => !p)}
-                title={showNoc ? "Esconder Console NOC" : "Mostrar Console NOC"}
+                title="NOC Console"
               >
                 <Radio className="w-4 h-4" />
               </Button>
@@ -608,7 +611,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 size="icon"
                 className="h-8 w-8 bg-background/50 backdrop-blur-xl border border-border/30 text-muted-foreground hover:text-neon-red"
                 onClick={toggleWarRoom}
-                title="Sair da Tela Cheia"
+                title={t("flowmap.exitFullscreen")}
               >
                 <Minimize className="w-4 h-4" />
               </Button>
@@ -675,7 +678,7 @@ function MapEditorView({ mapId }: { mapId: string }) {
                 onRemoveLinkItem={(id, linkId) => removeLinkItem.mutate({ id, link_id: linkId })}
                 onUpdateLinkCapacity={async (id, capacity) => {
                   await updateLink.mutateAsync({ id, map_id: mapId, capacity_mbps: capacity });
-                  toast({ title: `Capacidade atualizada: ${capacity >= 1000 ? `${capacity / 1000}G` : `${capacity}M`}` });
+                  toast({ title: `${t("flowmap.capacityUpdated")}: ${capacity >= 1000 ? `${capacity / 1000}G` : `${capacity}M`}` });
                 }}
                 editingLinkId={editingLinkId}
                 onEditRoute={handleEditRoute}

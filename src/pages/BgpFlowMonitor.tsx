@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from "react";
+import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -71,7 +72,7 @@ const HARDWARE_CATALOG: HardwareModel[] = [
 /* ─── Step Indicator ── */
 
 function StepIndicator({ current, total }: { current: number; total: number }) {
-  const labels = ["Hardware", "Terminal SSH", "Confirmação"];
+  const labels = ["Hardware", "SSH", "✓"];
   return (
     <div className="flex items-center justify-center gap-2 mb-8">
       {Array.from({ length: total }, (_, i) => {
@@ -111,6 +112,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 /* ─── Step 1: Hardware Selection ── */
 
 function HardwareStep({ config, onChange }: { config: Partial<BgpConfig>; onChange: (c: Partial<BgpConfig>) => void }) {
+  const { t } = useTranslation();
   const [vendorFilter, setVendorFilter] = useState<"all" | "huawei" | "datacom">("all");
 
   const filtered = useMemo(() =>
@@ -122,9 +124,9 @@ function HardwareStep({ config, onChange }: { config: Partial<BgpConfig>; onChan
     <div className="space-y-6">
       <div className="text-center">
         <h2 className="text-xl font-orbitron font-bold text-foreground tracking-wide">
-          Selecione o Hardware
+          {t("bgp.selectHardware")}
         </h2>
-        <p className="text-sm text-muted-foreground mt-1">Escolha o roteador para monitoramento BGP</p>
+        <p className="text-sm text-muted-foreground mt-1">{t("bgp.selectHardwareSub")}</p>
       </div>
 
       {/* Vendor filter */}
@@ -141,7 +143,7 @@ function HardwareStep({ config, onChange }: { config: Partial<BgpConfig>; onChan
               }
             `}
           >
-            {v === "all" ? "Todos" : v === "huawei" ? "🟠 Huawei" : "🔵 Datacom"}
+            {v === "all" ? t("bgp.all") : v === "huawei" ? "🟠 Huawei" : "🔵 Datacom"}
           </button>
         ))}
       </div>
@@ -216,6 +218,7 @@ function HardwareStep({ config, onChange }: { config: Partial<BgpConfig>; onChan
 /* ─── Step 2: SSH Terminal ── */
 
 function SSHStep({ config, onChange }: { config: Partial<BgpConfig>; onChange: (c: Partial<BgpConfig>) => void }) {
+  const { t } = useTranslation();
   const [showPwd, setShowPwd] = useState(false);
   const selectedHw = HARDWARE_CATALOG.find(h => h.id === config.model);
 
@@ -223,10 +226,10 @@ function SSHStep({ config, onChange }: { config: Partial<BgpConfig>; onChange: (
     <div className="space-y-6 max-w-lg mx-auto">
       <div className="text-center">
         <h2 className="text-xl font-orbitron font-bold text-foreground tracking-wide">
-          Terminal SSH
+          {t("bgp.sshTerminal")}
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Credenciais de acesso ao {selectedHw?.name || "roteador"}
+          {t("bgp.credentialsSub")} {selectedHw?.name || "router"}
         </p>
       </div>
 
@@ -267,7 +270,7 @@ function SSHStep({ config, onChange }: { config: Partial<BgpConfig>; onChange: (
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-[10px] font-mono text-cyan-400/70 uppercase tracking-wider">Porta</label>
+              <label className="text-[10px] font-mono text-cyan-400/70 uppercase tracking-wider">{t("bgp.port")}</label>
               <input
                 type="text"
                 placeholder="22"
@@ -280,7 +283,7 @@ function SSHStep({ config, onChange }: { config: Partial<BgpConfig>; onChange: (
 
           <div className="space-y-1.5">
             <label className="text-[10px] font-mono text-cyan-400/70 uppercase tracking-wider">
-              <User className="w-3 h-3 inline mr-1" />Usuário
+              <User className="w-3 h-3 inline mr-1" />{t("bgp.user")}
             </label>
             <input
               type="text"
@@ -293,7 +296,7 @@ function SSHStep({ config, onChange }: { config: Partial<BgpConfig>; onChange: (
 
           <div className="space-y-1.5">
             <label className="text-[10px] font-mono text-cyan-400/70 uppercase tracking-wider">
-              <Lock className="w-3 h-3 inline mr-1" />Senha
+              <Lock className="w-3 h-3 inline mr-1" />{t("bgp.password")}
             </label>
             <div className="relative">
               <input
@@ -328,14 +331,15 @@ function SSHStep({ config, onChange }: { config: Partial<BgpConfig>; onChange: (
 /* ─── Step 3: Confirmation ── */
 
 function ConfirmStep({ config }: { config: Partial<BgpConfig> }) {
+  const { t } = useTranslation();
   const hw = HARDWARE_CATALOG.find(h => h.id === config.model);
   return (
     <div className="space-y-6 max-w-lg mx-auto">
       <div className="text-center">
         <h2 className="text-xl font-orbitron font-bold text-foreground tracking-wide">
-          Confirmação
+          {t("bgp.confirmation")}
         </h2>
-        <p className="text-sm text-muted-foreground mt-1">Revise as configurações antes de conectar</p>
+        <p className="text-sm text-muted-foreground mt-1">{t("bgp.confirmSub")}</p>
       </div>
 
       <div
@@ -360,10 +364,10 @@ function ConfirmStep({ config }: { config: Partial<BgpConfig> }) {
         {/* Connection details */}
         <div className="grid grid-cols-2 gap-3">
           {[
-            { label: "Host", value: config.host, icon: Globe },
-            { label: "Porta", value: config.port || "22", icon: Terminal },
-            { label: "Usuário", value: config.username, icon: User },
-            { label: "Senha", value: "••••••••", icon: Lock },
+            { label: t("bgp.host"), value: config.host, icon: Globe },
+            { label: t("bgp.port"), value: config.port || "22", icon: Terminal },
+            { label: t("bgp.user"), value: config.username, icon: User },
+            { label: t("bgp.password"), value: "••••••••", icon: Lock },
           ].map(({ label, value, icon: Ic }) => (
             <div key={label} className="flex items-center gap-2 p-2.5 rounded-lg bg-black/20 border border-muted/10">
               <Ic className="w-3.5 h-3.5 text-cyan-400/50 shrink-0" />
@@ -377,7 +381,7 @@ function ConfirmStep({ config }: { config: Partial<BgpConfig> }) {
 
         {/* Command preview */}
         <div className="p-3 rounded-lg bg-black/30 border border-emerald-500/10">
-          <div className="text-[9px] font-mono text-muted-foreground/40 mb-1">Comandos que serão executados:</div>
+          <div className="text-[9px] font-mono text-muted-foreground/40 mb-1">{t("bgp.commandsToExecute")}</div>
           <div className="text-[11px] font-mono text-emerald-400/70 space-y-0.5">
             {config.vendor === "huawei" ? (
               <>
@@ -407,11 +411,11 @@ function countryFlag(code: string): string {
 
 /* ─── Traffic type colors ── */
 const TRAFFIC_COLORS: Record<string, { gradient: string; solid: string; label: string }> = {
-  transit: { gradient: "from-cyan-400 to-blue-500", solid: "#00e5ff", label: "Trânsito IP" },
-  ix:      { gradient: "from-purple-400 to-fuchsia-500", solid: "#c050ff", label: "IX-BR / Peering" },
+  transit: { gradient: "from-cyan-400 to-blue-500", solid: "#00e5ff", label: "IP Transit" },
+  ix:      { gradient: "from-purple-400 to-fuchsia-500", solid: "#c050ff", label: "IX / Peering" },
   cdn:     { gradient: "from-emerald-400 to-green-500", solid: "#00e676", label: "CDNs" },
   enterprise: { gradient: "from-amber-400 to-orange-500", solid: "#ffab40", label: "Enterprise" },
-  unknown: { gradient: "from-gray-400 to-gray-500", solid: "#9e9e9e", label: "Outros" },
+  unknown: { gradient: "from-gray-400 to-gray-500", solid: "#9e9e9e", label: "Others" },
 };
 
 /* ─── Sankey-style flow visualization ── */
@@ -803,6 +807,7 @@ function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
 /* ─── Dashboard (Phase 2) ── */
 
 function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpConfig; onReconfigure: () => void; onSave?: () => void; saving?: boolean }) {
+  const { t } = useTranslation();
   const hw = HARDWARE_CATALOG.find(h => h.id === config.model);
   const configId = `${config.host}:${config.port}`;
   const { stats, peers, flow_data, network_summary, timestamp, connected, refresh } = useBgpRealtime(configId);
@@ -824,7 +829,7 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-4">
           <button onClick={() => window.history.back()} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-            <ArrowLeft className="w-3.5 h-3.5" /> Voltar
+            <ArrowLeft className="w-3.5 h-3.5" /> {t("common.back")}
           </button>
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg flex items-center justify-center bg-cyan-500/10 border border-cyan-400/20">
@@ -838,7 +843,7 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
                 </span>
               </h1>
               <p className="text-[11px] font-mono text-muted-foreground/60">
-                {config.host}:{config.port} • Peering Analytics • Atualizado: {lastUpdate}
+                {config.host}:{config.port} • Peering Analytics • {t("bgpDashboard.updated")}: {lastUpdate}
               </p>
             </div>
           </div>
@@ -848,12 +853,12 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
           <div className="flex rounded-lg border border-muted/20 overflow-hidden">
             {(["peering", "bgp", "flow", "flaps", "geo", "resumo"] as const).map(mode => {
               const labels: Record<string, string> = {
-                peering: "Peering Wall",
-                bgp: "Visão BGP",
-                flow: "Visão Flow",
-                flaps: "Estabilidade",
-                geo: "Geo-BGP",
-                resumo: "Resumo Rede",
+                peering: t("bgp.peeringWall"),
+                bgp: t("bgp.bgpView"),
+                flow: t("bgp.flowView"),
+                flaps: t("bgp.stability"),
+                geo: t("bgp.geoBgp"),
+                resumo: t("bgp.networkSummary"),
               };
               return (
                 <button
@@ -885,17 +890,17 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
           }`}>
             <div className={`w-2 h-2 rounded-full animate-pulse ${connected ? "bg-emerald-400" : "bg-amber-400"}`} />
             <span className={`text-[10px] font-mono ${connected ? "text-emerald-400" : "text-amber-400"}`}>
-              {connected ? "ONLINE" : "AGUARDANDO"}
+              {connected ? t("bgpDashboard.online") : t("bgpDashboard.waiting")}
             </span>
           </div>
 
           {onSave && (
             <button onClick={onSave} disabled={saving} className="flex items-center gap-1 text-[9px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50">
-              <Save className="w-3 h-3" /> {saving ? 'Salvando…' : 'Salvar'}
+              <Save className="w-3 h-3" /> {saving ? t("virtualization.saving") : t("common.save")}
             </button>
           )}
           <button onClick={onReconfigure} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-            <Settings2 className="w-3 h-3" /> Reconfigurar
+            <Settings2 className="w-3 h-3" /> {t("bgp.reconfigure")}
           </button>
         </div>
       </div>
@@ -917,7 +922,7 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-mono text-sm text-foreground flex items-center gap-2">
                   <Zap className="w-4 h-4 text-cyan-400" />
-                  {viewMode === "flow" ? "Traffic Flow — Sankey" : "BGP Peers Overview"}
+                  {viewMode === "flow" ? t("bgpDashboard.trafficFlow") : t("bgpDashboard.bgpPeersOverview")}
                 </h3>
                 <div className="flex gap-2">
                   {Object.entries(TRAFFIC_COLORS).filter(([k]) => k !== "unknown").map(([, tc]) => (
@@ -946,7 +951,7 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full gap-3 text-muted-foreground/40">
                     <BarChart3 className="w-10 h-10" />
-                    <p className="text-[11px] font-mono">Aguardando dados de peers...</p>
+                    <p className="text-[11px] font-mono">{t("bgpDashboard.waitingPeerData")}</p>
                     <p className="text-[9px] font-mono text-muted-foreground/25">
                       POST para /functions/v1/bgp-collector com peers[]
                     </p>
@@ -958,10 +963,10 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
             {/* Stats panel */}
             <div className="space-y-4">
               {[
-                { label: "BGP Sessions", value: stats ? `${stats.established_peers}/${stats.total_peers}` : "—", icon: Activity, color: "#00e5ff" },
-                { label: "Prefixes Received", value: stats ? stats.prefixes_received.toLocaleString() : "—", icon: ArrowDownToLine, color: "#448aff" },
-                { label: "Prefixes Sent", value: stats ? stats.prefixes_sent.toLocaleString() : "—", icon: ArrowUpFromLine, color: "#00e676" },
-                { label: "Active ASNs", value: stats ? String(stats.active_asns) : "—", icon: Globe, color: "#c050ff" },
+                { label: t("bgpDashboard.bgpSessions"), value: stats ? `${stats.established_peers}/${stats.total_peers}` : "—", icon: Activity, color: "#00e5ff" },
+                { label: t("bgpDashboard.prefixesReceived"), value: stats ? stats.prefixes_received.toLocaleString() : "—", icon: ArrowDownToLine, color: "#448aff" },
+                { label: t("bgpDashboard.prefixesSent"), value: stats ? stats.prefixes_sent.toLocaleString() : "—", icon: ArrowUpFromLine, color: "#00e676" },
+                { label: t("bgpDashboard.activeAsns"), value: stats ? String(stats.active_asns) : "—", icon: Globe, color: "#c050ff" },
               ].map(({ label, value, icon: Ic, color }) => (
                 <motion.div
                   key={label}
@@ -988,14 +993,14 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-mono text-sm text-foreground flex items-center gap-2">
                 <Globe className="w-4 h-4 text-cyan-400" />
-                ASN Peers — Enriquecimento LACNIC/Registro.br
+                {t("bgpDashboard.asnPeers")}
               </h3>
               <div className="flex gap-2">
                 {([
-                  { key: "all", label: "Todos" },
-                  { key: "top10", label: "Top 10 ASNs" },
-                  { key: "latency", label: "Maior Latência" },
-                  { key: "cost", label: "Custo por Mb" },
+                  { key: "all", label: t("bgpDashboard.all") },
+                  { key: "top10", label: t("bgpDashboard.top10Asns") },
+                  { key: "latency", label: t("bgpDashboard.highestLatency") },
+                  { key: "cost", label: t("bgpDashboard.costPerMb") },
                 ] as const).map(f => (
                   <button
                     key={f.key}
@@ -1028,7 +1033,7 @@ function BgpDashboard({ config, onReconfigure, onSave, saving }: { config: BgpCo
         >
           <h4 className="font-mono text-sm text-amber-400 mb-3 flex items-center gap-2">
             <Terminal className="w-4 h-4" />
-            Como enviar dados para o dashboard
+            {t("bgpDashboard.howToSend")}
           </h4>
           <div className="text-[11px] font-mono text-muted-foreground/70 space-y-2">
             <p>1. Baixe o script coletor e configure as variáveis de ambiente:</p>
@@ -1083,6 +1088,7 @@ bash ne8000-bgp-collector.sh`}</pre>
 /* ─── Main Page ── */
 
 export default function BgpFlowMonitor() {
+  const { t } = useTranslation();
   const { save: saveDashboard, saving, dashboardId, loadedConfig } = useDashboardPersist<BgpConfig>({
     category: 'bgp',
     listPath: '/app/monitoring/bgp',
@@ -1202,7 +1208,7 @@ export default function BgpFlowMonitor() {
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-mono
               text-muted-foreground/60 hover:text-foreground transition-all disabled:opacity-30 disabled:cursor-not-allowed"
           >
-            <ChevronLeft className="w-4 h-4" /> Voltar
+            <ChevronLeft className="w-4 h-4" /> {t("common.back")}
           </button>
 
           {step < 3 ? (
@@ -1217,7 +1223,7 @@ export default function BgpFlowMonitor() {
                 boxShadow: canAdvance ? "0 0 20px rgba(0, 229, 255, 0.2)" : undefined,
               }}
             >
-              Avançar <ChevronRight className="w-4 h-4" />
+              {t("common.next")} <ChevronRight className="w-4 h-4" />
             </button>
           ) : (
             <button
@@ -1228,7 +1234,7 @@ export default function BgpFlowMonitor() {
                 boxShadow: "0 0 20px rgba(0, 200, 100, 0.2)",
               }}
             >
-              <CheckCircle className="w-4 h-4" /> Conectar & Monitorar
+              <CheckCircle className="w-4 h-4" /> {t("bgp.connect")}
             </button>
           )}
         </div>
