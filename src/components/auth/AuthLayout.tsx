@@ -36,7 +36,7 @@ export default function AuthLayout({ children, title, subtitle }: AuthLayoutProp
         </div>
 
         <p className="text-center text-[10px] font-mono text-muted-foreground/40 mt-6">
-          FLOWPULSE • {t("auth.platformSubtitle")}
+          FLOWPULSE INTELLIGENCE • {t("auth.platformSubtitle")}
         </p>
       </div>
     </div>

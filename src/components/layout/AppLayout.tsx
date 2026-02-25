@@ -1,10 +1,11 @@
 import { useState, useCallback, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useLocation } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2 } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "./AppSidebar";
 import GlassHeader from "./GlassHeader";
+import InstitutionalFooter from "./InstitutionalFooter";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -12,6 +13,7 @@ interface AppLayoutProps {
 
 export default function AppLayout({ children }: AppLayoutProps) {
   const [searchParams] = useSearchParams();
+  const location = useLocation();
   const kioskFromUrl = searchParams.get("kiosk") === "true";
   const [isKiosk, setIsKiosk] = useState(kioskFromUrl);
 
@@ -46,6 +48,11 @@ export default function AppLayout({ children }: AppLayoutProps) {
           <main className="flex-1 overflow-auto">
             {children}
           </main>
+
+          {/* Institutional footer — hidden on dashboards and kiosk */}
+          {!isKiosk && !location.pathname.includes("/dashboard/") && (
+            <InstitutionalFooter />
+          )}
         </div>
 
         {/* Kiosk exit FAB */}

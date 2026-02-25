@@ -96,6 +96,9 @@ export default function Login() {
       <p className="text-center text-xs text-muted-foreground/60 mt-6">
         Acesso restrito. Contate o administrador para obter credenciais.
       </p>
+      <p className="text-center text-[9px] text-muted-foreground/30 mt-2 font-mono tracking-wider">
+        Powered by <span className="text-muted-foreground/50 font-semibold">CBLabs</span>
+      </p>
     </AuthLayout>
   );
 }
