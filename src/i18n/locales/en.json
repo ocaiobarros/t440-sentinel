@@ -26,7 +26,10 @@
     "tenants": "Tenants",
     "system": "System",
     "hostStatus": "Host Status",
-    "updates": "Updates"
+    "updates": "Updates",
+    "docs": "Docs",
+    "support": "Support",
+    "help": "Help"
   },
   "header": {
     "searchModules": "Search modules...",
@@ -473,5 +476,53 @@
     "cdns": "CDNs",
     "enterprise": "Enterprise",
     "others": "Others"
+  },
+  "docs": {
+    "title": "Documentation",
+    "subtitle": "Knowledge base and user guides",
+    "searchPlaceholder": "Search documentation...",
+    "noContent": "Documentation coming soon.",
+    "whatsNew": "What's New",
+    "feature": "Feature",
+    "fix": "Fix",
+    "improvement": "Improvement",
+    "modules": {
+      "flowmap": "FlowMap",
+      "flowmapDesc": "Geospatial NOC topology with real-time status and ring detection",
+      "bgp": "BGP Flow Monitor",
+      "bgpDesc": "BGP session monitoring, ASN peering analytics, and traffic flow",
+      "dashboards": "Dashboard Builder",
+      "dashboardsDesc": "Custom monitoring dashboards with drag & drop widgets",
+      "sla": "SLA & Availability",
+      "slaDesc": "Service level agreement governance, compliance, and reporting",
+      "inventory": "Asset Inventory",
+      "inventoryDesc": "Centralized management of hosts, CTOs, and cables",
+      "telegram": "Telegram Bot",
+      "telegramDesc": "Automated alerts and interactive status queries via Telegram"
+    },
+    "updates": {
+      "i18n": "Multi-language support",
+      "i18nDesc": "Full internationalization with PT, EN, ES support across all modules",
+      "docsPage": "Documentation page",
+      "docsPageDesc": "Knowledge base with markdown docs and system updates timeline",
+      "warRoom": "War Room improvements",
+      "warRoomDesc": "Enhanced fullscreen mode with sound alerts and NOC console",
+      "oltHealth": "OLT Health Panel",
+      "oltHealthDesc": "Real-time OLT monitoring with slot temperatures and PON traffic",
+      "cableVertex": "Cable vertex editing",
+      "cableVertexDesc": "Fixed vertex snapping and route recalculation for cables",
+      "slaModule": "SLA Governance module",
+      "slaModuleDesc": "Complete SLA management with compliance checks and PDF export"
+    },
+    "support": {
+      "title": "Support",
+      "subtitle": "Choose a channel to get help",
+      "telegram": "Telegram Bot",
+      "telegramDesc": "Interactive support via FlowPulse Bot",
+      "whatsapp": "WhatsApp",
+      "whatsappDesc": "Direct chat with our support team",
+      "email": "E-mail",
+      "emailDesc": "Send a detailed request to our team"
+    }
   }
 }

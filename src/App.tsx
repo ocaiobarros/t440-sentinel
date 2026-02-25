@@ -43,6 +43,7 @@ import BgpFlowList from "./pages/monitoring/BgpFlowList";
 import FleetIntelligenceList from "./pages/monitoring/FleetIntelligenceList";
 import DashboardsList from "./pages/monitoring/DashboardsList";
 import UserSettings from "./pages/UserSettings";
+import DocsPage from "./pages/DocsPage";
 
 const queryClient = new QueryClient();
 
@@ -101,6 +102,9 @@ const App = () => (
                       {/* Governance */}
                       <Route path="governance/sla" element={<SLAGovernance />} />
                       <Route path="governance/timeline" element={<TimelinePage />} />
+
+                      {/* Docs */}
+                      <Route path="docs" element={<DocsPage />} />
 
                       {/* Settings */}
                       <Route path="settings/connections" element={

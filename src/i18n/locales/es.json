@@ -26,7 +26,10 @@
     "tenants": "Tenants",
     "system": "Sistema",
     "hostStatus": "Estado del Host",
-    "updates": "Actualizaciones"
+    "updates": "Actualizaciones",
+    "docs": "Docs",
+    "support": "Soporte",
+    "help": "Ayuda"
   },
   "header": {
     "searchModules": "Buscar módulos...",
@@ -473,5 +476,53 @@
     "cdns": "CDNs",
     "enterprise": "Enterprise",
     "others": "Otros"
+  },
+  "docs": {
+    "title": "Documentación",
+    "subtitle": "Base de conocimiento y guías de uso",
+    "searchPlaceholder": "Buscar en la documentación...",
+    "noContent": "Documentación próximamente.",
+    "whatsNew": "Novedades",
+    "feature": "Función",
+    "fix": "Corrección",
+    "improvement": "Mejora",
+    "modules": {
+      "flowmap": "FlowMap",
+      "flowmapDesc": "Topología geoespacial NOC con estado en tiempo real y detección de anillo",
+      "bgp": "BGP Flow Monitor",
+      "bgpDesc": "Monitoreo de sesiones BGP, analíticas de peering ASN y flujo de tráfico",
+      "dashboards": "Dashboard Builder",
+      "dashboardsDesc": "Dashboards de monitoreo personalizados con widgets drag & drop",
+      "sla": "SLA & Disponibilidad",
+      "slaDesc": "Gobernanza de acuerdos de nivel de servicio, cumplimiento e informes",
+      "inventory": "Inventario de Activos",
+      "inventoryDesc": "Gestión centralizada de hosts, CTOs y cables",
+      "telegram": "Bot de Telegram",
+      "telegramDesc": "Alertas automáticas y consultas interactivas de estado vía Telegram"
+    },
+    "updates": {
+      "i18n": "Soporte multi-idioma",
+      "i18nDesc": "Internacionalización completa con soporte PT, EN, ES en todos los módulos",
+      "docsPage": "Página de documentación",
+      "docsPageDesc": "Base de conocimiento con docs en markdown y timeline de actualizaciones",
+      "warRoom": "Mejoras en War Room",
+      "warRoomDesc": "Modo pantalla completa mejorado con alertas sonoras y consola NOC",
+      "oltHealth": "Panel de Salud OLT",
+      "oltHealthDesc": "Monitoreo OLT en tiempo real con temperaturas de slot y tráfico PON",
+      "cableVertex": "Edición de vértices de cable",
+      "cableVertexDesc": "Corrección de ajuste de vértices y recálculo de ruta para cables",
+      "slaModule": "Módulo de Gobernanza SLA",
+      "slaModuleDesc": "Gestión completa de SLA con verificación de cumplimiento y exportación PDF"
+    },
+    "support": {
+      "title": "Soporte",
+      "subtitle": "Elige un canal para obtener ayuda",
+      "telegram": "Bot de Telegram",
+      "telegramDesc": "Soporte interactivo vía FlowPulse Bot",
+      "whatsapp": "WhatsApp",
+      "whatsappDesc": "Chat directo con nuestro equipo de soporte",
+      "email": "E-mail",
+      "emailDesc": "Envíe una solicitud detallada a nuestro equipo"
+    }
   }
 }
