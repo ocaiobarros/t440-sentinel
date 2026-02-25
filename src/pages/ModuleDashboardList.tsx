@@ -1,9 +1,10 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
+import { useRef, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Plus, Eye, Pencil, Trash2, LayoutDashboard, ExternalLink } from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, LayoutDashboard, ExternalLink, Download, Upload } from "lucide-react";
 import {
   ContextMenu,
   ContextMenuContent,
@@ -55,9 +56,107 @@ export default function ModuleDashboardList({ category, title, description, icon
     },
   });
 
+  // ── Export logic ──
+  const handleExport = useCallback(async (dashId: string, dashName: string) => {
+    try {
+      const [{ data: dash, error: dErr }, { data: widgets, error: wErr }] = await Promise.all([
+        supabase.from("dashboards").select("name, description, category, settings, layout").eq("id", dashId).single(),
+        supabase.from("widgets").select("widget_type, title, position_x, position_y, width, height, config, query, adapter").eq("dashboard_id", dashId),
+      ]);
+      if (dErr || wErr) throw dErr || wErr;
+
+      const payload = {
+        _flowpulse_version: 1,
+        exported_at: new Date().toISOString(),
+        dashboard: dash,
+        widgets: widgets ?? [],
+      };
+
+      const slug = dashName.toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 40);
+      const date = new Date().toISOString().slice(0, 10);
+      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `flowpulse-dash-${slug}-${date}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast({ title: "Exportado!", description: `"${dashName}" salvo como JSON.` });
+    } catch (err) {
+      toast({ title: "Erro ao exportar", description: (err as Error).message, variant: "destructive" });
+    }
+  }, [toast]);
+
+  // ── Import logic ──
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleImport = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    // reset so same file can be re-imported
+    e.target.value = "";
+
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+
+      // Validate structure
+      if (!payload?._flowpulse_version || !payload?.dashboard || !Array.isArray(payload?.widgets)) {
+        throw new Error("Arquivo JSON inválido — não é um export FlowPulse.");
+      }
+
+      const { data: session } = await supabase.auth.getSession();
+      if (!session?.session) throw new Error("Não autenticado");
+      const userId = session.session.user.id;
+      const { data: tenantData } = await supabase.rpc("get_user_tenant_id", { p_user_id: userId });
+      const tenantId = tenantData as string;
+
+      const dashData = payload.dashboard;
+      const importedName = `${dashData.name ?? "Importado"} (Import)`;
+
+      // Create dashboard — strip any sensitive fields
+      const { data: newDash, error: insertErr } = await supabase.from("dashboards").insert({
+        tenant_id: tenantId,
+        name: importedName,
+        description: dashData.description ?? null,
+        category: dashData.category ?? category,
+        settings: dashData.settings ?? {},
+        layout: dashData.layout ?? [],
+        created_by: userId,
+      } as any).select("id").single();
+      if (insertErr) throw insertErr;
+
+      // Insert widgets
+      if (payload.widgets.length > 0 && newDash) {
+        const widgetRows = payload.widgets.map((w: any) => ({
+          dashboard_id: newDash.id,
+          widget_type: w.widget_type,
+          title: w.title ?? "Widget",
+          position_x: w.position_x ?? 0,
+          position_y: w.position_y ?? 0,
+          width: w.width ?? 4,
+          height: w.height ?? 3,
+          config: w.config ?? {},
+          query: w.query ?? {},
+          adapter: w.adapter ?? {},
+        }));
+        const { error: wInsertErr } = await supabase.from("widgets").insert(widgetRows);
+        if (wInsertErr) throw wInsertErr;
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["dashboards", category] });
+      toast({ title: "Importado com sucesso!", description: `Dashboard "${importedName}" importado para a CBLabs!` });
+    } catch (err) {
+      toast({ title: "Erro ao importar", description: (err as Error).message, variant: "destructive" });
+    }
+  }, [category, queryClient, toast]);
+
   return (
     <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-green/5 rounded-full blur-[120px] pointer-events-none" />
+
+      {/* Hidden file input for import */}
+      <input ref={fileInputRef} type="file" accept=".json" className="hidden" onChange={handleImport} />
 
       <div className="max-w-[1200px] mx-auto relative z-10">
         <motion.header
@@ -73,16 +172,30 @@ export default function ModuleDashboardList({ category, title, description, icon
             </div>
           </div>
 
-          <RoleGate allowed={["admin", "editor"]}>
-            <Button
-              size="sm"
-              onClick={() => navigate(defaultCreatePath)}
-              className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Novo Painel
-            </Button>
-          </RoleGate>
+          <div className="flex items-center gap-2">
+            <RoleGate allowed={["admin", "editor"]}>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => fileInputRef.current?.click()}
+                className="gap-1.5 text-xs"
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Importar
+              </Button>
+            </RoleGate>
+
+            <RoleGate allowed={["admin", "editor"]}>
+              <Button
+                size="sm"
+                onClick={() => navigate(defaultCreatePath)}
+                className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                Novo Painel
+              </Button>
+            </RoleGate>
+          </div>
         </motion.header>
 
         {isLoading ? (
@@ -154,6 +267,9 @@ export default function ModuleDashboardList({ category, title, description, icon
                         <Button variant="outline" size="sm" onClick={openNewTab} className="gap-1 text-[10px] h-7" title="Abrir em nova aba">
                           <ExternalLink className="w-3 h-3" />
                         </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleExport(dash.id, dash.name)} className="gap-1 text-[10px] h-7" title="Exportar JSON">
+                          <Download className="w-3 h-3" />
+                        </Button>
                         <RoleGate allowed={["admin", "editor"]}>
                           <Button variant="outline" size="sm" onClick={() => navigate(`/builder/${dash.id}`)} className="flex-1 gap-1 text-[10px] h-7">
                             <Pencil className="w-3 h-3" /> Editar
@@ -173,6 +289,9 @@ export default function ModuleDashboardList({ category, title, description, icon
                     </ContextMenuItem>
                     <ContextMenuItem onClick={openKiosk} className="gap-2 text-xs cursor-pointer">
                       <Eye className="w-3.5 h-3.5" /> Abrir em Modo Kiosk
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={() => handleExport(dash.id, dash.name)} className="gap-2 text-xs cursor-pointer">
+                      <Download className="w-3.5 h-3.5" /> Exportar Config (JSON)
                     </ContextMenuItem>
                   </ContextMenuContent>
                 </ContextMenu>
