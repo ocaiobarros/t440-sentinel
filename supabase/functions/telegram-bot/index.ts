@@ -140,22 +140,19 @@ async function handleMessage(
 
   if (text === "/status") {
     await cmdStatus(creds, tenantId, supabase);
+  } else if (text.startsWith("/status ")) {
+    const printerName = text.replace("/status ", "").trim();
+    await cmdPrinterStatus(creds, tenantId, printerName);
   } else if (text === "/flowmaps") {
     await cmdFlowmaps(creds, tenantId, supabase);
   } else if (text === "/contadores") {
     await cmdContadores(creds, tenantId);
   } else if (text === "/toner") {
     await cmdToner(creds, tenantId);
-  } else if (text === "/help" || text === "/start") {
-    await sendMessage(creds.botToken, creds.chatId,
-      "🤖 *FLOWPULSE Bot*\n\n" +
-      "Comandos disponíveis:\n" +
-      "• `/status` — Resumo do NOC\n" +
-      "• `/flowmaps` — Navegar mapas e links\n" +
-      "• `/contadores` — Contadores de impressão\n" +
-      "• `/toner` — Suprimentos baixos (<10%)\n" +
-      "• `/help` — Esta mensagem"
-    );
+  } else if (text === "/fechamento") {
+    await cmdFechamento(creds, tenantId, supabase);
+  } else if (text === "/help" || text === "/start" || text === "/ajuda") {
+    await cmdAjuda(creds);
   }
 }
 
@@ -434,6 +431,100 @@ function formatCapacity(mbps: number): string {
   return `${mbps} Mbps`;
 }
 
+/* ─── Help Command ─── */
+
+async function cmdAjuda(creds: TenantCreds) {
+  await sendMessage(creds.botToken, creds.chatId,
+    "🤖 *FLOWPULSE Bot — Menu de Ajuda*\n\n" +
+    "📋 *Comandos disponíveis:*\n\n" +
+    "🖨️ `/contadores` — Lista o odômetro de faturamento (Base Manual + Leitura Zabbix) de todas as impressoras.\n\n" +
+    "⚠️ `/toner` — Relatório rápido de níveis de tinta/toner (exibe apenas os que precisam de atenção).\n\n" +
+    "📅 `/fechamento` — Consulta o último snapshot mensal salvo no sistema.\n\n" +
+    "📊 `/status [nome]` — Consulta o status em tempo real de uma impressora específica. Ex: `/status Portaria`\n\n" +
+    "📡 `/status` — Resumo geral do NOC (hosts, links e alertas).\n\n" +
+    "🗺 `/flowmaps` — Navegar mapas de rede e gráficos de tráfego.\n\n" +
+    "❓ `/ajuda` — Esta mensagem.\n\n" +
+    "🌐 Acesse o painel completo:\nhttps://flowpulse.app/monitoring/printers"
+  );
+}
+
+/* ─── Fechamento Command ─── */
+
+async function cmdFechamento(creds: TenantCreds, tenantId: string, supabase: ReturnType<typeof createClient>) {
+  await sendChatAction(creds.botToken, creds.chatId, "typing");
+
+  const { data } = await supabase
+    .from("billing_logs")
+    .select("period, snapshot_at, total_pages, entries")
+    .eq("tenant_id", tenantId)
+    .order("snapshot_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!data) {
+    await sendMessage(creds.botToken, creds.chatId, "📭 Nenhum fechamento mensal encontrado ainda.");
+    return;
+  }
+
+  const entries = (data.entries as any[]) ?? [];
+  const lines = entries.map(
+    (e: any) => `• [${e.host_name || e.name || "?"}] *${(e.billing_counter ?? e.billingCounter ?? 0).toLocaleString("pt-BR")}* pág.`,
+  );
+
+  await sendMessage(creds.botToken, creds.chatId,
+    `📅 *Último Fechamento Mensal*\n\n` +
+    `📆 Período: *${data.period}*\n` +
+    `🕐 Capturado em: _${new Date(data.snapshot_at).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}_\n\n` +
+    (lines.length > 0 ? lines.join("\n") + "\n\n" : "") +
+    `📄 *Total: ${(data.total_pages ?? 0).toLocaleString("pt-BR")} páginas*`
+  );
+}
+
+/* ─── Printer Status Command ─── */
+
+async function cmdPrinterStatus(creds: TenantCreds, tenantId: string, printerName: string) {
+  await sendChatAction(creds.botToken, creds.chatId, "typing");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/printer-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
+      body: JSON.stringify({ tenant_id: tenantId, action: "counters" }),
+    });
+    const data = await resp.json();
+
+    if (!data.printers || data.printers.length === 0) {
+      await sendMessage(creds.botToken, creds.chatId, "📭 Nenhuma impressora configurada.");
+      return;
+    }
+
+    const search = printerName.toLowerCase();
+    const match = data.printers.find((p: any) => p.name.toLowerCase().includes(search));
+
+    if (!match) {
+      await sendMessage(creds.botToken, creds.chatId,
+        `❌ Impressora *"${printerName}"* não encontrada.\n\nUse \`/contadores\` para ver a lista completa.`
+      );
+      return;
+    }
+
+    const statusEmoji = match.status === "online" ? "🟢" : match.status === "offline" ? "🔴" : "🟡";
+
+    await sendMessage(creds.botToken, creds.chatId,
+      `🖨️ *${match.name}*\n\n` +
+      `${statusEmoji} Status: *${match.status ?? "desconhecido"}*\n` +
+      `📊 Contador Zabbix: *${(match.zabbixCounter ?? 0).toLocaleString("pt-BR")}*\n` +
+      `📋 Contador Base: *${(match.baseCounter ?? 0).toLocaleString("pt-BR")}*\n` +
+      `📄 Total Faturado: *${(match.billingCounter ?? 0).toLocaleString("pt-BR")}* pág.\n\n` +
+      `_Atualizado: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}_`
+    );
+  } catch (err) {
+    await sendMessage(creds.botToken, creds.chatId, `❌ Erro ao buscar status: ${err}`);
+  }
+}
+
 /* ─── Printer Commands ─── */
 
 async function cmdContadores(creds: TenantCreds, tenantId: string) {
@@ -574,7 +665,7 @@ async function handleSendAlert(
     .from("telemetry_config")
     .select("config_key, config_value")
     .eq("tenant_id", tenantId)
-    .in("config_key", ["telegram_notify_bgp_down", "telegram_notify_high_cpu", "telegram_notify_admin_login"]);
+    .in("config_key", ["telegram_notify_bgp_down", "telegram_notify_high_cpu", "telegram_notify_admin_login", "telegram_notify_printer_error"]);
 
   const prefMap = Object.fromEntries(
     (prefs ?? []).map((r: { config_key: string; config_value: string }) => [r.config_key, r.config_value])
@@ -587,6 +678,11 @@ async function handleSendAlert(
     });
   }
   if (alertType === "high_cpu" && prefMap.telegram_notify_high_cpu === "false") {
+    return new Response(JSON.stringify({ skipped: true, reason: "notification_disabled" }), {
+      status: 200, headers: { ...headers, "Content-Type": "application/json" },
+    });
+  }
+  if (alertType === "printer_error" && prefMap.telegram_notify_printer_error === "false") {
     return new Response(JSON.stringify({ skipped: true, reason: "notification_disabled" }), {
       status: 200, headers: { ...headers, "Content-Type": "application/json" },
     });

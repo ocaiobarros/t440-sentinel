@@ -11,11 +11,23 @@ O **Bot do Telegram** do FlowPulse permite receber alertas e consultar o status 
 
 ## Comandos Disponíveis
 
+### `/ajuda` ou `/start`
+Exibe o menu interativo com todos os comandos disponíveis e um link direto para o painel web.
+
 ### `/status`
 Retorna a saúde geral do sistema:
 - Hosts online/offline
 - Incidentes abertos
 - Uptime global
+
+### `/status [nome]`
+Consulta o status em tempo real de uma impressora específica:
+- Status (online/offline)
+- Contador Zabbix atual
+- Contador Base (contrato)
+- Total Faturado
+
+Exemplo: `/status Portaria`
 
 ### `/flowmaps`
 Lista os FlowMaps disponíveis com navegação interativa:
@@ -35,6 +47,12 @@ Lista todas as impressoras monitoradas com seus contadores de faturamento:
 Lista impressoras com suprimentos abaixo de 10%:
 - Nome da impressora
 - Nível de cada suprimento crítico
+
+### `/fechamento`
+Consulta o último snapshot mensal salvo no sistema:
+- Período e data de captura
+- Lista de impressoras com contadores
+- Total consolidado de páginas
 
 ### Gráficos de Tráfego
 
@@ -56,6 +74,7 @@ O bot envia notificações automáticas para:
 - ⚠️ CPU acima do limiar configurado
 - 🔐 Acessos administrativos
 - 📊 Fechamento mensal de contadores de impressão
+- 🖨️ Erros de impressora (Papel Preso, Porta Aberta)
 
 ## Fechamento Mensal
 
