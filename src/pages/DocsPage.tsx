@@ -21,6 +21,7 @@ interface DocModule {
 }
 
 const DOC_MODULES: DocModule[] = [
+  { id: "install",    titleKey: "docs.modules.install",    descKey: "docs.modules.installDesc",    icon: Wrench,           color: "text-orange-400",  file: "/docs/installation.md" },
   { id: "flowmap",    titleKey: "docs.modules.flowmap",    descKey: "docs.modules.flowmapDesc",    icon: Map,              color: "text-neon-green",  file: "/docs/flowmap.md" },
   { id: "bgp",        titleKey: "docs.modules.bgp",        descKey: "docs.modules.bgpDesc",        icon: Globe,            color: "text-neon-cyan",   file: "/docs/bgp-flow.md" },
   { id: "dashboards", titleKey: "docs.modules.dashboards", descKey: "docs.modules.dashboardsDesc", icon: LayoutDashboard,  color: "text-neon-amber",  file: "/docs/dashboards.md" },
@@ -117,6 +118,23 @@ export default function DocsPage() {
     <div className="flex flex-col lg:flex-row gap-6 p-4 md:p-6 h-full min-h-0">
       {/* ─── Main content ─── */}
       <div className="flex-1 min-w-0">
+        {/* Breadcrumbs */}
+        <nav className="flex items-center gap-1.5 text-[11px] text-muted-foreground mb-4">
+          <button onClick={() => { setSelectedModule(null); }} className="hover:text-foreground transition-colors">
+            {t("operations.title")}
+          </button>
+          <ChevronRight className="w-3 h-3" />
+          <button onClick={() => setSelectedModule(null)} className={`hover:text-foreground transition-colors ${!selectedModule ? "text-foreground font-semibold" : ""}`}>
+            {t("docs.title")}
+          </button>
+          {selectedModule && (
+            <>
+              <ChevronRight className="w-3 h-3" />
+              <span className="text-foreground font-semibold">{t(selectedModule.titleKey)}</span>
+            </>
+          )}
+        </nav>
+
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
           <div className="flex items-center gap-3 mb-4">
@@ -260,6 +278,13 @@ export default function DocsPage() {
           </div>
         </div>
       </motion.aside>
+
+      {/* Footer */}
+      <div className="absolute bottom-2 left-4 right-4 lg:left-auto lg:right-6">
+        <p className="text-[9px] text-muted-foreground/40 font-mono text-right">
+          FlowPulse v1.1.0-Alpha | @flowpulselabsbot
+        </p>
+      </div>
     </div>
   );
 }

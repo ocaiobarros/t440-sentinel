@@ -503,7 +503,7 @@ export default function FlowMapCanvas({
           e.originalEvent.stopPropagation();
           e.originalEvent.preventDefault();
         }
-        console.log("[FlowMapCanvas] host click/tap:", h.id, h.host_name);
+        // Host click/tap
         onHostClick?.(h.id);
         // Dispatch for mobile FieldOverlay
         window.dispatchEvent(new CustomEvent("field-host-tap", { detail: h.id }));
@@ -513,7 +513,7 @@ export default function FlowMapCanvas({
       marker.getElement()?.addEventListener("touchend", (te) => {
         te.stopPropagation();
         te.preventDefault();
-        console.log("[FlowMapCanvas] touchend on host:", h.id);
+        // touchend on host
         onHostClick?.(h.id);
         window.dispatchEvent(new CustomEvent("field-host-tap", { detail: h.id }));
       }, { passive: false });

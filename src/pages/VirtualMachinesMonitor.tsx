@@ -141,9 +141,6 @@ function VMDetailCard({ vm, index, hostCpuFreqHz }: { vm: VirtVM; index: number;
 
   // Compute CPU in MHz: use cpuUsageHz if available, else estimate from host frequency
   const cpuMhzDisplay = useMemo(() => {
-    // Debug: log what we have
-    console.log(`[VM ${vm.name}] cpuUsageHz="${vm.cpuUsageHz}", cpuUsage=${vm.cpuUsage}, hostCpuFreqHz=${hostCpuFreqHz}`);
-    
     if (vm.cpuUsageHz) return formatHz(vm.cpuUsageHz);
     // Estimate from host CPU frequency × usage%
     if (hostCpuFreqHz && hostCpuFreqHz > 0) {
@@ -501,7 +498,7 @@ export default function VirtualMachinesMonitor() {
 
   // Parse host CPU frequency to Hz for estimating VM MHz
   const hostCpuFreqHz = useMemo(() => {
-    console.log("[VMs] virt.cpu:", JSON.stringify(virt?.cpu));
+    if (!virt?.cpu?.frequency) return 0;
     if (!virt?.cpu?.frequency) return 0;
     const raw = virt.cpu.frequency;
     const m = raw.match(/([\d.]+)\s*(Hz|KHz|MHz|GHz)/i);

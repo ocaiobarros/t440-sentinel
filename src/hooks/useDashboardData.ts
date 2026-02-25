@@ -225,7 +225,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     if (!dashboard?.zabbix_connection_id || !dashboard.widgets.length) return;
 
     const intervalMs = effectiveInterval * 1000;
-    console.log(`🔄 Polling: ${effectiveInterval}s (${intervalMs}ms)${isEmergencyMode ? " ⚡ EMERGENCY MODE" : ""}`);
+    // Polling active: ${effectiveInterval}s
 
     // Immediate first poll
     pollNow();

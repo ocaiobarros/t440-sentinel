@@ -100,7 +100,7 @@ export function useFlowMapStatus({
     if (!mapId) return;
     // 🅱️ Single-flight: skip if already in-flight
     if (rpcInflightRef.current) {
-      console.log("[FlowMapStatus] RPC skipped (in-flight)");
+      // RPC skipped (in-flight)
       return;
     }
     rpcInflightRef.current = true;
@@ -128,9 +128,7 @@ export function useFlowMapStatus({
 
         // 🅲 Log RPC metrics for performance monitoring
         const maxDepth = typed.reduce((m, h) => Math.max(m, h.depth), 0);
-        console.log(
-          `[FlowMapStatus] RPC OK: ${durationMs}ms, ${typed.length} hosts, maxDepth=${maxDepth}${durationMs > 150 ? " ⚠ SLOW" : ""}`
-        );
+        // RPC OK: metrics tracked internally
       }
     } catch (err: any) {
       console.warn("[FlowMapStatus] RPC fetch error:", err.message);
@@ -148,7 +146,7 @@ export function useFlowMapStatus({
       const count = recomputePendingRef.current;
       recomputePendingRef.current = 0;
       recomputeWindowRef.current = null;
-      console.log(`[FlowMapStatus] Windowed recompute: ${count} events coalesced`);
+      // Windowed recompute coalesced
       fetchEffectiveStatus();
     }, RECOMPUTE_WINDOW_MS);
   }, [fetchEffectiveStatus]);
@@ -226,14 +224,14 @@ export function useFlowMapStatus({
     fetchStatus();
     const intervalMs = Math.max(10, Math.min(300, refreshInterval)) * 1000;
     intervalRef.current = setInterval(fetchStatus, intervalMs);
-    console.log(`[FlowMapStatus] polling started (${intervalMs}ms)`);
+    // Polling started
   }, [fetchStatus, refreshInterval]);
 
   const stopPolling = useCallback(() => {
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
       intervalRef.current = null;
-      console.log("[FlowMapStatus] polling stopped");
+      // Polling stopped
     }
     abortRef.current?.abort();
   }, []);
@@ -289,7 +287,7 @@ export function useFlowMapStatus({
           if (msg.tabId < tabId) {
             isLeaderRef.current = false;
             stopPolling();
-            console.log("[FlowMapStatus] yielded leadership to", msg.tabId);
+            // Yielded leadership
           }
         }
       }
@@ -321,7 +319,7 @@ export function useFlowMapStatus({
       const timeSinceHeartbeat = Date.now() - lastLeaderHeartbeatRef.current;
       if (timeSinceHeartbeat > LEADER_TIMEOUT_MS || lastLeaderHeartbeatRef.current === 0) {
         isLeaderRef.current = true;
-        console.log("[FlowMapStatus] became leader:", tabId);
+        // Became leader
         startPolling();
       }
     }, 500);
@@ -333,7 +331,7 @@ export function useFlowMapStatus({
         const elapsed = Date.now() - lastLeaderHeartbeatRef.current;
         if (elapsed > LEADER_TIMEOUT_MS && lastLeaderHeartbeatRef.current > 0) {
           isLeaderRef.current = true;
-          console.log("[FlowMapStatus] leader died, taking over:", tabId);
+          // Leader died, taking over
           startPolling();
         }
       }

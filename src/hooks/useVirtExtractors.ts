@@ -206,7 +206,7 @@ export function extractProxmoxData(d: IdracData): VirtData {
       const mult = freqMatch[2].toLowerCase() === "ghz" ? 1e9 : 1e6;
       inventoryFreqHz = parseFloat(freqMatch[1]) * mult;
     }
-    console.log(`[PVE] Inventory freq: ${inventoryFreqHz} Hz from "${invStr}"`);
+    // PVE inventory freq parsed
   }
 
   // Detect node name
