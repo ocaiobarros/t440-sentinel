@@ -3,7 +3,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Plus, Eye, Pencil, Trash2, LayoutDashboard } from "lucide-react";
+import { Plus, Eye, Pencil, Trash2, LayoutDashboard, ExternalLink } from "lucide-react";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { useToast } from "@/hooks/use-toast";
 import RoleGate from "@/components/auth/RoleGate";
 
@@ -108,66 +114,70 @@ export default function ModuleDashboardList({ category, title, description, icon
           </motion.div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {dashboards.map((dash, i) => (
-              <motion.div
-                key={dash.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: i * 0.05 }}
-                className="glass-card rounded-xl p-5 border border-border/50 hover:border-neon-green/20 transition-all group"
-              >
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-sm font-display font-bold text-foreground group-hover:text-neon-green transition-colors">
-                      {dash.name}
-                    </h3>
-                    {dash.description && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{dash.description}</p>
-                    )}
-                  </div>
-                </div>
+            {dashboards.map((dash, i) => {
+              const viewUrl = viewBasePath ? `${viewBasePath}/${dash.id}` : `/dashboard/${dash.id}`;
+              const kioskUrl = `${viewUrl}?kiosk=true`;
+              const openNewTab = () => window.open(viewUrl, "_blank");
+              const openKiosk = () => window.open(kioskUrl, "_blank");
 
-                <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground mb-4">
-                  <span className={`w-1.5 h-1.5 rounded-full ${dash.zabbix_connection_id ? "bg-neon-green pulse-green" : "bg-muted-foreground/30"}`} />
-                  <span>{dash.zabbix_connection_id ? "Conectado" : "Sem conexão"}</span>
-                  <span className="mx-1">•</span>
-                  <span>{new Date(dash.updated_at).toLocaleDateString("pt-BR")}</span>
-                </div>
+              return (
+                <ContextMenu key={dash.id}>
+                  <ContextMenuTrigger asChild>
+                    <motion.div
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05 }}
+                      className="glass-card rounded-xl p-5 border border-border/50 hover:border-neon-green/20 transition-all group"
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div>
+                          <h3 className="text-sm font-display font-bold text-foreground group-hover:text-neon-green transition-colors">
+                            {dash.name}
+                          </h3>
+                          {dash.description && (
+                            <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{dash.description}</p>
+                          )}
+                        </div>
+                      </div>
 
-                <div className="flex items-center gap-1.5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => navigate(viewBasePath ? `${viewBasePath}/${dash.id}` : `/dashboard/${dash.id}`)}
-                    className="flex-1 gap-1 text-[10px] h-7"
-                  >
-                    <Eye className="w-3 h-3" />
-                    Visualizar
-                  </Button>
-                  <RoleGate allowed={["admin", "editor"]}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => navigate(`/builder/${dash.id}`)}
-                      className="flex-1 gap-1 text-[10px] h-7"
-                    >
-                      <Pencil className="w-3 h-3" />
-                      Editar
-                    </Button>
-                  </RoleGate>
-                  <RoleGate allowed={["admin"]}>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => deleteMutation.mutate(dash.id)}
-                      className="h-7 w-7 text-muted-foreground hover:text-neon-red"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
-                  </RoleGate>
-                </div>
-              </motion.div>
-            ))}
+                      <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground mb-4">
+                        <span className={`w-1.5 h-1.5 rounded-full ${dash.zabbix_connection_id ? "bg-neon-green pulse-green" : "bg-muted-foreground/30"}`} />
+                        <span>{dash.zabbix_connection_id ? "Conectado" : "Sem conexão"}</span>
+                        <span className="mx-1">•</span>
+                        <span>{new Date(dash.updated_at).toLocaleDateString("pt-BR")}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <Button variant="outline" size="sm" onClick={() => navigate(viewUrl)} className="flex-1 gap-1 text-[10px] h-7">
+                          <Eye className="w-3 h-3" /> Visualizar
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={openNewTab} className="gap-1 text-[10px] h-7" title="Abrir em nova aba">
+                          <ExternalLink className="w-3 h-3" />
+                        </Button>
+                        <RoleGate allowed={["admin", "editor"]}>
+                          <Button variant="outline" size="sm" onClick={() => navigate(`/builder/${dash.id}`)} className="flex-1 gap-1 text-[10px] h-7">
+                            <Pencil className="w-3 h-3" /> Editar
+                          </Button>
+                        </RoleGate>
+                        <RoleGate allowed={["admin"]}>
+                          <Button variant="ghost" size="icon" onClick={() => deleteMutation.mutate(dash.id)} className="h-7 w-7 text-muted-foreground hover:text-neon-red">
+                            <Trash2 className="w-3 h-3" />
+                          </Button>
+                        </RoleGate>
+                      </div>
+                    </motion.div>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent className="w-52 bg-card/95 backdrop-blur-xl border-border/50">
+                    <ContextMenuItem onClick={openNewTab} className="gap-2 text-xs cursor-pointer">
+                      <ExternalLink className="w-3.5 h-3.5" /> Abrir em Nova Aba
+                    </ContextMenuItem>
+                    <ContextMenuItem onClick={openKiosk} className="gap-2 text-xs cursor-pointer">
+                      <Eye className="w-3.5 h-3.5" /> Abrir em Modo Kiosk
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
+              );
+            })}
           </div>
         )}
       </div>

@@ -2,7 +2,7 @@ import React, { useState } from "react";
 import type { WidgetConfig } from "@/types/builder";
 import DynamicIcon from "./DynamicIcon";
 import { buildWidgetCSS, getGlassClass } from "@/lib/widget-style-utils";
-import { MoreVertical, Copy, Settings2, Trash2 } from "lucide-react";
+import { MoreVertical, Copy, Settings2, Trash2, Maximize2 } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -19,12 +19,13 @@ interface Props {
   onDuplicate?: (widget: WidgetConfig) => void;
   onEdit?: (widget: WidgetConfig) => void;
   onDelete?: (id: string) => void;
+  dashboardId?: string;
 }
 
 /** Use themed primary color, fallback to explicit style color */
 const PRIMARY_CSS = "hsl(var(--primary))";
 
-const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSelected, onClick, isPreview, onDuplicate, onEdit, onDelete }: Props) {
+const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSelected, onClick, isPreview, onDuplicate, onEdit, onDelete, dashboardId }: Props) {
   const s = widget.style;
   const inlineCSS = buildWidgetCSS(s as any);
   const glassClass = getGlassClass(s as any);
@@ -95,7 +96,16 @@ const WidgetPreviewCard = React.memo(function WidgetPreviewCard({ widget, isSele
                   <span className="ml-auto text-[10px] text-muted-foreground/50 font-mono">Enter</span>
                 </DropdownMenuItem>
               )}
-              {(onDuplicate || onEdit) && onDelete && <DropdownMenuSeparator className="bg-border/30" />}
+              {dashboardId && (
+                <DropdownMenuItem
+                  onClick={() => window.open(`/dashboard/${dashboardId}?kiosk=true`, "_blank")}
+                  className="gap-2 text-xs cursor-pointer"
+                >
+                  <Maximize2 className="h-3.5 w-3.5" />
+                  Expandir (Kiosk)
+                </DropdownMenuItem>
+              )}
+              {(onDuplicate || onEdit || dashboardId) && onDelete && <DropdownMenuSeparator className="bg-border/30" />}
               {onDelete && (
                 <DropdownMenuItem onClick={() => onDelete(widget.id)} className="gap-2 text-xs cursor-pointer text-destructive focus:text-destructive">
                   <Trash2 className="h-3.5 w-3.5" />

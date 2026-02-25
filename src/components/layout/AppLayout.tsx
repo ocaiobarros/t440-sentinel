@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
+import { useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Maximize2 } from "lucide-react";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -10,7 +11,13 @@ interface AppLayoutProps {
 }
 
 export default function AppLayout({ children }: AppLayoutProps) {
-  const [isKiosk, setIsKiosk] = useState(false);
+  const [searchParams] = useSearchParams();
+  const kioskFromUrl = searchParams.get("kiosk") === "true";
+  const [isKiosk, setIsKiosk] = useState(kioskFromUrl);
+
+  useEffect(() => {
+    if (kioskFromUrl) setIsKiosk(true);
+  }, [kioskFromUrl]);
 
   const toggleKiosk = useCallback(() => setIsKiosk((k) => !k), []);
 

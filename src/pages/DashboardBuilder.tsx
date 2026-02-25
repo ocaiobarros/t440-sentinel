@@ -509,6 +509,7 @@ export default function DashboardBuilder() {
                         setSidebarOpen(true);
                       }}
                       onDelete={deleteWidget}
+                      dashboardId={config.id}
                     />
                   </div>
                 ))}
