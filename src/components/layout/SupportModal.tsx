@@ -16,7 +16,7 @@ export default function SupportModal({ open, onOpenChange }: SupportModalProps) 
       icon: Send,
       label: t("docs.support.telegram"),
       desc: t("docs.support.telegramDesc"),
-      href: "https://t.me/FlowPulseBot",
+      href: "https://t.me/flowpulselabsbot",
       color: "text-blue-400",
       bg: "bg-blue-500/10 hover:bg-blue-500/20 border-blue-500/20",
     },
