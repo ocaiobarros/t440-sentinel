@@ -44,6 +44,7 @@ import FleetIntelligenceList from "./pages/monitoring/FleetIntelligenceList";
 import DashboardsList from "./pages/monitoring/DashboardsList";
 import PrinterList from "./pages/monitoring/PrinterList";
 import PrinterIntelligence from "./pages/PrinterIntelligence";
+import BillingHistory from "./pages/BillingHistory";
 import UserSettings from "./pages/UserSettings";
 import DocsPage from "./pages/DocsPage";
 
@@ -103,6 +104,7 @@ const App = () => (
                       <Route path="monitoring/printers" element={<PrinterList />} />
                       <Route path="monitoring/printers/new" element={<PrinterIntelligence />} />
                       <Route path="monitoring/printers/:dashboardId" element={<PrinterIntelligence />} />
+                      <Route path="monitoring/printers/billing" element={<BillingHistory />} />
 
                       {/* Governance */}
                       <Route path="governance/sla" element={<SLAGovernance />} />

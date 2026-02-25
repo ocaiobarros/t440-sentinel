@@ -392,6 +392,44 @@ export type Database = {
           },
         ]
       }
+      billing_logs: {
+        Row: {
+          created_at: string
+          entries: Json
+          id: string
+          period: string
+          snapshot_at: string
+          tenant_id: string
+          total_pages: number
+        }
+        Insert: {
+          created_at?: string
+          entries?: Json
+          id?: string
+          period: string
+          snapshot_at?: string
+          tenant_id: string
+          total_pages?: number
+        }
+        Update: {
+          created_at?: string
+          entries?: Json
+          id?: string
+          period?: string
+          snapshot_at?: string
+          tenant_id?: string
+          total_pages?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "billing_logs_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       dashboards: {
         Row: {
           category: string | null
@@ -1272,6 +1310,54 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "notification_channels_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      printer_configs: {
+        Row: {
+          base_counter: number
+          created_at: string
+          dashboard_id: string | null
+          host_name: string
+          id: string
+          tenant_id: string
+          updated_at: string
+          zabbix_host_id: string
+        }
+        Insert: {
+          base_counter?: number
+          created_at?: string
+          dashboard_id?: string | null
+          host_name?: string
+          id?: string
+          tenant_id: string
+          updated_at?: string
+          zabbix_host_id: string
+        }
+        Update: {
+          base_counter?: number
+          created_at?: string
+          dashboard_id?: string | null
+          host_name?: string
+          id?: string
+          tenant_id?: string
+          updated_at?: string
+          zabbix_host_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "printer_configs_dashboard_id_fkey"
+            columns: ["dashboard_id"]
+            isOneToOne: false
+            referencedRelation: "dashboards"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "printer_configs_tenant_id_fkey"
             columns: ["tenant_id"]
             isOneToOne: false
             referencedRelation: "tenants"
