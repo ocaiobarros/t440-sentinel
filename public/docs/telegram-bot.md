@@ -25,6 +25,17 @@ Lista os FlowMaps disponíveis com navegação interativa:
 4. O Bot envia o status "Enviando foto..." e gera o gráfico automaticamente
 5. A legenda inclui: nome do link, período, picos de tráfego IN/OUT e número de métricas
 
+### `/contadores`
+Lista todas as impressoras monitoradas com seus contadores de faturamento:
+- Nome/Setor da impressora
+- Contador de Faturamento (Base + Zabbix)
+- Total consolidado de páginas
+
+### `/toner`
+Lista impressoras com suprimentos abaixo de 10%:
+- Nome da impressora
+- Nível de cada suprimento crítico
+
 ### Gráficos de Tráfego
 
 Ao selecionar um período, o Bot gera um gráfico de linha via QuickChart contendo:
@@ -44,6 +55,14 @@ O bot envia notificações automáticas para:
 - 🔴 Host crítico DOWN
 - ⚠️ CPU acima do limiar configurado
 - 🔐 Acessos administrativos
+- 📊 Fechamento mensal de contadores de impressão
+
+## Fechamento Mensal
+
+No último dia de cada mês, o sistema automaticamente:
+1. Captura um snapshot de todos os contadores de impressão
+2. Salva o registro na tabela `billing_logs`
+3. Envia um resumo via Telegram com todos os contadores de faturamento
 
 ## Segurança
 
