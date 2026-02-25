@@ -75,7 +75,7 @@ export default function RMSConnections() {
       <div className="max-w-4xl mx-auto relative z-10">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
-          <Link to="/">
+          <Link to="/app/settings/rms-connections">
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -89,7 +89,7 @@ export default function RMSConnections() {
 
           {/* Navigation tabs */}
           <div className="flex items-center gap-1 ml-4">
-            <Link to="/settings/connections">
+            <Link to="/app/settings/connections">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground">
                 Zabbix
               </Button>

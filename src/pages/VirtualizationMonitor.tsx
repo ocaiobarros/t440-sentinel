@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Loader2, Settings2, Server, Cpu, MemoryStick, HardDrive, Network,
@@ -303,6 +304,7 @@ function StatusPill({ label, value, isOk }: { label: string; value: string; isOk
 
 export default function VirtualizationMonitor() {
   const navigate = useNavigate();
+  const { t } = useTranslation();
   const { save: saveDashboard, saving, dashboardId, loadedConfig } = useDashboardPersist<IdracConfig>({
     category: 'virtualization',
     listPath: '/app/monitoring/virtualization',
@@ -413,7 +415,7 @@ export default function VirtualizationMonitor() {
           </div>
           <div className="flex items-center gap-3">
             <button onClick={() => navigate('/app/monitoring/virtualization')} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-              <ArrowLeft className="w-3 h-3" /> Voltar
+              <ArrowLeft className="w-3 h-3" /> {t("common.back")}
             </button>
             {data && (
               <button onClick={refresh} className="text-[9px] font-mono text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border/20 hover:border-border/40">

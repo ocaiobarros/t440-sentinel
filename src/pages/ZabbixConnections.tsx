@@ -110,7 +110,7 @@ export default function ZabbixConnections() {
       <div className="max-w-4xl mx-auto relative z-10">
         {/* Header */}
         <div className="flex items-center gap-4 mb-8">
-          <Link to="/">
+          <Link to="/app/settings/connections">
             <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
               <ArrowLeft className="w-5 h-5" />
             </Button>
@@ -127,7 +127,7 @@ export default function ZabbixConnections() {
             <Button variant="secondary" size="sm" className="text-xs">
               Zabbix
             </Button>
-            <Link to="/settings/rms-connections">
+            <Link to="/app/settings/rms-connections">
               <Button variant="ghost" size="sm" className="text-xs text-muted-foreground hover:text-foreground">
                 RMS
               </Button>
