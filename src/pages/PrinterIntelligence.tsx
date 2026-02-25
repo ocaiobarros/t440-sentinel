@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useMemo } from "react";
+import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -19,6 +19,7 @@ import IdracSetupWizard, { loadIdracConfig, clearIdracConfig, type IdracConfig }
 import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { perfLog } from "@/lib/perf-logger";
 
 /* ─── Types ───────────────────────── */
 
@@ -245,7 +246,7 @@ function TonerBar({ label, value, color, forecast }: { label: string; value: num
 
 /* ─── Printer Card ────────────────── */
 
-function PrinterCard({ printer, onBaseCounterChange, forecasts }: { printer: PrinterData; onBaseCounterChange?: (hostId: string, value: number) => void; forecasts?: SupplyForecast[] }) {
+const PrinterCard = React.memo(function PrinterCard({ printer, onBaseCounterChange, forecasts }: { printer: PrinterData; onBaseCounterChange?: (hostId: string, value: number) => void; forecasts?: SupplyForecast[] }) {
   const { host, items, brand, hasAlert, baseCounter, billingCounter } = printer;
 
   // Helper to find forecast by supply name
@@ -574,7 +575,7 @@ function PrinterCard({ printer, onBaseCounterChange, forecasts }: { printer: Pri
       </ContextMenuContent>
     </ContextMenu>
   );
-}
+});
 
 /* ─── Host Selector Step ──────────── */
 
@@ -887,48 +888,44 @@ export default function PrinterIntelligence() {
         .in("zabbix_host_id", config.selectedHostIds);
       const baseMap = new Map((baseCounters ?? []).map((c: any) => [c.zabbix_host_id, c.base_counter as number]));
 
-      // Fetch ALL items for selected hosts (application tag "Printer" or matching keys)
-      const items = await zabbixProxy(config.connectionId, "item.get", {
-        output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
-        hostids: config.selectedHostIds,
-        tags: [{ tag: "Application", value: "Printer", operator: "0" }],
-        limit: 1000,
-      }) as (ZabbixItem & { hostid: string })[];
-
-      // Fetch by specific key patterns from real templates
-      const keyPatterns = [
-        "ink.", "black", "cyan", "magenta", "yellow",
-        "printers.status", "number.of.printed", "consumable", "cosumable",
-        "kyocera.",
-        "hrDeviceDescr", "sysLocation", "sysContact",
-        "net.tcp.service",
-        ".1.3.6.1.2.1.43.",
-      ];
-      const extraItems = await zabbixProxy(config.connectionId, "item.get", {
-        output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
-        hostids: config.selectedHostIds,
-        search: { key_: keyPatterns.join(",") },
-        searchByAny: true,
-        searchWildcardsEnabled: true,
-        limit: 1000,
-      }) as (ZabbixItem & { hostid: string })[];
-
-      const taggedItems = await zabbixProxy(config.connectionId, "item.get", {
-        output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
-        hostids: config.selectedHostIds,
-        tags: [
-          { tag: "Application", value: "Toner", operator: "0" },
-          { tag: "Application", value: "Contador", operator: "0" },
-          { tag: "Application", value: "Alertas", operator: "0" },
-          { tag: "Application", value: "Equipamento", operator: "0" },
-          { tag: "Application", value: "Consumables level %", operator: "0" },
-          { tag: "Application", value: "Consumables level", operator: "0" },
-          { tag: "Application", value: "Printer information", operator: "0" },
-          { tag: "Application", value: "Servicos", operator: "0" },
-        ],
-        searchByAny: true,
-        limit: 1000,
-      }) as (ZabbixItem & { hostid: string })[];
+      // Fetch items from 3 sources in PARALLEL (avoid waterfall)
+      const [items, extraItems, taggedItems] = await Promise.all([
+        zabbixProxy(config.connectionId, "item.get", {
+          output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
+          hostids: config.selectedHostIds,
+          tags: [{ tag: "Application", value: "Printer", operator: "0" }],
+          limit: 1000,
+        }) as Promise<(ZabbixItem & { hostid: string })[]>,
+        zabbixProxy(config.connectionId, "item.get", {
+          output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
+          hostids: config.selectedHostIds,
+          search: { key_: [
+            "ink.", "black", "cyan", "magenta", "yellow",
+            "printers.status", "number.of.printed", "consumable", "cosumable",
+            "kyocera.", "hrDeviceDescr", "sysLocation", "sysContact",
+            "net.tcp.service", ".1.3.6.1.2.1.43.",
+          ].join(",") },
+          searchByAny: true,
+          searchWildcardsEnabled: true,
+          limit: 1000,
+        }) as Promise<(ZabbixItem & { hostid: string })[]>,
+        zabbixProxy(config.connectionId, "item.get", {
+          output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
+          hostids: config.selectedHostIds,
+          tags: [
+            { tag: "Application", value: "Toner", operator: "0" },
+            { tag: "Application", value: "Contador", operator: "0" },
+            { tag: "Application", value: "Alertas", operator: "0" },
+            { tag: "Application", value: "Equipamento", operator: "0" },
+            { tag: "Application", value: "Consumables level %", operator: "0" },
+            { tag: "Application", value: "Consumables level", operator: "0" },
+            { tag: "Application", value: "Printer information", operator: "0" },
+            { tag: "Application", value: "Servicos", operator: "0" },
+          ],
+          searchByAny: true,
+          limit: 1000,
+        }) as Promise<(ZabbixItem & { hostid: string })[]>,
+      ]);
 
       const allItems = [...items, ...extraItems, ...taggedItems];
       const unique = new Map<string, ZabbixItem & { hostid: string }>();
@@ -983,6 +980,9 @@ export default function PrinterIntelligence() {
     baseCounterMutation.mutate({ hostId, value, hostName: printer?.host.name || printer?.host.host || "" });
   }, [printerData, baseCounterMutation]);
 
+  // Dev performance logging
+  perfLog("PrinterIntelligence", printerData.length > 0);
+
   if (showWizard && !wizardBase) {
     return (
       <IdracSetupWizard
@@ -1005,12 +1005,13 @@ export default function PrinterIntelligence() {
     );
   }
 
-  // Filter printers
-  const filteredPrinters = printerData.filter((p) =>
-    !hostFilter || (p.host.name || p.host.host).toLowerCase().includes(hostFilter.toLowerCase())
-  );
+  // Memoize filtered printers and alert count
+  const filteredPrinters = useMemo(() =>
+    printerData.filter((p) =>
+      !hostFilter || (p.host.name || p.host.host).toLowerCase().includes(hostFilter.toLowerCase())
+    ), [printerData, hostFilter]);
 
-  const alertCount = printerData.filter((p) => p.hasAlert).length;
+  const alertCount = useMemo(() => printerData.filter((p) => p.hasAlert).length, [printerData]);
 
   return (
     <div className={`min-h-screen bg-background grid-pattern scanlines relative ${isKiosk ? "p-4" : "p-4 md:p-6 lg:p-8"}`}>
