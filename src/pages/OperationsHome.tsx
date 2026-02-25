@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
@@ -10,6 +10,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
 import BgpHealthWidget from "@/components/home/BgpHealthWidget";
+import { perfLog } from "@/lib/perf-logger";
 
 /* ── Animated counter ── */
 function AnimatedCounter({ target, duration = 1200 }: { target: number; duration?: number }) {
@@ -58,12 +59,16 @@ export default function OperationsHome() {
   const [activities, setActivities] = useState<{ text: string; time: string; type: string }[]>([]);
   const uptimeData = useMemo(generateUptimeData, []);
 
-  // Load real counts from DB
+  // Load real counts from DB — all in parallel
   useEffect(() => {
     (async () => {
-      const [incRes, ctoRes] = await Promise.all([
+      const [incRes, ctoRes, logsRes] = await Promise.all([
         supabase.from("alert_instances").select("id", { count: "exact", head: true }).eq("status", "open"),
         supabase.from("flow_map_ctos").select("id, occupied_ports, capacity", { count: "exact" }),
+        supabase.from("flow_audit_logs")
+          .select("action, table_name, created_at, user_email")
+          .order("created_at", { ascending: false })
+          .limit(8),
       ]);
       
       const openIncidents = incRes.count ?? 0;
@@ -74,13 +79,7 @@ export default function OperationsHome() {
 
       setStats(prev => ({ ...prev, incidents: openIncidents, capacity: capacityPct }));
 
-      // Recent activities from audit logs
-      const { data: logs } = await supabase
-        .from("flow_audit_logs")
-        .select("action, table_name, created_at, user_email")
-        .order("created_at", { ascending: false })
-        .limit(8);
-
+      const logs = logsRes.data;
       if (logs?.length) {
         setActivities(logs.map(l => ({
           text: `${l.user_email?.split("@")[0] || "Sistema"} → ${l.action} em ${l.table_name}`,
