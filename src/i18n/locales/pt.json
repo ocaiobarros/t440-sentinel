@@ -501,6 +501,8 @@
       "telegramDesc": "Alertas automáticos e consultas interativas de status via Telegram"
     },
     "updates": {
+      "tgCharts": "Gráficos com período no Telegram",
+      "tgChartsDesc": "Seleção de período (1h, 6h, 24h) para gráficos de tráfego via Bot do Telegram com picos IN/OUT",
       "i18n": "Suporte multi-idioma",
       "i18nDesc": "Internacionalização completa com suporte a PT, EN, ES em todos os módulos",
       "docsPage": "Página de documentação",

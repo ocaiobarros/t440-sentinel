@@ -19,9 +19,23 @@ Retorna a saúde geral do sistema:
 
 ### `/flowmaps`
 Lista os FlowMaps disponíveis com navegação interativa:
-- Selecione um mapa para ver detalhes
-- Visualize gráficos de tráfego dos links
-- Receba imagens geradas automaticamente via QuickChart
+1. Selecione um mapa para ver os links
+2. Selecione um link para abrir a escolha de período
+3. Escolha o período do gráfico: **1 Hora**, **6 Horas** ou **24 Horas**
+4. O Bot envia o status "Enviando foto..." e gera o gráfico automaticamente
+5. A legenda inclui: nome do link, período, picos de tráfego IN/OUT e número de métricas
+
+### Gráficos de Tráfego
+
+Ao selecionar um período, o Bot gera um gráfico de linha via QuickChart contendo:
+
+| Campo | Descrição |
+| --- | --- |
+| **Eixo X** | Horários do intervalo selecionado |
+| **Eixo Y** | Tráfego em Mbps |
+| **Linha Azul** | Tráfego de entrada (IN ▼) |
+| **Linha Verde** | Tráfego de saída (OUT ▲) |
+| **Legenda** | Nome do link, capacidade, status, período e picos |
 
 ## Alertas Automáticos
 

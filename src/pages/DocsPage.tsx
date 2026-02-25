@@ -39,6 +39,7 @@ interface UpdateEntry {
 }
 
 const UPDATES: UpdateEntry[] = [
+  { version: "2.9.0", date: "2026-02-25", titleKey: "docs.updates.tgCharts",     descKey: "docs.updates.tgChartsDesc",     type: "feature" },
   { version: "2.8.0", date: "2026-02-25", titleKey: "docs.updates.i18n",         descKey: "docs.updates.i18nDesc",         type: "feature" },
   { version: "2.7.0", date: "2026-02-20", titleKey: "docs.updates.docsPage",     descKey: "docs.updates.docsPageDesc",     type: "feature" },
   { version: "2.6.2", date: "2026-02-18", titleKey: "docs.updates.warRoom",      descKey: "docs.updates.warRoomDesc",      type: "improvement" },

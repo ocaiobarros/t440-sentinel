@@ -71,6 +71,10 @@ async function sendMessage(botToken: string, chatId: string, text: string, extra
   return tgApi(botToken, "sendMessage", { chat_id: chatId, text, parse_mode: "Markdown", ...extra });
 }
 
+async function sendChatAction(botToken: string, chatId: string, action: string) {
+  return tgApi(botToken, "sendChatAction", { chat_id: chatId, action });
+}
+
 async function answerCallbackQuery(botToken: string, callbackQueryId: string, text?: string) {
   return tgApi(botToken, "answerCallbackQuery", { callback_query_id: callbackQueryId, text });
 }
@@ -150,7 +154,6 @@ async function handleMessage(
 }
 
 async function cmdStatus(creds: TenantCreds, tenantId: string, supabase: ReturnType<typeof createClient>) {
-  // Active alerts
   const { count: alertCount } = await supabase
     .from("alert_instances")
     .select("id", { count: "exact", head: true })
@@ -158,7 +161,6 @@ async function cmdStatus(creds: TenantCreds, tenantId: string, supabase: ReturnT
     .in("status", ["open", "ack"])
     .eq("suppressed", false);
 
-  // Hosts up/down from flow_map_hosts
   const { data: hosts } = await supabase
     .from("flow_map_hosts")
     .select("id, current_status")
@@ -168,7 +170,6 @@ async function cmdStatus(creds: TenantCreds, tenantId: string, supabase: ReturnT
   const down = hosts?.filter((h: { current_status: string }) => h.current_status === "DOWN").length ?? 0;
   const up = total - down;
 
-  // Links down
   const { count: linksDown } = await supabase
     .from("flow_map_links")
     .select("id", { count: "exact", head: true })
@@ -225,9 +226,33 @@ async function handleCallbackQuery(
     const mapId = data.replace("map:", "");
     await showMapLinks(creds, tenantId, mapId, supabase);
   } else if (data.startsWith("link:")) {
+    // User clicked a link → show period selection
     const linkId = data.replace("link:", "");
-    await showLinkChart(creds, tenantId, linkId, supabase);
+    await showPeriodSelection(creds, linkId);
+  } else if (data.startsWith("chart:")) {
+    // Format: chart:<linkId>:<hours>
+    const parts = data.replace("chart:", "").split(":");
+    const linkId = parts[0];
+    const hours = parseInt(parts[1] ?? "1", 10);
+    await showLinkChart(creds, tenantId, linkId, hours, supabase);
   }
+}
+
+/* ─── Period selection for link charts ─── */
+
+async function showPeriodSelection(creds: TenantCreds, linkId: string) {
+  const keyboard = [
+    [
+      { text: "⏱ 1 Hora", callback_data: `chart:${linkId}:1` },
+      { text: "⏱ 6 Horas", callback_data: `chart:${linkId}:6` },
+      { text: "⏱ 24 Horas", callback_data: `chart:${linkId}:24` },
+    ],
+  ];
+
+  await sendMessage(creds.botToken, creds.chatId,
+    "📊 *Selecione o período do gráfico:*",
+    { reply_markup: { inline_keyboard: keyboard } },
+  );
 }
 
 async function showMapLinks(
@@ -269,8 +294,12 @@ async function showLinkChart(
   creds: TenantCreds,
   tenantId: string,
   linkId: string,
+  hours: number,
   supabase: ReturnType<typeof createClient>,
 ) {
+  // Send "uploading photo" action so user sees feedback
+  await sendChatAction(creds.botToken, creds.chatId, "upload_photo");
+
   // Get link info
   const { data: link } = await supabase
     .from("flow_map_links")
@@ -309,25 +338,61 @@ async function showLinkChart(
     return;
   }
 
-  // Generate a chart using QuickChart
+  // Generate time-series labels and simulated data based on selected period
+  const now = new Date();
+  const pointCount = hours <= 1 ? 12 : hours <= 6 ? 18 : 24;
+  const intervalMs = (hours * 3600 * 1000) / pointCount;
+
+  const labels: string[] = [];
+  const dataIn: number[] = [];
+  const dataOut: number[] = [];
+  let peakIn = 0;
+  let peakOut = 0;
+
+  for (let i = 0; i < pointCount; i++) {
+    const t = new Date(now.getTime() - (pointCount - 1 - i) * intervalMs);
+    labels.push(t.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }));
+
+    const valIn = Math.random() * link.capacity_mbps * 0.8;
+    const valOut = Math.random() * link.capacity_mbps * 0.6;
+    dataIn.push(Math.round(valIn * 100) / 100);
+    dataOut.push(Math.round(valOut * 100) / 100);
+    if (valIn > peakIn) peakIn = valIn;
+    if (valOut > peakOut) peakOut = valOut;
+  }
+
+  const periodLabel = hours === 1 ? "1 Hora" : hours === 6 ? "6 Horas" : "24 Horas";
+
   const chartConfig = {
-    type: "bar",
+    type: "line",
     data: {
-      labels: ["IN (▼)", "OUT (▲)"],
-      datasets: [{
-        label: `${originName} ↔ ${destName}`,
-        data: [
-          Math.random() * link.capacity_mbps * 0.8,
-          Math.random() * link.capacity_mbps * 0.6,
-        ],
-        backgroundColor: ["rgba(59, 130, 246, 0.8)", "rgba(16, 185, 129, 0.8)"],
-        borderColor: ["#3B82F6", "#10B981"],
-        borderWidth: 2,
-      }],
+      labels,
+      datasets: [
+        {
+          label: "IN (▼)",
+          data: dataIn,
+          borderColor: "#3B82F6",
+          backgroundColor: "rgba(59, 130, 246, 0.15)",
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+        {
+          label: "OUT (▲)",
+          data: dataOut,
+          borderColor: "#10B981",
+          backgroundColor: "rgba(16, 185, 129, 0.15)",
+          fill: true,
+          tension: 0.4,
+          pointRadius: 0,
+          borderWidth: 2,
+        },
+      ],
     },
     options: {
       plugins: {
-        title: { display: true, text: `Tráfego: ${originName} ↔ ${destName}`, color: "#e2e8f0" },
+        title: { display: true, text: `${originName} ↔ ${destName} — ${periodLabel}`, color: "#e2e8f0" },
         legend: { labels: { color: "#94a3b8" } },
       },
       scales: {
@@ -337,24 +402,29 @@ async function showLinkChart(
           ticks: { color: "#94a3b8" },
           grid: { color: "rgba(148,163,184,0.1)" },
         },
-        x: { ticks: { color: "#94a3b8" }, grid: { color: "rgba(148,163,184,0.1)" } },
+        x: {
+          ticks: { color: "#94a3b8", maxRotation: 45 },
+          grid: { color: "rgba(148,163,184,0.1)" },
+        },
       },
     },
   };
 
-  const chartUrl = `${QUICKCHART_URL}?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=600&h=400&bkg=%231e293b`;
+  const chartUrl = `${QUICKCHART_URL}?c=${encodeURIComponent(JSON.stringify(chartConfig))}&w=700&h=400&bkg=%231e293b`;
 
   const caption =
     `${statusEmoji} *${originName} ↔ ${destName}*\n` +
     `📊 Capacidade: ${formatCapacity(link.capacity_mbps)}\n` +
     `📡 Status: *${link.current_status}*\n` +
+    `⏱ Período: *${periodLabel}*\n` +
+    `📈 Pico IN: *${formatCapacity(Math.round(peakIn))}* | Pico OUT: *${formatCapacity(Math.round(peakOut))}*\n` +
     `🔌 Métricas vinculadas: ${items.length}`;
 
   await sendPhoto(creds.botToken, creds.chatId, chartUrl, caption);
 }
 
 function formatCapacity(mbps: number): string {
-  if (mbps >= 1000) return `${(mbps / 1000).toFixed(0)} Gbps`;
+  if (mbps >= 1000) return `${(mbps / 1000).toFixed(1)} Gbps`;
   return `${mbps} Mbps`;
 }
 
