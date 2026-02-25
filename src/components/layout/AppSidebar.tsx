@@ -1,10 +1,11 @@
+import { useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
   Map, AlertTriangle, Wrench, Search, BarChart3,
   FileText, Clock, Settings, Users, Building2, Zap, ChevronRight,
   Server, Box, MonitorCheck, Fuel, Globe, LayoutDashboard,
-  RefreshCw, Send, UserCog,
+  RefreshCw, Send, UserCog, BookOpen, HelpCircle,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -20,6 +21,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import RoleGate from "@/components/auth/RoleGate";
+import SupportModal from "@/components/layout/SupportModal";
 
 function useSidebarItems() {
   const { t } = useTranslation();
@@ -107,6 +109,11 @@ export function AppSidebar() {
   const { t } = useTranslation();
   const collapsed = state === "collapsed";
   const { operationsItems, monitoringItems, engineeringItems, governanceItems, settingsItems, systemItems } = useSidebarItems();
+  const [supportOpen, setSupportOpen] = useState(false);
+
+  const helpItems = [
+    { title: t("sidebar.docs"), url: "/app/docs", icon: BookOpen },
+  ];
 
   return (
     <Sidebar collapsible="icon" className="border-r border-sidebar-border sidebar-deep-space">
@@ -126,11 +133,34 @@ export function AppSidebar() {
         <NavGroup label={t("sidebar.monitoring")} items={monitoringItems} collapsed={collapsed} />
         <NavGroup label={t("sidebar.engineering")} items={engineeringItems} collapsed={collapsed} />
         <NavGroup label={t("sidebar.governance")} items={governanceItems} collapsed={collapsed} />
+        <NavGroup label={t("sidebar.help")} items={helpItems} collapsed={collapsed} />
+
+        {/* Support button */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton asChild>
+                  <button
+                    onClick={() => setSupportOpen(true)}
+                    className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors w-full"
+                  >
+                    <HelpCircle className="w-3.5 h-3.5 shrink-0" />
+                    {!collapsed && <span>{t("sidebar.support")}</span>}
+                  </button>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         <RoleGate allowed={["admin"]}>
           <NavGroup label={t("sidebar.settings")} items={settingsItems} collapsed={collapsed} />
           <NavGroup label={t("sidebar.system")} items={systemItems} collapsed={collapsed} />
         </RoleGate>
       </SidebarContent>
+
+      <SupportModal open={supportOpen} onOpenChange={setSupportOpen} />
     </Sidebar>
   );
 }

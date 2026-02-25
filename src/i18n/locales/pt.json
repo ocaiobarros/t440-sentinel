@@ -26,7 +26,10 @@
     "tenants": "Tenants",
     "system": "Sistema",
     "hostStatus": "Status do Host",
-    "updates": "Atualizações"
+    "updates": "Atualizações",
+    "docs": "Docs",
+    "support": "Suporte",
+    "help": "Ajuda"
   },
   "header": {
     "searchModules": "Buscar módulos...",
@@ -473,5 +476,53 @@
     "cdns": "CDNs",
     "enterprise": "Enterprise",
     "others": "Outros"
+  },
+  "docs": {
+    "title": "Documentação",
+    "subtitle": "Base de conhecimento e guias de uso",
+    "searchPlaceholder": "Buscar na documentação...",
+    "noContent": "Documentação em breve.",
+    "whatsNew": "Novidades",
+    "feature": "Recurso",
+    "fix": "Correção",
+    "improvement": "Melhoria",
+    "modules": {
+      "flowmap": "FlowMap",
+      "flowmapDesc": "Topologia geoespacial NOC com status em tempo real e detecção de anel",
+      "bgp": "BGP Flow Monitor",
+      "bgpDesc": "Monitoramento de sessões BGP, analytics de peering ASN e fluxo de tráfego",
+      "dashboards": "Dashboard Builder",
+      "dashboardsDesc": "Dashboards de monitoramento customizados com widgets drag & drop",
+      "sla": "SLA & Disponibilidade",
+      "slaDesc": "Governança de acordos de nível de serviço, compliance e relatórios",
+      "inventory": "Inventário de Ativos",
+      "inventoryDesc": "Gestão centralizada de hosts, CTOs e cabos",
+      "telegram": "Bot do Telegram",
+      "telegramDesc": "Alertas automáticos e consultas interativas de status via Telegram"
+    },
+    "updates": {
+      "i18n": "Suporte multi-idioma",
+      "i18nDesc": "Internacionalização completa com suporte a PT, EN, ES em todos os módulos",
+      "docsPage": "Página de documentação",
+      "docsPageDesc": "Base de conhecimento com docs em markdown e timeline de atualizações",
+      "warRoom": "Melhorias no War Room",
+      "warRoomDesc": "Modo fullscreen aprimorado com alertas sonoros e console NOC",
+      "oltHealth": "Painel de Saúde OLT",
+      "oltHealthDesc": "Monitoramento OLT em tempo real com temperaturas de slot e tráfego PON",
+      "cableVertex": "Edição de vértices de cabo",
+      "cableVertexDesc": "Correção de snap de vértices e recálculo de rota para cabos",
+      "slaModule": "Módulo de Governança SLA",
+      "slaModuleDesc": "Gestão completa de SLA com verificação de compliance e exportação PDF"
+    },
+    "support": {
+      "title": "Suporte",
+      "subtitle": "Escolha um canal para obter ajuda",
+      "telegram": "Bot do Telegram",
+      "telegramDesc": "Suporte interativo via FlowPulse Bot",
+      "whatsapp": "WhatsApp",
+      "whatsappDesc": "Chat direto com nossa equipe de suporte",
+      "email": "E-mail",
+      "emailDesc": "Envie uma solicitação detalhada para nossa equipe"
+    }
   }
 }
