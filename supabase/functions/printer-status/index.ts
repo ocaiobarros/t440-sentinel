@@ -96,7 +96,11 @@ async function getPrinterConfigs(supabase: ReturnType<typeof createClient>, tena
     .from("printer_configs")
     .select("zabbix_host_id, host_name, base_counter")
     .eq("tenant_id", tenantId);
-  return data ?? [];
+  // Sanitize base_counter to prevent NaN propagation
+  return (data ?? []).map((c: any) => ({
+    ...c,
+    base_counter: typeof c.base_counter === "number" && !isNaN(c.base_counter) ? c.base_counter : 0,
+  }));
 }
 
 /* ─── Fetch printer items from Zabbix ─── */

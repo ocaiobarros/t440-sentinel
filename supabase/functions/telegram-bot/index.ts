@@ -520,8 +520,8 @@ async function cmdPrinterStatus(creds: TenantCreds, tenantId: string, printerNam
       `📄 Total Faturado: *${(match.billingCounter ?? 0).toLocaleString("pt-BR")}* pág.\n\n` +
       `_Atualizado: ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}_`
     );
-  } catch (err) {
-    await sendMessage(creds.botToken, creds.chatId, `❌ Erro ao buscar status: ${err}`);
+  } catch (_err) {
+    await sendMessage(creds.botToken, creds.chatId, "⚠️ Servidor de monitoramento indisponível no momento. Tente novamente em alguns minutos.");
   }
 }
 
@@ -555,8 +555,8 @@ async function cmdContadores(creds: TenantCreds, tenantId: string) {
       `📄 *Total: ${data.total.toLocaleString("pt-BR")} páginas*\n\n` +
       `_Valores calculados com base nos ajustes de contrato._`,
     );
-  } catch (err) {
-    await sendMessage(creds.botToken, creds.chatId, `❌ Erro ao buscar contadores: ${err}`);
+  } catch (_err) {
+    await sendMessage(creds.botToken, creds.chatId, "⚠️ Servidor de monitoramento indisponível no momento. Tente novamente em alguns minutos.");
   }
 }
 
@@ -586,8 +586,8 @@ async function cmdToner(creds: TenantCreds, tenantId: string) {
     await sendMessage(creds.botToken, creds.chatId,
       `⚠️ *Suprimentos Baixos (<10%)*\n\n` + lines.join("\n\n"),
     );
-  } catch (err) {
-    await sendMessage(creds.botToken, creds.chatId, `❌ Erro ao buscar toner: ${err}`);
+  } catch (_err) {
+    await sendMessage(creds.botToken, creds.chatId, "⚠️ Servidor de monitoramento indisponível no momento. Tente novamente em alguns minutos.");
   }
 }
 
@@ -646,6 +646,8 @@ async function handleSendAlert(
   const title = body.title as string;
   const severity = body.severity as string ?? "high";
   const details = body.details as string ?? "";
+  const alertType = body.alert_type as string ?? "";
+  const dedupeKey = body.dedupe_key as string ?? "";
 
   if (!tenantId || !title) {
     return new Response(JSON.stringify({ error: "missing tenant_id or title" }), {
@@ -671,7 +673,6 @@ async function handleSendAlert(
     (prefs ?? []).map((r: { config_key: string; config_value: string }) => [r.config_key, r.config_value])
   );
 
-  const alertType = body.alert_type as string ?? "";
   if (alertType === "bgp_down" && prefMap.telegram_notify_bgp_down === "false") {
     return new Response(JSON.stringify({ skipped: true, reason: "notification_disabled" }), {
       status: 200, headers: { ...headers, "Content-Type": "application/json" },
@@ -686,6 +687,23 @@ async function handleSendAlert(
     return new Response(JSON.stringify({ skipped: true, reason: "notification_disabled" }), {
       status: 200, headers: { ...headers, "Content-Type": "application/json" },
     });
+  }
+
+  // ── Debounce for printer_error: suppress duplicate alerts within 5 minutes ──
+  if (alertType === "printer_error" && dedupeKey) {
+    const fiveMinAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+    const { count } = await supabase
+      .from("alert_instances")
+      .select("id", { count: "exact", head: true })
+      .eq("tenant_id", tenantId)
+      .eq("dedupe_key", dedupeKey)
+      .gte("last_seen_at", fiveMinAgo);
+
+    if ((count ?? 0) > 1) {
+      return new Response(JSON.stringify({ skipped: true, reason: "debounced" }), {
+        status: 200, headers: { ...headers, "Content-Type": "application/json" },
+      });
+    }
   }
 
   const severityEmoji: Record<string, string> = {

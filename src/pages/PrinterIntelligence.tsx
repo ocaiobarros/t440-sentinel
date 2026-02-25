@@ -469,12 +469,14 @@ function PrinterCard({ printer, onBaseCounterChange }: { printer: PrinterData; o
                 <div className="flex items-center gap-1">
                   <Input
                     type="number"
+                    min="0"
                     value={baseValue}
-                    onChange={(e) => setBaseValue(e.target.value)}
+                    onChange={(e) => setBaseValue(e.target.value.replace(/[^0-9]/g, ""))}
+                    onKeyDown={(e) => { if (e.key === "Enter") { const v = Math.max(0, parseInt(baseValue) || 0); onBaseCounterChange?.(host.hostid, v); setEditingBase(false); } }}
                     className="h-5 w-20 text-[9px] px-1"
                   />
                   <button onClick={() => {
-                    const v = parseInt(baseValue) || 0;
+                    const v = Math.max(0, parseInt(baseValue) || 0);
                     onBaseCounterChange?.(host.hostid, v);
                     setEditingBase(false);
                   }} className="text-neon-green hover:text-neon-green/80"><Check className="w-3 h-3" /></button>
@@ -698,8 +700,23 @@ async function exportPrinterCountersPdf(printers: PrinterData[]) {
     const imgData = canvas.toDataURL("image/png");
     const pdf = new jsPDF({ orientation: "portrait", unit: "mm", format: "a4" });
     const pdfWidth = pdf.internal.pageSize.getWidth();
-    const imgHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, imgHeight);
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imgWidth = pdfWidth;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+
+    let heightLeft = imgHeight;
+    let position = 0;
+
+    pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+    heightLeft -= pdfHeight;
+
+    while (heightLeft > 0) {
+      position = -(imgHeight - heightLeft);
+      pdf.addPage();
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pdfHeight;
+    }
+
     pdf.save(`Contadores_Impressoras_${new Date().toISOString().slice(0, 10)}.pdf`);
   } finally {
     document.body.removeChild(container);
@@ -935,8 +952,8 @@ export default function PrinterIntelligence() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={() => exportPrinterCountersPdf(filteredPrinters)}
-                  disabled={filteredPrinters.length === 0}
+                  onClick={() => exportPrinterCountersPdf([...filteredPrinters])}
+                  disabled={filteredPrinters.length === 0 || dataLoading}
                   className="text-[10px] h-7 gap-1"
                 >
                   <FileText className="w-3 h-3" /> Relatório PDF
