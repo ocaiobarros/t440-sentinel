@@ -15,7 +15,8 @@ function json(data: unknown, status = 200) {
 
 /* ─── AES-GCM helpers for encrypting config values ─── */
 async function deriveKey(): Promise<CryptoKey> {
-  const secret = Deno.env.get("ZABBIX_ENCRYPTION_KEY") || "default-telemetry-key";
+  const secret = Deno.env.get("ZABBIX_ENCRYPTION_KEY");
+  if (!secret) throw new Error("ZABBIX_ENCRYPTION_KEY not configured");
   const keyMaterial = await crypto.subtle.importKey(
     "raw", new TextEncoder().encode(secret), "PBKDF2", false, ["deriveKey"]
   );

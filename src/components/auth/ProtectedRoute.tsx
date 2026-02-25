@@ -1,4 +1,3 @@
-import { forwardRef } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { useUserRole, type AppRole } from "@/hooks/useUserRole";
@@ -10,7 +9,7 @@ interface ProtectedRouteProps {
   roles?: AppRole[];
 }
 
-const ProtectedRoute = forwardRef<HTMLDivElement, ProtectedRouteProps>(function ProtectedRoute({ children, roles }, _ref) {
+function ProtectedRoute({ children, roles }: ProtectedRouteProps) {
   const { user, loading } = useAuth();
   const { hasRole, isLoading: roleLoading } = useUserRole();
 
@@ -37,6 +36,6 @@ const ProtectedRoute = forwardRef<HTMLDivElement, ProtectedRouteProps>(function 
   }
 
   return <>{children}</>;
-});
+}
 
 export default ProtectedRoute;
