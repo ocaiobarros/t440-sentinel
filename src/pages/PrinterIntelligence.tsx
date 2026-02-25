@@ -4,7 +4,10 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   Printer, ArrowLeft, Save, Settings2, Loader2, Search,
   AlertTriangle, FileText, Eye, EyeOff, ExternalLink, Calendar, Edit2, Check, X,
+  BarChart3,
 } from "lucide-react";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import UsageHeatmap from "@/components/printer/UsageHeatmap";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -1065,45 +1068,64 @@ export default function PrinterIntelligence() {
           </motion.header>
         )}
 
-        {/* Filter bar */}
-        <div className="flex items-center gap-3 mb-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-            <Input
-              placeholder="Filtrar impressoras..."
-              value={hostFilter}
-              onChange={(e) => setHostFilter(e.target.value)}
-              className="pl-8 h-8 text-xs"
+        <Tabs defaultValue="monitoring" className="space-y-4">
+          <TabsList className="bg-card/50 border border-border/30">
+            <TabsTrigger value="monitoring" className="text-xs gap-1.5 data-[state=active]:text-neon-cyan">
+              <Printer className="w-3.5 h-3.5" /> Monitoramento
+            </TabsTrigger>
+            <TabsTrigger value="heatmap" className="text-xs gap-1.5 data-[state=active]:text-neon-cyan">
+              <BarChart3 className="w-3.5 h-3.5" /> Análise de Demanda
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="monitoring">
+            {/* Filter bar */}
+            <div className="flex items-center gap-3 mb-4">
+              <div className="relative flex-1 max-w-sm">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Filtrar impressoras..."
+                  value={hostFilter}
+                  onChange={(e) => setHostFilter(e.target.value)}
+                  className="pl-8 h-8 text-xs"
+                />
+              </div>
+              <span className="text-[9px] font-mono text-muted-foreground">
+                {filteredPrinters.length}/{printerData.length}
+              </span>
+            </div>
+
+            {/* Loading state */}
+            {dataLoading && printerData.length === 0 && (
+              <div className="glass-card rounded-xl p-16 text-center">
+                <Loader2 className="w-8 h-8 text-neon-cyan animate-spin mx-auto mb-4" />
+                <p className="text-sm text-muted-foreground font-mono">Carregando dados das impressoras...</p>
+              </div>
+            )}
+
+            {/* Printer Grid */}
+            {filteredPrinters.length > 0 && (
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
+                {filteredPrinters.map((p) => (
+                  <PrinterCard key={p.host.hostid} printer={p} onBaseCounterChange={handleBaseCounterChange} forecasts={forecastMap.get(p.host.hostid)} />
+                ))}
+              </div>
+            )}
+
+            {!dataLoading && printerData.length === 0 && config && (
+              <div className="glass-card rounded-xl p-12 text-center">
+                <Printer className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
+                <p className="text-sm text-muted-foreground">Nenhum dado de impressora disponível</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="heatmap">
+            <UsageHeatmap
+              printers={printerData.map((p) => ({ hostId: p.host.hostid, name: p.host.name || p.host.host }))}
             />
-          </div>
-          <span className="text-[9px] font-mono text-muted-foreground">
-            {filteredPrinters.length}/{printerData.length}
-          </span>
-        </div>
-
-        {/* Loading state */}
-        {dataLoading && printerData.length === 0 && (
-          <div className="glass-card rounded-xl p-16 text-center">
-            <Loader2 className="w-8 h-8 text-neon-cyan animate-spin mx-auto mb-4" />
-            <p className="text-sm text-muted-foreground font-mono">Carregando dados das impressoras...</p>
-          </div>
-        )}
-
-        {/* Printer Grid */}
-        {filteredPrinters.length > 0 && (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
-            {filteredPrinters.map((p) => (
-              <PrinterCard key={p.host.hostid} printer={p} onBaseCounterChange={handleBaseCounterChange} forecasts={forecastMap.get(p.host.hostid)} />
-            ))}
-          </div>
-        )}
-
-        {!dataLoading && printerData.length === 0 && config && (
-          <div className="glass-card rounded-xl p-12 text-center">
-            <Printer className="w-12 h-12 text-muted-foreground/30 mx-auto mb-3" />
-            <p className="text-sm text-muted-foreground">Nenhum dado de impressora disponível</p>
-          </div>
-        )}
+          </TabsContent>
+        </Tabs>
 
         {/* Footer */}
         <div className="text-center py-4 mt-4">

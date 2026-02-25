@@ -43,6 +43,11 @@ Deno.serve(async (req) => {
       return await getSupplyForecast(supabase, tenantId, corsHeaders);
     }
 
+    if (action === "usage_heatmap") {
+      const hostId = body.host_id as string | undefined;
+      return await getUsageHeatmap(supabase, tenantId, hostId, corsHeaders);
+    }
+
     return new Response(JSON.stringify({ error: "unknown action" }), {
       status: 400,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -519,6 +524,123 @@ async function getSupplyForecast(
 
   return new Response(
     JSON.stringify({ printers: forecasts }),
+    { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
+  );
+}
+
+/* ─── Action: usage_heatmap ─── */
+
+async function getUsageHeatmap(
+  supabase: ReturnType<typeof createClient>,
+  tenantId: string,
+  hostId: string | undefined,
+  headers: Record<string, string>,
+) {
+  const connectionId = await getZabbixConnection(supabase, tenantId);
+  const configs = await getPrinterConfigs(supabase, tenantId);
+
+  if (!connectionId || configs.length === 0) {
+    return new Response(
+      JSON.stringify({ grid: [], peak: null, message: "Nenhuma impressora configurada." }),
+      { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
+    );
+  }
+
+  // Filter to specific host or all
+  const targetConfigs = hostId
+    ? configs.filter((c) => c.zabbix_host_id === hostId)
+    : configs;
+
+  if (targetConfigs.length === 0) {
+    return new Response(
+      JSON.stringify({ grid: [], peak: null }),
+      { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
+    );
+  }
+
+  const hostIds = targetConfigs.map((c) => c.zabbix_host_id);
+
+  // Get counter items
+  const items = await fetchPrinterItems(supabase, connectionId, hostIds);
+  const counterItems = items.filter((i: any) =>
+    COUNTER_KEYS.some((k) => i.key_.toLowerCase().includes(k.toLowerCase()))
+  );
+
+  if (counterItems.length === 0) {
+    return new Response(
+      JSON.stringify({ grid: [], peak: null }),
+      { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
+    );
+  }
+
+  // Fetch 7 days of history for counter items
+  const now = Math.floor(Date.now() / 1000);
+  const sevenDaysAgo = now - 7 * 86400;
+
+  // Aggregate grid: 7 days x 24 hours
+  const grid: number[][] = Array.from({ length: 7 }, () => Array(24).fill(0));
+
+  for (const item of counterItems) {
+    try {
+      const valueType = (item as any).value_type ?? "3";
+      const historyType = valueType === "0" ? 0 : 3;
+
+      const history = await zabbixProxy(supabase, connectionId, "history.get", {
+        output: ["clock", "value"],
+        itemids: [item.itemid],
+        history: historyType,
+        time_from: sevenDaysAgo,
+        time_till: now,
+        sortfield: "clock",
+        sortorder: "ASC",
+        limit: 5000,
+      });
+
+      if (!history || history.length < 2) continue;
+
+      // Calculate hourly diffs
+      for (let i = 1; i < history.length; i++) {
+        const prevVal = parseInt(history[i - 1].value);
+        const currVal = parseInt(history[i].value);
+        const clock = parseInt(history[i].clock);
+
+        if (isNaN(prevVal) || isNaN(currVal) || isNaN(clock)) continue;
+
+        const diff = currVal - prevVal;
+        if (diff <= 0 || diff > 10000) continue; // ignore resets or anomalies
+
+        const date = new Date(clock * 1000);
+        // JS getDay: 0=Sun..6=Sat → convert to 0=Mon..6=Sun
+        const jsDay = date.getDay();
+        const dayIdx = jsDay === 0 ? 6 : jsDay - 1;
+        const hour = date.getHours();
+
+        grid[dayIdx][hour] += diff;
+      }
+    } catch {
+      // skip item on error
+    }
+  }
+
+  // Build response
+  const cells: { day: number; hour: number; value: number }[] = [];
+  let peak: { day: number; hour: number; value: number } | null = null;
+
+  for (let d = 0; d < 7; d++) {
+    for (let h = 0; h < 24; h++) {
+      const val = grid[d][h];
+      cells.push({ day: d, hour: h, value: val });
+      if (!peak || val > peak.value) {
+        peak = { day: d, hour: h, value: val };
+      }
+    }
+  }
+
+  // If peak is 0, set to null
+  if (peak && peak.value === 0) peak = null;
+
+  return new Response(
+    JSON.stringify({ grid: cells, peak }),
     { status: 200, headers: { ...headers, "Content-Type": "application/json" } },
   );
 }
