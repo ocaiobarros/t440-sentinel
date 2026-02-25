@@ -142,12 +142,18 @@ async function handleMessage(
     await cmdStatus(creds, tenantId, supabase);
   } else if (text === "/flowmaps") {
     await cmdFlowmaps(creds, tenantId, supabase);
+  } else if (text === "/contadores") {
+    await cmdContadores(creds, tenantId);
+  } else if (text === "/toner") {
+    await cmdToner(creds, tenantId);
   } else if (text === "/help" || text === "/start") {
     await sendMessage(creds.botToken, creds.chatId,
       "🤖 *FLOWPULSE Bot*\n\n" +
       "Comandos disponíveis:\n" +
       "• `/status` — Resumo do NOC\n" +
       "• `/flowmaps` — Navegar mapas e links\n" +
+      "• `/contadores` — Contadores de impressão\n" +
+      "• `/toner` — Suprimentos baixos (<10%)\n" +
       "• `/help` — Esta mensagem"
     );
   }
@@ -426,6 +432,72 @@ async function showLinkChart(
 function formatCapacity(mbps: number): string {
   if (mbps >= 1000) return `${(mbps / 1000).toFixed(1)} Gbps`;
   return `${mbps} Mbps`;
+}
+
+/* ─── Printer Commands ─── */
+
+async function cmdContadores(creds: TenantCreds, tenantId: string) {
+  await sendChatAction(creds.botToken, creds.chatId, "typing");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/printer-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
+      body: JSON.stringify({ tenant_id: tenantId, action: "counters" }),
+    });
+    const data = await resp.json();
+
+    if (!data.printers || data.printers.length === 0) {
+      await sendMessage(creds.botToken, creds.chatId, "📭 Nenhuma impressora configurada no módulo Printer Intelligence.");
+      return;
+    }
+
+    const lines = data.printers.map(
+      (p: any) => `• [${p.name}] *${p.billingCounter.toLocaleString("pt-BR")}* pág.${p.baseCounter > 0 ? ` _(base: ${p.baseCounter.toLocaleString("pt-BR")})_` : ""}`,
+    );
+
+    await sendMessage(creds.botToken, creds.chatId,
+      `🖨️ *FLOWPULSE — Relatório de Impressão*\n\n` +
+      lines.join("\n") + "\n\n" +
+      `📄 *Total: ${data.total.toLocaleString("pt-BR")} páginas*\n\n` +
+      `_Valores calculados com base nos ajustes de contrato._`,
+    );
+  } catch (err) {
+    await sendMessage(creds.botToken, creds.chatId, `❌ Erro ao buscar contadores: ${err}`);
+  }
+}
+
+async function cmdToner(creds: TenantCreds, tenantId: string) {
+  await sendChatAction(creds.botToken, creds.chatId, "typing");
+  const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+  const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+  try {
+    const resp = await fetch(`${supabaseUrl}/functions/v1/printer-status`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceRoleKey}` },
+      body: JSON.stringify({ tenant_id: tenantId, action: "low_toner" }),
+    });
+    const data = await resp.json();
+
+    if (!data.printers || data.printers.length === 0) {
+      await sendMessage(creds.botToken, creds.chatId, "✅ Nenhuma impressora com suprimentos abaixo de 10%.");
+      return;
+    }
+
+    const lines = data.printers.map((p: any) => {
+      const supplies = p.supplies.map((s: any) => `  └ ${s.name}: *${s.level}%*`).join("\n");
+      return `🔴 *${p.name}*\n${supplies}`;
+    });
+
+    await sendMessage(creds.botToken, creds.chatId,
+      `⚠️ *Suprimentos Baixos (<10%)*\n\n` + lines.join("\n\n"),
+    );
+  } catch (err) {
+    await sendMessage(creds.botToken, creds.chatId, `❌ Erro ao buscar toner: ${err}`);
+  }
 }
 
 /* ─── UI Actions ─── */

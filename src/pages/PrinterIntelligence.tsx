@@ -3,7 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Printer, ArrowLeft, Save, Settings2, Loader2, Search,
-  AlertTriangle, FileText, Eye, EyeOff, ExternalLink,
+  AlertTriangle, FileText, Eye, EyeOff, ExternalLink, Calendar, Edit2, Check, X,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import {
 import IdracSetupWizard, { loadIdracConfig, clearIdracConfig, type IdracConfig } from "@/components/dashboard/IdracSetupWizard";
 import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import { supabase } from "@/integrations/supabase/client";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 
 /* ─── Types ───────────────────────── */
 
@@ -42,6 +42,8 @@ interface PrinterData {
   items: ZabbixItem[];
   brand: "brother" | "hp" | "kyocera" | "generic";
   hasAlert: boolean;
+  baseCounter: number;
+  billingCounter: number;
 }
 
 /* ─── Storage ─────────────────────── */
@@ -180,8 +182,10 @@ function TonerBar({ label, value, color }: { label: string; value: number; color
 
 /* ─── Printer Card ────────────────── */
 
-function PrinterCard({ printer }: { printer: PrinterData }) {
-  const { host, items, brand, hasAlert } = printer;
+function PrinterCard({ printer, onBaseCounterChange }: { printer: PrinterData; onBaseCounterChange?: (hostId: string, value: number) => void }) {
+  const { host, items, brand, hasAlert, baseCounter, billingCounter } = printer;
+  const [editingBase, setEditingBase] = useState(false);
+  const [baseValue, setBaseValue] = useState(String(baseCounter));
 
   // Find item by exact key or partial match
   const findByKey = (exactKey: string) =>
@@ -456,6 +460,38 @@ function PrinterCard({ printer }: { printer: PrinterData }) {
               </div>
             ) : null;
           })()}
+
+          {/* ── Billing Counter Footer ── */}
+          <div className="mt-3 pt-2 border-t border-border/20 space-y-1">
+            <div className="flex justify-between items-center text-[9px] font-mono">
+              <span className="text-muted-foreground">Contador Base (Contrato)</span>
+              {editingBase ? (
+                <div className="flex items-center gap-1">
+                  <Input
+                    type="number"
+                    value={baseValue}
+                    onChange={(e) => setBaseValue(e.target.value)}
+                    className="h-5 w-20 text-[9px] px-1"
+                  />
+                  <button onClick={() => {
+                    const v = parseInt(baseValue) || 0;
+                    onBaseCounterChange?.(host.hostid, v);
+                    setEditingBase(false);
+                  }} className="text-neon-green hover:text-neon-green/80"><Check className="w-3 h-3" /></button>
+                  <button onClick={() => { setBaseValue(String(baseCounter)); setEditingBase(false); }} className="text-red-400 hover:text-red-300"><X className="w-3 h-3" /></button>
+                </div>
+              ) : (
+                <button onClick={() => setEditingBase(true)} className="flex items-center gap-1 text-muted-foreground hover:text-foreground transition-colors">
+                  <span>{baseCounter.toLocaleString("pt-BR")}</span>
+                  <Edit2 className="w-2.5 h-2.5" />
+                </button>
+              )}
+            </div>
+            <div className="flex justify-between text-[10px] font-mono">
+              <span className="text-neon-cyan font-bold">Total Faturado</span>
+              <span className="text-neon-cyan font-bold text-glow-cyan">{billingCounter.toLocaleString("pt-BR")}</span>
+            </div>
+          </div>
         </motion.div>
       </ContextMenuTrigger>
       <ContextMenuContent className="w-52 bg-card/95 backdrop-blur-xl border-border/50">
@@ -602,11 +638,22 @@ async function exportPrinterCountersPdf(printers: PrinterData[]) {
   const container = document.createElement("div");
   container.style.cssText = "position:fixed;left:-9999px;top:0;width:800px;background:#fff;padding:40px;font-family:'Segoe UI',system-ui,sans-serif;color:#1a1a2e;";
 
-  const totalPages = printers.reduce((sum, p) => {
-    const v = findValue(p.items, "kyocera.counter.total") || findValue(p.items, "number.of.printed.pages") || findValue(p.items, ".1.3.6.1.2.1.43.10.2.1.4.1.1");
-    const n = parseInt(v);
-    return sum + (isNaN(n) ? 0 : n);
-  }, 0);
+  const totalPages = printers.reduce((sum, p) => sum + p.billingCounter, 0);
+
+  const rows = printers.map((p) => {
+    const ip = p.host.host.match(/\d+\.\d+\.\d+\.\d+/)?.[0] || p.host.host;
+    const serial = findValue(p.items, "kyocera.serial") || findValue(p.items, ".1.3.6.1.2.1.43.5.1.1.17.1");
+    const zabbixCounter = p.billingCounter - p.baseCounter;
+    return `<tr>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-weight:500;">${p.host.name || p.host.host}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-family:monospace;">${ip}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-transform:uppercase;">${p.brand}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:right;">${p.baseCounter.toLocaleString("pt-BR")}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:right;">${zabbixCounter.toLocaleString("pt-BR")}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700;color:#0891b2;">${p.billingCounter.toLocaleString("pt-BR")}</td>
+      <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-family:monospace;">${serial}</td>
+    </tr>`;
+  }).join("");
 
   container.innerHTML = `
     <div style="margin-bottom:24px;">
@@ -622,39 +669,24 @@ async function exportPrinterCountersPdf(printers: PrinterData[]) {
       <div style="font-size:10px;color:#94a3b8;margin-top:6px;">Gerado em: ${now}</div>
       <div style="height:2px;background:linear-gradient(90deg,#0891b2,#06b6d4,transparent);margin-top:12px;border-radius:2px;"></div>
     </div>
-
     <table style="width:100%;border-collapse:collapse;font-size:10px;">
       <thead>
         <tr style="background:#f1f5f9;">
           <th style="text-align:left;padding:8px;font-size:9px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;">Nome / Setor</th>
           <th style="text-align:left;padding:8px;font-size:9px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;">IP</th>
           <th style="text-align:left;padding:8px;font-size:9px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;">Marca</th>
-          <th style="text-align:right;padding:8px;font-size:9px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;">Contador Total</th>
+          <th style="text-align:right;padding:8px;font-size:9px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;">Contador Base</th>
+          <th style="text-align:right;padding:8px;font-size:9px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;">Contador Zabbix</th>
+          <th style="text-align:right;padding:8px;font-size:9px;text-transform:uppercase;color:#0891b2;border-bottom:1px solid #e2e8f0;font-weight:800;">Total Faturado</th>
           <th style="text-align:left;padding:8px;font-size:9px;text-transform:uppercase;color:#64748b;border-bottom:1px solid #e2e8f0;">Serial</th>
         </tr>
       </thead>
-      <tbody>
-        ${printers.map((p) => {
-          const ip = p.host.host.match(/\d+\.\d+\.\d+\.\d+/)?.[0] || p.host.host;
-          const counter = findValue(p.items, "kyocera.counter.total") || findValue(p.items, "number.of.printed.pages") || findValue(p.items, ".1.3.6.1.2.1.43.10.2.1.4.1.1");
-          const serial = findValue(p.items, "kyocera.serial") || findValue(p.items, ".1.3.6.1.2.1.43.5.1.1.17.1");
-          const num = parseInt(counter);
-          return `<tr>
-            <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-weight:500;">${p.host.name || p.host.host}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-family:monospace;">${ip}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-transform:uppercase;">${p.brand}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;text-align:right;font-weight:700;">${isNaN(num) ? counter : num.toLocaleString("pt-BR")}</td>
-            <td style="padding:6px 8px;border-bottom:1px solid #f1f5f9;font-family:monospace;">${serial}</td>
-          </tr>`;
-        }).join("")}
-      </tbody>
+      <tbody>${rows}</tbody>
     </table>
-
     <div style="margin-top:16px;padding:12px;background:#f0f9ff;border-radius:8px;text-align:right;">
-      <span style="font-size:10px;color:#64748b;">Total Consolidado:</span>
+      <span style="font-size:10px;color:#64748b;">Total Faturado Consolidado:</span>
       <span style="font-size:18px;font-weight:800;color:#0891b2;margin-left:8px;">${totalPages.toLocaleString("pt-BR")} páginas</span>
     </div>
-
     <div style="margin-top:24px;text-align:center;font-size:9px;color:#94a3b8;border-top:1px solid #e2e8f0;padding-top:12px;">
       FLOWPULSE INTELLIGENCE — Relatório de Contadores — ${now}
     </div>
@@ -689,6 +721,27 @@ export default function PrinterIntelligence() {
   const [showWizard, setShowWizard] = useState(() => !dashboardId ? true : !loadPrinterConfig());
   const [wizardBase, setWizardBase] = useState<IdracConfig | null>(null);
   const [hostFilter, setHostFilter] = useState("");
+  const queryClient = useQueryClient();
+
+  // Base counter mutation
+  const baseCounterMutation = useMutation({
+    mutationFn: async ({ hostId, value, hostName }: { hostId: string; value: number; hostName: string }) => {
+      const { error } = await supabase
+        .from("printer_configs")
+        .upsert({
+          tenant_id: (await supabase.auth.getUser()).data.user?.app_metadata?.tenant_id,
+          zabbix_host_id: hostId,
+          host_name: hostName,
+          base_counter: value,
+        }, { onConflict: "tenant_id,zabbix_host_id" });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["printer-data"] });
+    },
+  });
+
+  // handleBaseCounterChange defined after printerData query below
 
   // Load from DB
   useEffect(() => {
@@ -739,6 +792,13 @@ export default function PrinterIntelligence() {
         hostids: config.selectedHostIds,
       }) as ZabbixHost[];
 
+      // Fetch base counters from DB
+      const { data: baseCounters } = await supabase
+        .from("printer_configs")
+        .select("zabbix_host_id, base_counter")
+        .in("zabbix_host_id", config.selectedHostIds);
+      const baseMap = new Map((baseCounters ?? []).map((c: any) => [c.zabbix_host_id, c.base_counter as number]));
+
       // Fetch ALL items for selected hosts (application tag "Printer" or matching keys)
       const items = await zabbixProxy(config.connectionId, "item.get", {
         output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
@@ -749,12 +809,12 @@ export default function PrinterIntelligence() {
 
       // Fetch by specific key patterns from real templates
       const keyPatterns = [
-        "ink.", "black", "cyan", "magenta", "yellow",        // HP
-        "printers.status", "number.of.printed", "consumable", "cosumable", // Brother
-        "kyocera.",                                            // Kyocera
-        "hrDeviceDescr", "sysLocation", "sysContact",        // General
-        "net.tcp.service",                                     // Services
-        ".1.3.6.1.2.1.43.",                                   // Printer-MIB OIDs
+        "ink.", "black", "cyan", "magenta", "yellow",
+        "printers.status", "number.of.printed", "consumable", "cosumable",
+        "kyocera.",
+        "hrDeviceDescr", "sysLocation", "sysContact",
+        "net.tcp.service",
+        ".1.3.6.1.2.1.43.",
       ];
       const extraItems = await zabbixProxy(config.connectionId, "item.get", {
         output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
@@ -765,7 +825,6 @@ export default function PrinterIntelligence() {
         limit: 1000,
       }) as (ZabbixItem & { hostid: string })[];
 
-      // Also fetch items with "Toner", "Contador", "Alertas", "Equipamento" tags
       const taggedItems = await zabbixProxy(config.connectionId, "item.get", {
         output: ["itemid", "key_", "name", "lastvalue", "units", "hostid"],
         hostids: config.selectedHostIds,
@@ -790,12 +849,24 @@ export default function PrinterIntelligence() {
       return hosts.map((h) => {
         const hostItems = Array.from(unique.values()).filter((i) => i.hostid === h.hostid);
         const brand = detectBrand(hostItems);
-        return { host: h, items: hostItems, brand, hasAlert: hasAlertCondition(hostItems) };
+        const baseCounter = baseMap.get(h.hostid) ?? 0;
+        // Get raw page counter from Zabbix
+        const counterKeys = ["kyocera.counter.total", "number.of.printed.pages", ".1.3.6.1.2.1.43.10.2.1.4.1.1"];
+        let zabbixCounter = 0;
+        for (const ck of counterKeys) {
+          const item = hostItems.find((i) => i.key_.toLowerCase().includes(ck.toLowerCase()));
+          if (item) { const v = parseInt(item.lastvalue); if (!isNaN(v)) { zabbixCounter = v; break; } }
+        }
+        return { host: h, items: hostItems, brand, hasAlert: hasAlertCondition(hostItems), baseCounter, billingCounter: baseCounter + zabbixCounter };
       });
     },
   });
 
-  // Wizard flow
+  const handleBaseCounterChange = useCallback((hostId: string, value: number) => {
+    const printer = printerData.find((p: PrinterData) => p.host.hostid === hostId);
+    baseCounterMutation.mutate({ hostId, value, hostName: printer?.host.name || printer?.host.host || "" });
+  }, [printerData, baseCounterMutation]);
+
   if (showWizard && !wizardBase) {
     return (
       <IdracSetupWizard
@@ -856,6 +927,14 @@ export default function PrinterIntelligence() {
                 <Button
                   variant="outline"
                   size="sm"
+                  onClick={() => navigate("/app/monitoring/printers/billing")}
+                  className="text-[10px] h-7 gap-1"
+                >
+                  <Calendar className="w-3 h-3" /> Histórico
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={() => exportPrinterCountersPdf(filteredPrinters)}
                   disabled={filteredPrinters.length === 0}
                   className="text-[10px] h-7 gap-1"
@@ -901,7 +980,7 @@ export default function PrinterIntelligence() {
         {filteredPrinters.length > 0 && (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6 gap-3">
             {filteredPrinters.map((p) => (
-              <PrinterCard key={p.host.hostid} printer={p} />
+              <PrinterCard key={p.host.hostid} printer={p} onBaseCounterChange={handleBaseCounterChange} />
             ))}
           </div>
         )}

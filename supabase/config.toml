@@ -47,3 +47,9 @@ verify_jwt = false
 
 [functions.telegram-bot]
 verify_jwt = false
+
+[functions.printer-status]
+verify_jwt = false
+
+[functions.billing-cron]
+verify_jwt = false
