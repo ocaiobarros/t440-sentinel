@@ -985,6 +985,62 @@ app.get("/realtime/v1/websocket", (_req, res) => {
   res.status(200).json({ message: "Realtime not available in on-premise mode" });
 });
 
+/* ═══════════════════════════════════════════════════════════
+   HEALTHZ — Endpoint de Saúde (sem auth)
+   ═══════════════════════════════════════════════════════════ */
+app.get("/healthz", async (_req, res) => {
+  try {
+    await pool.query("SELECT 1");
+    return res.json({ status: "ok", version: process.env.npm_package_version || "3.0.0", mode: "on-premise", database: "connected", uptime_seconds: Math.round(process.uptime()) });
+  } catch (err) {
+    return res.status(503).json({ status: "degraded", version: process.env.npm_package_version || "3.0.0", database: "unreachable", error: err.message });
+  }
+});
+
+/* ═══════════════════════════════════════════════════════════
+   SIGNUP — Criação de usuário local (admin only)
+   ═══════════════════════════════════════════════════════════ */
+app.post("/auth/v1/signup", requireAuth, async (req, res) => {
+  try {
+    const caller = req.user;
+    const callerRole = caller.app_metadata?.role;
+    if (callerRole !== "admin") return res.status(403).json({ error: "forbidden", error_description: "Apenas admins podem criar usuários" });
+
+    const { email, password, data } = req.body;
+    if (!email || !password) return res.status(400).json({ error: "invalid_request", error_description: "email e password são obrigatórios" });
+
+    const resolvedEmail = email.includes("@") ? email : `${email}@flowpulse.local`;
+    const tenantId = caller.app_metadata?.tenant_id;
+    const hash = await bcrypt.hash(password, 12);
+
+    // Create auth_users entry
+    const { rows: [authUser] } = await pool.query(
+      `INSERT INTO auth_users (email, encrypted_password) VALUES ($1, $2) RETURNING id`,
+      [resolvedEmail, hash]
+    );
+
+    // Create profile
+    const displayName = data?.display_name || email.split("@")[0];
+    await pool.query(
+      `INSERT INTO profiles (id, tenant_id, display_name, email) VALUES ($1, $2, $3, $4)`,
+      [authUser.id, tenantId, displayName, resolvedEmail]
+    );
+
+    // Create role
+    const role = data?.role || "viewer";
+    await pool.query(
+      `INSERT INTO user_roles (user_id, tenant_id, role) VALUES ($1, $2, $3)`,
+      [authUser.id, tenantId, role]
+    );
+
+    return res.status(201).json(buildUserObject({ id: authUser.id, email: resolvedEmail, display_name: displayName, tenant_id: tenantId, role }));
+  } catch (err) {
+    if (err.code === "23505") return res.status(409).json({ error: "user_exists", error_description: "Usuário já existe" });
+    console.error("[auth/signup]", err);
+    return res.status(500).json({ error: "server_error", error_description: err.message });
+  }
+});
+
 /* ── LEGACY COMPAT ─────────────────────────────── */
 app.post("/auth/login", (req, res) => {
   req.query.grant_type = "password";
@@ -1004,11 +1060,12 @@ app.listen(PORT, "0.0.0.0", () => {
   console.log(`
 ╔══════════════════════════════════════════════════════╗
 ║   FLOWPULSE INTELLIGENCE — On-Premise Server         ║
-║   Supabase-Compatible API (PostgREST + GoTrue)       ║
+║   100% Local — Zero External Dependencies            ║
 ║   © 2026 CBLabs                                      ║
 ║   Porta: ${PORT}                                         ║
 ║                                                      ║
-║   Auth:    /auth/v1/*                                ║
+║   Health:  /healthz                                  ║
+║   Auth:    /auth/v1/*  (login, signup, user, logout) ║
 ║   REST:    /rest/v1/*                                ║
 ║   Storage: /storage/v1/*                             ║
 ║   RPC:     /rest/v1/rpc/*                            ║
