@@ -672,6 +672,128 @@ const EDGE_FUNCTION_HANDLERS = {
     }
   },
 
+  /* ── invite-user ──────────────────────────────── */
+  "invite-user": async (req, res) => {
+    try {
+      const { email, display_name, role, password, target_tenant_id } = req.body || {};
+      if (!email || !role) {
+        return res.status(400).json({ error: "email and role are required" });
+      }
+
+      const validRoles = ["admin", "editor", "viewer", "tech", "sales"];
+      if (!validRoles.includes(role)) {
+        return res.status(400).json({ error: "Invalid role" });
+      }
+
+      const callerId = req.user.sub;
+      const callerTenantId = req.user.app_metadata?.tenant_id;
+      if (!callerId || !callerTenantId) {
+        return res.status(403).json({ error: "Caller tenant not found" });
+      }
+
+      const { rows: roleRows } = await pool.query(
+        `SELECT EXISTS (
+          SELECT 1
+          FROM user_roles
+          WHERE user_id = $1
+            AND tenant_id = $2
+            AND role = 'admin'
+        ) AS is_admin`,
+        [callerId, callerTenantId],
+      );
+      const isAdmin = roleRows[0]?.is_admin === true;
+
+      const { rows: superRows } = await pool.query(
+        `SELECT EXISTS (
+          SELECT 1
+          FROM profiles
+          WHERE id = $1 AND email IN ('caio.barros@madeplant.com.br', 'admin@flowpulse.local')
+        ) AS is_super_admin`,
+        [callerId],
+      );
+      const isSuperAdmin = superRows[0]?.is_super_admin === true;
+
+      if (!isAdmin && !isSuperAdmin) {
+        return res.status(403).json({ error: "Admin role required" });
+      }
+
+      const targetTenantId = (isSuperAdmin && target_tenant_id) ? target_tenant_id : callerTenantId;
+
+      const { rows: tenantRows } = await pool.query(`SELECT id FROM tenants WHERE id = $1`, [targetTenantId]);
+      if (tenantRows.length === 0) {
+        return res.status(404).json({ error: "Target tenant not found" });
+      }
+
+      const resolvedEmail = String(email).trim().toLowerCase();
+      const displayName = String(display_name || resolvedEmail.split("@")[0]).trim();
+      const finalPassword = (typeof password === "string" && password.trim().length >= 6)
+        ? password.trim()
+        : `${crypto.randomUUID().slice(0, 12)}Aa1!`;
+
+      const { rows: profileRows } = await pool.query(
+        `SELECT id, tenant_id FROM profiles WHERE email = $1 LIMIT 1`,
+        [resolvedEmail],
+      );
+
+      let userId;
+      let previousTenantId = null;
+      let existing = false;
+
+      if (profileRows.length > 0) {
+        userId = profileRows[0].id;
+        previousTenantId = profileRows[0].tenant_id;
+        existing = true;
+      } else {
+        const { rows: authRows } = await pool.query(`SELECT id FROM auth_users WHERE email = $1 LIMIT 1`, [resolvedEmail]);
+        if (authRows.length > 0) {
+          userId = authRows[0].id;
+          existing = true;
+        } else {
+          const hash = await bcrypt.hash(finalPassword, 12);
+          const { rows: createdRows } = await pool.query(
+            `INSERT INTO auth_users (email, encrypted_password) VALUES ($1, $2) RETURNING id`,
+            [resolvedEmail, hash],
+          );
+          userId = createdRows[0].id;
+        }
+      }
+
+      await pool.query(
+        `INSERT INTO profiles (id, tenant_id, display_name, email)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (id) DO UPDATE
+         SET tenant_id = EXCLUDED.tenant_id,
+             display_name = EXCLUDED.display_name,
+             email = EXCLUDED.email`,
+        [userId, targetTenantId, displayName, resolvedEmail],
+      );
+
+      await pool.query(`DELETE FROM user_roles WHERE user_id = $1`, [userId]);
+      await pool.query(
+        `INSERT INTO user_roles (user_id, tenant_id, role) VALUES ($1, $2, $3)`,
+        [userId, targetTenantId, role],
+      );
+
+      if (previousTenantId && previousTenantId !== targetTenantId) {
+        const { rows: memberRows } = await pool.query(
+          `SELECT id FROM profiles WHERE tenant_id = $1 LIMIT 1`,
+          [previousTenantId],
+        );
+        if (memberRows.length === 0) {
+          await pool.query(`DELETE FROM tenants WHERE id = $1`, [previousTenantId]);
+        }
+      }
+
+      return res.json({ success: true, user_id: userId, existing, moved: !!previousTenantId && previousTenantId !== targetTenantId });
+    } catch (err) {
+      console.error("[invite-user]", err);
+      if (err.code === "23505") {
+        return res.status(409).json({ error: "Usuário já existe" });
+      }
+      return res.status(500).json({ error: err.message || "Failed to create user" });
+    }
+  },
+
   /* ── printer-status ──────────────────────────── */
   "printer-status": async (req, res) => {
     try {

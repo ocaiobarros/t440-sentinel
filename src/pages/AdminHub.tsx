@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -98,6 +98,7 @@ export default function AdminHub() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
+  const hasInitializedTenantSelection = useRef(false);
 
   // Team editing
   const [editingTeam, setEditingTeam] = useState(false);
@@ -172,10 +173,11 @@ export default function AdminHub() {
       ]);
       const allTenants = tenantsRes.data ?? [];
       setTenants(allTenants);
-      if (allTenants.length > 0 && !selectedTenantId) {
+      if (allTenants.length > 0 && !selectedTenantId && !hasInitializedTenantSelection.current) {
         setSelectedTenantId(allTenants[0].id);
         setTeamName(allTenants[0].name);
         setTeamSlug(allTenants[0].slug);
+        hasInitializedTenantSelection.current = true;
       }
       if (profilesRes.data) setProfiles(profilesRes.data);
       if (rolesRes.data) setRoles(rolesRes.data as UserRole[]);
@@ -323,6 +325,15 @@ export default function AdminHub() {
 
   const handleInviteUser = async () => {
     if (!inviteForm.email.trim()) return;
+    if (!selectedTenantId) {
+      toast({
+        variant: "destructive",
+        title: "Selecione uma organização",
+        description: "Escolha a organização antes de criar ou vincular o usuário.",
+      });
+      return;
+    }
+
     setInviting(true);
     try {
       const { data, error } = await supabase.functions.invoke("invite-user", {
@@ -331,10 +342,16 @@ export default function AdminHub() {
           display_name: inviteForm.display_name.trim(),
           role: inviteForm.role,
           password: inviteForm.password.trim() || undefined,
+          target_tenant_id: selectedTenantId,
         },
       });
+
       if (error) throw error;
       if (data?.error) throw new Error(data.error);
+      if (typeof data?.message === "string" && data.message.toLowerCase().includes("not implemented")) {
+        throw new Error("A função de criação de usuário ainda não está implementada no backend local.");
+      }
+
       const msg = inviteForm.password.trim()
         ? `${inviteForm.email} criado com a senha definida.`
         : `${inviteForm.email} foi adicionado ao time.`;
@@ -696,13 +713,31 @@ export default function AdminHub() {
                       {tenant?.name ?? "ORGANIZAÇÃO"}
                     </h2>
                   </div>
-                  {!editingTeam && (
-                    <Button variant="ghost" size="sm" onClick={() => setEditingTeam(true)}>
-                      <Pencil className="w-4 h-4 mr-1" /> Editar
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {isSuperAdmin && selectedTenantId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => {
+                          setEditingTeam(false);
+                          setSelectedTenantId(null);
+                        }}
+                      >
+                        <EyeOff className="w-4 h-4 mr-1" /> Sair da visualização
+                      </Button>
+                    )}
+                    {!editingTeam && tenant && (
+                      <Button variant="ghost" size="sm" onClick={() => setEditingTeam(true)}>
+                        <Pencil className="w-4 h-4 mr-1" /> Editar
+                      </Button>
+                    )}
+                  </div>
                 </div>
-                {editingTeam ? (
+                {!tenant ? (
+                  <div className="rounded-lg border border-border/60 bg-muted/20 p-4">
+                    <p className="text-sm text-muted-foreground">Selecione uma organização para visualizar os detalhes.</p>
+                  </div>
+                ) : editingTeam ? (
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
                       <div className="space-y-2">
@@ -744,33 +779,35 @@ export default function AdminHub() {
                 )}
 
                 {/* Member breakdown by role */}
-                <div className="mt-8">
-                  <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Membros por Role</h3>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
-                    {(["admin", "editor", "tech", "sales", "viewer"] as const).map((r) => {
-                      const members = tenantProfiles.filter((p) => getRoleForUser(p.id) === r);
-                      return (
-                        <div key={r} className="rounded-lg border border-border bg-muted/30 p-4">
-                          <div className="flex items-center gap-2 mb-3">
-                            <Badge variant={getRoleBadgeVariant(r)} className="text-xs">{r}</Badge>
-                            <span className="text-xs text-muted-foreground">({members.length})</span>
-                          </div>
-                          <div className="space-y-2">
-                            {members.map((m) => (
-                              <div key={m.id} className="flex items-center gap-2 text-xs">
-                                <div className="w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
-                                  {(m.display_name?.[0] ?? "?").toUpperCase()}
+                {tenant && (
+                  <div className="mt-8">
+                    <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-3">Membros por Role</h3>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+                      {(["admin", "editor", "tech", "sales", "viewer"] as const).map((r) => {
+                        const members = tenantProfiles.filter((p) => getRoleForUser(p.id) === r);
+                        return (
+                          <div key={r} className="rounded-lg border border-border bg-muted/30 p-4">
+                            <div className="flex items-center gap-2 mb-3">
+                              <Badge variant={getRoleBadgeVariant(r)} className="text-xs">{r}</Badge>
+                              <span className="text-xs text-muted-foreground">({members.length})</span>
+                            </div>
+                            <div className="space-y-2">
+                              {members.map((m) => (
+                                <div key={m.id} className="flex items-center gap-2 text-xs">
+                                  <div className="w-5 h-5 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-[10px] font-bold text-primary">
+                                    {(m.display_name?.[0] ?? "?").toUpperCase()}
+                                  </div>
+                                  <span className="text-foreground truncate">{m.display_name ?? m.email ?? "—"}</span>
                                 </div>
-                                <span className="text-foreground truncate">{m.display_name ?? m.email ?? "—"}</span>
-                              </div>
-                            ))}
-                            {members.length === 0 && <p className="text-xs text-muted-foreground italic">Nenhum membro</p>}
+                              ))}
+                              {members.length === 0 && <p className="text-xs text-muted-foreground italic">Nenhum membro</p>}
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
+                )}
               </section>
             </TabsContent>
 
@@ -1090,7 +1127,7 @@ export default function AdminHub() {
           <DialogHeader>
             <DialogTitle>Adicionar Novo Usuário</DialogTitle>
             <DialogDescription>
-              O usuário será criado e adicionado à sua organização com a role selecionada.
+              O usuário será criado e vinculado à organização selecionada: <strong>{tenant?.name ?? "nenhuma"}</strong>.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
