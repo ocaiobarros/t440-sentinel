@@ -3,8 +3,8 @@
 -- ║  © 2026 CBLabs — Versão 1.1                                    ║
 -- ╚══════════════════════════════════════════════════════════════════╝
 
--- Executar como superusuário no banco "flowpulse"
--- psql -U postgres -d flowpulse -f schema_cblabs_full.sql
+-- Executar como superusuário no banco "postgres"
+-- psql -U supabase_admin -d postgres -f schema_cblabs_full.sql
 
 BEGIN;
 
