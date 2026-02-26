@@ -55,11 +55,13 @@ import {
   Radio,
   Activity,
   TrendingUp,
+  Zap,
 } from "lucide-react";
 import TelemetryWizard from "@/components/admin/TelemetryWizard";
 import TelemetryHealthPanel from "@/components/admin/TelemetryHealthPanel";
 import AuditLogPanel from "@/components/admin/AuditLogPanel";
 import ReservationFunnelPanel from "@/components/admin/ReservationFunnelPanel";
+import DiagnosticPanel from "@/components/admin/DiagnosticPanel";
 
 interface Profile {
   id: string;
@@ -521,6 +523,9 @@ export default function AdminHub() {
               </TabsTrigger>
               <TabsTrigger value="intelligence" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                 <Activity className="w-4 h-4 mr-2" /> Intelligence Ops
+              </TabsTrigger>
+              <TabsTrigger value="diagnostics" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+                <Zap className="w-4 h-4 mr-2" /> Diagnóstico
               </TabsTrigger>
             </TabsList>
 
@@ -987,6 +992,11 @@ export default function AdminHub() {
                 </p>
                 <AuditLogPanel />
               </section>
+            </TabsContent>
+
+            {/* ─── DIAGNOSTICS TAB ─── */}
+            <TabsContent value="diagnostics">
+              <DiagnosticPanel tenants={tenants} selectedTenantId={selectedTenantId} />
             </TabsContent>
           </Tabs>
         )}
