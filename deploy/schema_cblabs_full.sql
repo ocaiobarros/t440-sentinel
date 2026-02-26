@@ -8,9 +8,12 @@
 
 BEGIN;
 
+-- Ensure uuid-ossp functions are visible without schema prefix
+SET search_path TO public, extensions, pg_temp;
+
 -- ─── EXTENSÕES ────────────────────────────────────────────
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
-CREATE EXTENSION IF NOT EXISTS pgcrypto;
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
+CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
 
 -- ─── ENUMS ────────────────────────────────────────────────
 DO $$ BEGIN
