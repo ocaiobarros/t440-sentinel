@@ -244,25 +244,47 @@ else
   fi
 fi
 
-# ─── 7. Edge Functions Runtime ────────────────────────────
+# ─── 7. Edge Functions ────────────────────────────────────
 echo -e "\n${CYAN}[7/8] Edge Functions${NC}"
-# Test that the edge runtime is reachable (any response from functions endpoint)
-FUNC_CODE=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" \
-  -H "apikey: ${ANON_HEADER}" \
-  -H "Authorization: Bearer ${TOKEN:-${SERVICE_ROLE_KEY:-}}" \
-  "${API}/functions/v1/system-status" 2>/dev/null || echo "000")
 
-if [[ "$FUNC_CODE" =~ ^2[0-9][0-9]$|^401$|^403$ ]]; then
-  echo -e "  ${GREEN}✔${NC} Edge Function respondeu (HTTP $FUNC_CODE)"
-  ((PASS++)); report "PASS" "Edge Function system-status (HTTP $FUNC_CODE)"
-elif [ "$FUNC_CODE" = "000" ]; then
-  echo -e "  ${RED}✘${NC} Edge Functions runtime não acessível"
-  ((FAIL++)); report "FAIL" "Edge Function runtime inacessível"
+# Test main router health first (with retry — functions need time to load)
+FUNC_OK=false
+FUNC_CODE="000"
+for _ftry in 1 2 3 4 5 6; do
+  FUNC_CODE=$(curl -sS --max-time 10 -o /tmp/func_resp.json -w "%{http_code}" \
+    "${API}/functions/v1/" 2>/dev/null || echo "000")
+  if [ "$FUNC_CODE" = "200" ]; then
+    FUNC_OK=true
+    break
+  fi
+  sleep 5
+done
+
+if $FUNC_OK; then
+  LOADED=$(cat /tmp/func_resp.json 2>/dev/null | grep -o '"functions_loaded":[0-9]*' | grep -o '[0-9]*' || echo "?")
+  echo -e "  ${GREEN}✔${NC} Edge Functions runtime ativo ($LOADED functions carregadas)"
+  ((PASS++)); report "PASS" "Edge Function runtime ($LOADED functions loaded)"
+
+  # Test a real function (system-status via POST with auth)
+  REAL_FUNC_CODE=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" -X POST \
+    -H "apikey: ${ANON_HEADER}" \
+    -H "Authorization: Bearer ${TOKEN:-${SERVICE_ROLE_KEY:-}}" \
+    -H "Content-Type: application/json" \
+    "${API}/functions/v1/system-status" 2>/dev/null || echo "000")
+
+  if [[ "$REAL_FUNC_CODE" =~ ^2[0-9][0-9]$ ]]; then
+    echo -e "  ${GREEN}✔${NC} Function system-status respondeu HTTP $REAL_FUNC_CODE"
+    ((PASS++)); report "PASS" "Edge Function system-status (HTTP $REAL_FUNC_CODE)"
+  elif [[ "$REAL_FUNC_CODE" =~ ^(401|403)$ ]]; then
+    echo -e "  ${YELLOW}⚠${NC}  Function system-status retornou HTTP $REAL_FUNC_CODE (auth issue)"
+    ((PASS++)); report "PASS" "Edge Function system-status reachable (HTTP $REAL_FUNC_CODE)"
+  else
+    echo -e "  ${RED}✘${NC} Function system-status retornou HTTP $REAL_FUNC_CODE"
+    ((FAIL++)); report "FAIL" "Edge Function system-status (HTTP $REAL_FUNC_CODE)"
+  fi
 else
-  # 404/500 from the runtime itself means it's running but function routing failed
-  # This is expected in on-prem where functions use Deno.serve() (non-importable)
-  echo -e "  ${YELLOW}⚠${NC}  Edge Function retornou HTTP $FUNC_CODE (runtime ativo, roteamento pendente)"
-  ((PASS++)); report "PASS" "Edge Function runtime ativo (HTTP $FUNC_CODE)"
+  echo -e "  ${RED}✘${NC} Edge Functions runtime não respondeu (HTTP $FUNC_CODE)"
+  ((FAIL++)); report "FAIL" "Edge Function runtime (HTTP $FUNC_CODE)"
 fi
 
 # ─── 8. UI ───────────────────────────────────────────────
