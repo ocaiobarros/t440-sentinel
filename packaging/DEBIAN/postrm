@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  purge)
+    # Remover dados locais (só no purge, não no remove)
+    rm -rf /var/lib/flowpulse 2>/dev/null || true
+    rm -rf /etc/flowpulse 2>/dev/null || true
+
+    # Remover usuário de serviço
+    deluser --system flowpulse 2>/dev/null || true
+    delgroup --system flowpulse 2>/dev/null || true
+
+    # Limpar nginx
+    rm -f /etc/nginx/sites-enabled/flowpulse 2>/dev/null || true
+    nginx -t 2>/dev/null && systemctl reload nginx 2>/dev/null || true
+
+    # Limpar systemd
+    rm -f /lib/systemd/system/flowpulse.service 2>/dev/null || true
+    systemctl daemon-reload 2>/dev/null || true
+
+    echo "flowpulse: dados e configuração removidos (purge)"
+  ;;
+
+  remove)
+    echo "flowpulse: removido. Dados preservados em /var/lib/flowpulse"
+    echo "           Use 'apt purge flowpulse' para remover tudo."
+  ;;
+esac
+
+exit 0

@@ -1,0 +1,13 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  remove|upgrade)
+    if systemctl is-active --quiet flowpulse; then
+      systemctl stop flowpulse || true
+    fi
+    systemctl disable flowpulse 2>/dev/null || true
+  ;;
+esac
+
+exit 0

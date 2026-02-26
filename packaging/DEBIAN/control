@@ -1,0 +1,16 @@
+Package: flowpulse
+Version: 3.0.0
+Section: web
+Priority: optional
+Architecture: amd64
+Depends: adduser, ca-certificates, postgresql, nginx, systemd
+Recommends: logrotate
+Maintainer: FlowPulse Intelligence <flowpulselabs@gmail.com>
+Homepage: https://github.com/ocaiobarros/FlowPulse
+Description: FlowPulse Intelligence — On-Premise Monitoring Platform
+ Enterprise-grade infrastructure monitoring, visualization and
+ alerting platform. Includes Express API server, React SPA frontend,
+ embedded Node.js runtime, and PostgreSQL schema provisioning.
+ .
+ Features: Zabbix integration, FlowMap FTTH, BGP monitoring,
+ dashboard builder, SLA governance, alert escalation engine.
