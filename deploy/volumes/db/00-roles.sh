@@ -59,16 +59,32 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authentic
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON ROUTINES TO anon, authenticated, service_role;
 
+-- Auth admin needs CREATE on database + public schema for GoTrue migrations
+GRANT CREATE ON DATABASE ${DB_NAME} TO supabase_auth_admin;
+GRANT CREATE ON DATABASE ${DB_NAME} TO supabase_storage_admin;
+
+GRANT USAGE, CREATE ON SCHEMA public TO supabase_auth_admin;
+GRANT USAGE, CREATE ON SCHEMA public TO supabase_storage_admin;
+
+GRANT ALL ON ALL TABLES IN SCHEMA public TO supabase_auth_admin, supabase_storage_admin;
+GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO supabase_auth_admin, supabase_storage_admin;
+
 -- Ensure auth schema exists for GoTrue
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
-GRANT USAGE ON SCHEMA auth TO supabase_auth_admin;
+GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
+
+-- Ensure storage schema exists
+CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION supabase_storage_admin;
+GRANT ALL ON SCHEMA storage TO supabase_storage_admin;
 
 -- Ensure _realtime schema exists for Realtime
 CREATE SCHEMA IF NOT EXISTS _realtime AUTHORIZATION supabase_admin;
 
--- Ensure extensions
+-- Ensure extensions schema
+CREATE SCHEMA IF NOT EXISTS extensions;
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp" SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS "pgcrypto" SCHEMA extensions;
+GRANT USAGE ON SCHEMA extensions TO supabase_auth_admin, supabase_storage_admin, anon, authenticated, service_role;
 
 EOSQL
 
