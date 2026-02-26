@@ -51,12 +51,26 @@ echo -e "${NC}"
 # ─── 1. Healthz (Nginx) ──────────────────────────────────
 echo -e "${CYAN}[1/8] Health Check${NC}"
 HEALTH=$(curl -sS --max-time 5 "${BASE}/healthz" 2>/dev/null || echo '{}')
-check "GET /healthz retorna OK" echo "$HEALTH" | grep -q '"ok"'
+if echo "$HEALTH" | grep -q '"ok"'; then
+  echo -e "  ${GREEN}✔${NC} GET /healthz retorna OK"
+  ((PASS++))
+else
+  echo -e "  ${RED}✘${NC} GET /healthz não retornou payload esperado"
+  echo "    Resposta: $(echo "$HEALTH" | head -c 180)"
+  ((FAIL++))
+fi
 
 # ─── 2. Auth Health ──────────────────────────────────────
 echo -e "\n${CYAN}[2/8] Auth (GoTrue)${NC}"
 AUTH_HEALTH=$(curl -sS --max-time 5 "${API}/auth/v1/health" 2>/dev/null || echo '{}')
-check "GoTrue health" echo "$AUTH_HEALTH" | grep -qi 'alive\|ok\|healthy'
+if echo "$AUTH_HEALTH" | grep -qi 'alive\|ok\|healthy'; then
+  echo -e "  ${GREEN}✔${NC} GoTrue health"
+  ((PASS++))
+else
+  echo -e "  ${RED}✘${NC} GoTrue health falhou"
+  echo "    Resposta: $(echo "$AUTH_HEALTH" | head -c 180)"
+  ((FAIL++))
+fi
 
 # ─── 3. Login Admin ──────────────────────────────────────
 echo -e "\n${CYAN}[3/8] Login Admin${NC}"

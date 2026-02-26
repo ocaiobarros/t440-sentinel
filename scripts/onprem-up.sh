@@ -255,8 +255,8 @@ wait_for_container() {
   local container_id="$2"
   local max_tries="${3:-45}"
   local i=0
+  local status="unknown"
   while [ $i -lt $max_tries ]; do
-    local status
     status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || echo "unknown")
     if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
       echo -e "  ${GREEN}✔${NC} $name está pronto (${status})"
@@ -266,7 +266,9 @@ wait_for_container() {
     i=$((i + 1))
   done
   echo -e "  ${RED}✘${NC} $name não ficou pronto após $((max_tries * 2))s"
-  docker logs "$container_id" --tail 30 2>/dev/null || true
+  echo -e "  Último status reportado: ${status}"
+  docker inspect --format '{{json .State.Health}}' "$container_id" 2>/dev/null || true
+  docker logs "$container_id" --tail 120 2>/dev/null || true
   return 1
 }
 
@@ -352,7 +354,13 @@ fi
 # Restart auth so it picks up the pre-created types
 docker restart "$AUTH_CONTAINER" >/dev/null 2>&1 || true
 sleep 3
-wait_for_container "Auth (GoTrue)" "$AUTH_CONTAINER" 60
+if ! wait_for_service "Auth (GoTrue)" "$KONG_URL/auth/v1/health" 90; then
+  echo -e "  ${YELLOW}⚠${NC}  Coletando logs detalhados do Auth..."
+  docker compose -f docker-compose.onprem.yml logs auth --tail 200 2>/dev/null || true
+  echo -e "  ${YELLOW}⚠${NC}  Coletando logs do Kong (rotas auth)..."
+  docker compose -f docker-compose.onprem.yml logs kong --tail 120 2>/dev/null || true
+  exit 1
+fi
 
 # ─── 7. Aplicar Schema + Seed ─────────────────────────────
 echo -e "\n${CYAN}[7/8] Aplicando schema e seed admin...${NC}"
