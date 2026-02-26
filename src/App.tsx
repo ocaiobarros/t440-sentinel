@@ -16,7 +16,20 @@ import { Loader2 } from "lucide-react";
 
 /* ── Lazy-loaded pages for code splitting ── */
 const DashboardView = lazy(() => import("./pages/DashboardView"));
-const DashboardBuilder = lazy(() => import("./pages/DashboardBuilder"));
+const DashboardBuilder = lazy(() => import("./pages/DashboardBuilder").catch((err) => {
+  console.error("[LazyLoad] DashboardBuilder failed:", err);
+  return { default: () => (
+    <div className="min-h-screen flex items-center justify-center p-8 bg-background">
+      <div className="rounded-xl p-6 border border-red-500/30 max-w-lg text-center bg-card">
+        <h2 className="text-sm font-bold text-foreground mb-2">Erro ao carregar o Builder</h2>
+        <pre className="text-[10px] font-mono text-red-400 bg-red-500/10 rounded p-3 overflow-auto max-h-[200px] text-left whitespace-pre-wrap">
+          {err?.message || String(err)}
+        </pre>
+        <p className="text-xs text-muted-foreground mt-3">Verifique o console do navegador (F12) para detalhes.</p>
+      </div>
+    </div>
+  ) };
+}));
 const ZabbixConnections = lazy(() => import("./pages/ZabbixConnections"));
 const RMSConnections = lazy(() => import("./pages/RMSConnections"));
 const Index = lazy(() => import("./pages/Index"));
@@ -167,10 +180,10 @@ const App = () => (
                 <ProtectedRoute><DashboardView /></ProtectedRoute>
               } />
               <Route path="/builder" element={
-                <ProtectedRoute roles={["admin", "editor"]}><ErrorBoundary fallbackTitle="Erro no Builder"><DashboardBuilder /></ErrorBoundary></ProtectedRoute>
+                <ProtectedRoute roles={["admin", "editor"]}><Suspense fallback={<LazyFallback />}><ErrorBoundary fallbackTitle="Erro no Builder"><DashboardBuilder /></ErrorBoundary></Suspense></ProtectedRoute>
               } />
               <Route path="/builder/:dashboardId" element={
-                <ProtectedRoute roles={["admin", "editor"]}><ErrorBoundary fallbackTitle="Erro no Builder"><DashboardBuilder /></ErrorBoundary></ProtectedRoute>
+                <ProtectedRoute roles={["admin", "editor"]}><Suspense fallback={<LazyFallback />}><ErrorBoundary fallbackTitle="Erro no Builder"><DashboardBuilder /></ErrorBoundary></Suspense></ProtectedRoute>
               } />
 
               {/* ── Legacy redirects ── */}
