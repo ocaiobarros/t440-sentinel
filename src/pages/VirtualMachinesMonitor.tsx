@@ -510,10 +510,11 @@ export default function VirtualMachinesMonitor() {
       if (!v) continue;
       if (!firstVirt) firstVirt = v;
       
-      // Tag VMs with their hypervisor name
+      // Tag VMs with their hypervisor name and fix "This VM" placeholder
       const hostName = hosts.find(h => h.id === hostId)?.name || hostId;
       for (const vm of v.vms) {
         if (!vm.hypervisorName) vm.hypervisorName = hostName;
+        if (vm.name === "This VM") vm.name = hostName;
         allVMs.push(vm);
       }
     }

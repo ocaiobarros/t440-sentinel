@@ -7,6 +7,7 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import ProtectedRoute from "@/components/auth/ProtectedRoute";
 import AppLayout from "@/components/layout/AppLayout";
+import ErrorBoundary from "@/components/ErrorBoundary";
 import Login from "./pages/Login";
 import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
@@ -82,6 +83,7 @@ const App = () => (
                   <ProtectedRoute>
                     <AppLayout>
                       <Suspense fallback={<LazyFallback />}>
+                      <ErrorBoundary>
                         <Routes>
                           {/* Operations */}
                           <Route path="operations/home" element={<OperationsHome />} />
@@ -150,6 +152,7 @@ const App = () => (
 
                           <Route path="*" element={<NotFound />} />
                         </Routes>
+                      </ErrorBoundary>
                       </Suspense>
                     </AppLayout>
                   </ProtectedRoute>
@@ -164,10 +167,10 @@ const App = () => (
                 <ProtectedRoute><DashboardView /></ProtectedRoute>
               } />
               <Route path="/builder" element={
-                <ProtectedRoute roles={["admin", "editor"]}><DashboardBuilder /></ProtectedRoute>
+                <ProtectedRoute roles={["admin", "editor"]}><ErrorBoundary fallbackTitle="Erro no Builder"><DashboardBuilder /></ErrorBoundary></ProtectedRoute>
               } />
               <Route path="/builder/:dashboardId" element={
-                <ProtectedRoute roles={["admin", "editor"]}><DashboardBuilder /></ProtectedRoute>
+                <ProtectedRoute roles={["admin", "editor"]}><ErrorBoundary fallbackTitle="Erro no Builder"><DashboardBuilder /></ErrorBoundary></ProtectedRoute>
               } />
 
               {/* ── Legacy redirects ── */}
