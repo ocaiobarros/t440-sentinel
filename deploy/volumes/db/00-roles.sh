@@ -97,8 +97,11 @@ ALTER DEFAULT PRIVILEGES FOR ROLE supabase_auth_admin IN SCHEMA auth GRANT SELEC
 CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION supabase_storage_admin;
 GRANT ALL ON SCHEMA storage TO supabase_storage_admin;
 
--- Ensure _realtime schema exists for Realtime
+-- Ensure _realtime and realtime schemas exist for Realtime
 CREATE SCHEMA IF NOT EXISTS _realtime AUTHORIZATION supabase_admin;
+CREATE SCHEMA IF NOT EXISTS realtime AUTHORIZATION supabase_admin;
+GRANT USAGE ON SCHEMA realtime TO supabase_admin;
+GRANT ALL ON SCHEMA realtime TO supabase_admin;
 
 -- Ensure extensions schema
 CREATE SCHEMA IF NOT EXISTS extensions;
