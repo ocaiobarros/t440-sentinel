@@ -1,20 +1,32 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  FLOWPULSE — Smoke Test On-Premise (Docker)                     ║
-# ║  Valida todos os serviços do stack Supabase self-hosted          ║
-# ║  Uso: bash scripts/smoke-onprem.sh [base_url]                   ║
+# ║  Valida serviços, trigger handle_new_user e isolamento RLS       ║
+# ║  Uso: bash scripts/smoke-onprem.sh [base_url] [api_url]          ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+ENV_FILE="$SCRIPT_DIR/../deploy/.env"
+if [ -f "$ENV_FILE" ]; then
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
 
 BASE="${1:-http://localhost}"
 API="${2:-http://localhost:8000}"
 RED='\033[0;31m'
 GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
 CYAN='\033[0;36m'
 NC='\033[0m'
 PASS=0
 FAIL=0
+
+ANON_HEADER="${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0}"
 
 check() {
   local desc="$1"
@@ -37,27 +49,34 @@ echo "╚═══════════════════════�
 echo -e "${NC}"
 
 # ─── 1. Healthz (Nginx) ──────────────────────────────────
-echo -e "${CYAN}[1/6] Health Check${NC}"
+echo -e "${CYAN}[1/8] Health Check${NC}"
 HEALTH=$(curl -sS --max-time 5 "${BASE}/healthz" 2>/dev/null || echo '{}')
 check "GET /healthz retorna OK" echo "$HEALTH" | grep -q '"ok"'
 
 # ─── 2. Auth Health ──────────────────────────────────────
-echo -e "\n${CYAN}[2/6] Auth (GoTrue)${NC}"
+echo -e "\n${CYAN}[2/8] Auth (GoTrue)${NC}"
 AUTH_HEALTH=$(curl -sS --max-time 5 "${API}/auth/v1/health" 2>/dev/null || echo '{}')
-check "GoTrue health" echo "$AUTH_HEALTH" | grep -qi 'alive\|ok'
+check "GoTrue health" echo "$AUTH_HEALTH" | grep -qi 'alive\|ok\|healthy'
 
 # ─── 3. Login Admin ──────────────────────────────────────
-echo -e "\n${CYAN}[3/6] Login Admin${NC}"
+echo -e "\n${CYAN}[3/8] Login Admin${NC}"
 LOGIN_RESP=$(curl -sS --max-time 10 -X POST "${API}/auth/v1/token?grant_type=password" \
-  -H "apikey: ${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0}" \
+  -H "apikey: ${ANON_HEADER}" \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@flowpulse.local","password":"admin@123"}' 2>/dev/null || echo '{}')
 
 TOKEN=$(echo "$LOGIN_RESP" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+ADMIN_ID=""
+ADMIN_TENANT=""
 
 if [ -n "$TOKEN" ]; then
   echo -e "  ${GREEN}✔${NC} Login admin bem-sucedido"
   ((PASS++))
+
+  USER_RESP=$(curl -sS --max-time 10 "${API}/auth/v1/user" \
+    -H "apikey: ${ANON_HEADER}" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo '{}')
+  ADMIN_ID=$(echo "$USER_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
 else
   echo -e "  ${RED}✘${NC} Login admin falhou"
   echo "    Resposta: $(echo "$LOGIN_RESP" | head -c 200)"
@@ -65,37 +84,144 @@ else
 fi
 
 # ─── 4. REST API ─────────────────────────────────────────
-echo -e "\n${CYAN}[4/6] REST API (PostgREST)${NC}"
+echo -e "\n${CYAN}[4/8] REST API (PostgREST)${NC}"
 if [ -n "$TOKEN" ]; then
-  TENANTS_RESP=$(curl -sS --max-time 5 \
+  REST_CODE=$(curl -sS --max-time 8 -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer $TOKEN" \
-    -H "apikey: ${ANON_KEY:-}" \
-    "${API}/rest/v1/tenants?limit=1" 2>/dev/null || echo '[]')
-  check "GET /rest/v1/tenants responde" test $? -eq 0
-  
-  # Test RPC
-  RPC_RESP=$(curl -sS --max-time 5 -X POST \
+    -H "apikey: ${ANON_HEADER}" \
+    "${API}/rest/v1/tenants?limit=1" 2>/dev/null || echo "000")
+
+  if [ "$REST_CODE" = "200" ]; then
+    echo -e "  ${GREEN}✔${NC} GET /rest/v1/tenants respondeu 200"
+    ((PASS++))
+  else
+    echo -e "  ${RED}✘${NC} GET /rest/v1/tenants retornou HTTP $REST_CODE"
+    ((FAIL++))
+  fi
+
+  RPC_CODE=$(curl -sS --max-time 8 -o /dev/null -w "%{http_code}" -X POST \
     -H "Authorization: Bearer $TOKEN" \
-    -H "apikey: ${ANON_KEY:-}" \
+    -H "apikey: ${ANON_HEADER}" \
     -H "Content-Type: application/json" \
     "${API}/rest/v1/rpc/get_user_tenant_id" \
-    -d "{\"p_user_id\": \"00000000-0000-0000-0000-000000000000\"}" 2>/dev/null || echo '{}')
-  check "RPC get_user_tenant_id responde" test $? -eq 0
+    -d "{\"p_user_id\": \"${ADMIN_ID:-00000000-0000-0000-0000-000000000000}\"}" 2>/dev/null || echo "000")
+
+  if [ "$RPC_CODE" = "200" ]; then
+    echo -e "  ${GREEN}✔${NC} RPC get_user_tenant_id respondeu 200"
+    ((PASS++))
+  else
+    echo -e "  ${RED}✘${NC} RPC get_user_tenant_id retornou HTTP $RPC_CODE"
+    ((FAIL++))
+  fi
 else
   echo -e "  ${RED}✘${NC} Pulando — sem token"
   ((FAIL += 2))
 fi
 
-# ─── 5. Edge Function ────────────────────────────────────
-echo -e "\n${CYAN}[5/6] Edge Functions${NC}"
-FUNC_RESP=$(curl -sS --max-time 10 -X POST \
-  -H "apikey: ${ANON_KEY:-}" \
-  -H "Authorization: Bearer ${SERVICE_ROLE_KEY:-}" \
-  "${API}/functions/v1/system-status" 2>/dev/null || echo '{}')
-check "POST /functions/v1/system-status responde" test $? -eq 0
+# ─── 5. Trigger handle_new_user ───────────────────────────
+echo -e "\n${CYAN}[5/8] Trigger handle_new_user${NC}"
+if [ -n "$TOKEN" ] && [ -n "$ADMIN_ID" ]; then
+  PROFILE_RESP=$(curl -sS --max-time 8 "${API}/rest/v1/profiles?select=id,tenant_id,email&id=eq.${ADMIN_ID}&limit=1" \
+    -H "apikey: ${ANON_HEADER}" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo '[]')
 
-# ─── 6. UI ───────────────────────────────────────────────
-echo -e "\n${CYAN}[6/6] Frontend (Nginx)${NC}"
+  if echo "$PROFILE_RESP" | grep -q '"tenant_id"'; then
+    echo -e "  ${GREEN}✔${NC} Perfil auto-provisionado"
+    ADMIN_TENANT=$(echo "$PROFILE_RESP" | grep -o '"tenant_id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    ((PASS++))
+  else
+    echo -e "  ${RED}✘${NC} Perfil não encontrado para admin"
+    ((FAIL++))
+  fi
+
+  ROLE_RESP=$(curl -sS --max-time 8 "${API}/rest/v1/user_roles?select=role,user_id,tenant_id&user_id=eq.${ADMIN_ID}&role=eq.admin&limit=1" \
+    -H "apikey: ${ANON_HEADER}" \
+    -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo '[]')
+
+  if echo "$ROLE_RESP" | grep -q '"admin"'; then
+    echo -e "  ${GREEN}✔${NC} Role admin atribuída automaticamente"
+    ((PASS++))
+  else
+    echo -e "  ${RED}✘${NC} Role admin não encontrada no user_roles"
+    ((FAIL++))
+  fi
+else
+  echo -e "  ${RED}✘${NC} Não foi possível validar trigger (token/id ausente)"
+  ((FAIL += 2))
+fi
+
+# ─── 6. RLS cross-tenant ──────────────────────────────────
+echo -e "\n${CYAN}[6/8] Isolamento RLS cross-tenant${NC}"
+if [ -z "${SERVICE_ROLE_KEY:-}" ]; then
+  echo -e "  ${RED}✘${NC} SERVICE_ROLE_KEY ausente no ambiente (.env)"
+  ((FAIL++))
+elif [ -z "$ADMIN_TENANT" ]; then
+  echo -e "  ${RED}✘${NC} Tenant do admin não identificado"
+  ((FAIL++))
+else
+  GHOST_EMAIL="rls-smoke-$(date +%s)@flowpulse.local"
+  GHOST_PASSWORD="RlsTest@9999"
+
+  GHOST_RESP=$(curl -sS --max-time 12 -X POST "${API}/auth/v1/admin/users" \
+    -H "apikey: ${SERVICE_ROLE_KEY}" \
+    -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" \
+    -H "Content-Type: application/json" \
+    -d "{\"email\":\"${GHOST_EMAIL}\",\"password\":\"${GHOST_PASSWORD}\",\"email_confirm\":true}" 2>/dev/null || echo '{}')
+
+  GHOST_ID=$(echo "$GHOST_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+
+  if [ -n "$GHOST_ID" ]; then
+    GHOST_LOGIN=$(curl -sS --max-time 10 -X POST "${API}/auth/v1/token?grant_type=password" \
+      -H "apikey: ${ANON_HEADER}" \
+      -H "Content-Type: application/json" \
+      -d "{\"email\":\"${GHOST_EMAIL}\",\"password\":\"${GHOST_PASSWORD}\"}" 2>/dev/null || echo '{}')
+
+    GHOST_TOKEN=$(echo "$GHOST_LOGIN" | grep -o '"access_token":"[^"]*"' | cut -d'"' -f4)
+
+    if [ -n "$GHOST_TOKEN" ]; then
+      CROSS_RESP=$(curl -sS --max-time 8 "${API}/rest/v1/dashboards?tenant_id=eq.${ADMIN_TENANT}&select=id&limit=1" \
+        -H "apikey: ${ANON_HEADER}" \
+        -H "Authorization: Bearer ${GHOST_TOKEN}" 2>/dev/null || echo '[]')
+
+      CROSS_MIN=$(echo "$CROSS_RESP" | tr -d '[:space:]')
+      if [ "$CROSS_MIN" = "[]" ]; then
+        echo -e "  ${GREEN}✔${NC} RLS bloqueou acesso cross-tenant"
+        ((PASS++))
+      else
+        echo -e "  ${RED}✘${NC} RLS violada: usuário ghost acessou tenant de admin"
+        ((FAIL++))
+      fi
+    else
+      echo -e "  ${RED}✘${NC} Não foi possível autenticar usuário ghost"
+      ((FAIL++))
+    fi
+
+    curl -sS --max-time 8 -X DELETE "${API}/auth/v1/admin/users/${GHOST_ID}" \
+      -H "apikey: ${SERVICE_ROLE_KEY}" \
+      -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" >/dev/null 2>&1 || true
+  else
+    echo -e "  ${RED}✘${NC} Não foi possível criar usuário ghost"
+    ((FAIL++))
+  fi
+fi
+
+# ─── 7. Edge Function ────────────────────────────────────
+echo -e "\n${CYAN}[7/8] Edge Functions${NC}"
+FUNC_CODE=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" -X POST \
+  -H "apikey: ${ANON_HEADER}" \
+  -H "Authorization: Bearer ${SERVICE_ROLE_KEY:-}" \
+  "${API}/functions/v1/system-status" 2>/dev/null || echo "000")
+
+if [[ "$FUNC_CODE" =~ ^2[0-9][0-9]$|^401$|^403$ ]]; then
+  echo -e "  ${GREEN}✔${NC} Endpoint de function respondeu (HTTP $FUNC_CODE)"
+  ((PASS++))
+else
+  echo -e "  ${RED}✘${NC} Function retornou HTTP $FUNC_CODE"
+  ((FAIL++))
+fi
+
+# ─── 8. UI ───────────────────────────────────────────────
+echo -e "\n${CYAN}[8/8] Frontend (Nginx)${NC}"
 UI_RESP=$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "${BASE}/" 2>/dev/null || echo "000")
 if [ "$UI_RESP" = "200" ]; then
   echo -e "  ${GREEN}✔${NC} UI acessível (HTTP 200)"

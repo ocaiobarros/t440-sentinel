@@ -281,7 +281,7 @@ wait_for_container "Database" "$DB_CONTAINER" 30
 # GoTrue v2.164 expects auth.factor_type enum to exist before its MFA migration.
 # If the init script created the auth schema but GoTrue hasn't run yet, we pre-create it.
 echo -e "  Preparando pré-requisitos do Auth..."
-docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c "
+docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres -c "
   CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
   GRANT USAGE, CREATE ON SCHEMA auth TO supabase_auth_admin;
   ALTER ROLE supabase_auth_admin SET search_path = auth, public;
@@ -358,21 +358,21 @@ wait_for_container "Auth (GoTrue)" "$AUTH_CONTAINER" 60
 echo -e "\n${CYAN}[7/8] Aplicando schema e seed admin...${NC}"
 
 # Ensure postgres can reference auth.users for FK constraints
-docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -c \
+docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres -c \
   "GRANT USAGE ON SCHEMA auth TO supabase_admin; GRANT REFERENCES ON ALL TABLES IN SCHEMA auth TO supabase_admin;" 2>/dev/null || true
 
 # Check if schema already applied (check for tenants table)
-SCHEMA_EXISTS=$(docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres -tAc \
+SCHEMA_EXISTS=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
   "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='tenants');" 2>/dev/null || echo "f")
 
 if [ "$SCHEMA_EXISTS" = "t" ] && ! $FIX_MODE; then
   echo -e "  ${GREEN}✔${NC} Schema já aplicado (tabela 'tenants' encontrada)"
   echo "  Re-aplicando funções e triggers..."
-  docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < "$DEPLOY_DIR/schema_cblabs_full.sql"
+  docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" -i "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres < "$DEPLOY_DIR/schema_cblabs_full.sql"
   echo -e "  ${GREEN}✔${NC} Funções e triggers atualizados"
 else
   echo "  Aplicando schema_cblabs_full.sql..."
-  docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U supabase_admin -d postgres < "$DEPLOY_DIR/schema_cblabs_full.sql"
+  docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" -i "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres < "$DEPLOY_DIR/schema_cblabs_full.sql"
   echo -e "  ${GREEN}✔${NC} Schema aplicado"
 fi
 
