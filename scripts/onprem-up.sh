@@ -347,6 +347,8 @@ docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_E
 
   CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
   GRANT USAGE, CREATE ON SCHEMA auth TO supabase_auth_admin;
+  CREATE SCHEMA IF NOT EXISTS _realtime AUTHORIZATION supabase_admin;
+  GRANT USAGE, CREATE ON SCHEMA _realtime TO supabase_admin;
   ALTER ROLE supabase_auth_admin SET search_path = auth, public;
 
   -- If factor_type was accidentally created in public, move it to auth
