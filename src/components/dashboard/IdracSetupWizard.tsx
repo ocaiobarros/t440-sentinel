@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Server, Network, MonitorSpeaker, ChevronRight, ChevronLeft, Loader2, CheckCircle2, Wifi, Settings2 } from "lucide-react";
+import { Server, Network, MonitorSpeaker, ChevronRight, ChevronLeft, Loader2, CheckCircle2, Wifi, Settings2, Check } from "lucide-react";
 import { useZabbixConnections } from "@/hooks/useZabbixConnections";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -13,6 +13,8 @@ export interface IdracConfig {
   hostgroupName: string;
   hostId: string;
   hostName: string;
+  /** Multi-host selection (optional, used by VM monitor) */
+  hosts?: Array<{ id: string; name: string }>;
 }
 
 interface ZabbixHostGroup {
@@ -35,6 +37,8 @@ interface Props {
   subtitle?: string;
   /** Override the wizard icon */
   icon?: React.ElementType;
+  /** Allow selecting multiple hosts (used by VM monitor) */
+  multiSelect?: boolean;
 }
 
 const STORAGE_KEY = "flowpulse_idrac_config";
@@ -70,7 +74,7 @@ async function zabbixProxy(connectionId: string, method: string, params: Record<
 
 /* ─── Component ──────────────────────── */
 
-export default function IdracSetupWizard({ onComplete, existingConfig, title = "Server Monitor", subtitle = "Dell iDRAC (T440, R440, R720, R740) • Linux/SNMP (Huawei 2288H)", icon: HeaderIcon = MonitorSpeaker }: Props) {
+export default function IdracSetupWizard({ onComplete, existingConfig, title = "Server Monitor", subtitle = "Dell iDRAC (T440, R440, R720, R740) • Linux/SNMP (Huawei 2288H)", icon: HeaderIcon = MonitorSpeaker, multiSelect = false }: Props) {
   const { connections, isLoading: connectionsLoading } = useZabbixConnections();
   const [step, setStep] = useState(0); // 0=connection, 1=hostgroup, 2=host
 
@@ -78,6 +82,7 @@ export default function IdracSetupWizard({ onComplete, existingConfig, title = "
   const [selectedConnection, setSelectedConnection] = useState<{ id: string; name: string } | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<{ id: string; name: string } | null>(null);
   const [selectedHost, setSelectedHost] = useState<{ id: string; name: string } | null>(null);
+  const [selectedHosts, setSelectedHosts] = useState<Array<{ id: string; name: string }>>([]);
 
   // Data
   const [hostgroups, setHostgroups] = useState<ZabbixHostGroup[]>([]);
@@ -137,6 +142,14 @@ export default function IdracSetupWizard({ onComplete, existingConfig, title = "
   };
 
   const handleSelectHost = (host: ZabbixHost) => {
+    if (multiSelect) {
+      setSelectedHosts(prev => {
+        const exists = prev.some(h => h.id === host.hostid);
+        if (exists) return prev.filter(h => h.id !== host.hostid);
+        return [...prev, { id: host.hostid, name: host.name || host.host }];
+      });
+      return;
+    }
     const config: IdracConfig = {
       connectionId: selectedConnection!.id,
       connectionName: selectedConnection!.name,
@@ -144,6 +157,22 @@ export default function IdracSetupWizard({ onComplete, existingConfig, title = "
       hostgroupName: selectedGroup!.name,
       hostId: host.hostid,
       hostName: host.name || host.host,
+    };
+    saveIdracConfig(config);
+    onComplete(config);
+  };
+
+  const handleConfirmMultiSelect = () => {
+    if (selectedHosts.length === 0) return;
+    const first = selectedHosts[0];
+    const config: IdracConfig = {
+      connectionId: selectedConnection!.id,
+      connectionName: selectedConnection!.name,
+      hostgroupId: selectedGroup!.id,
+      hostgroupName: selectedGroup!.name,
+      hostId: first.id,
+      hostName: selectedHosts.map(h => h.name).join(", "),
+      hosts: selectedHosts,
     };
     saveIdracConfig(config);
     onComplete(config);
@@ -304,26 +333,56 @@ export default function IdracSetupWizard({ onComplete, existingConfig, title = "
                     <p className="text-xs text-muted-foreground">Nenhum host encontrado neste grupo</p>
                   </div>
                 ) : (
-                  <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
-                    {hosts.map((h) => (
-                      <button
-                        key={h.hostid}
-                        onClick={() => handleSelectHost(h)}
-                        className="w-full glass-card rounded-lg p-3 border border-border/20 hover:border-neon-green/30 transition-all group text-left flex items-center justify-between"
-                      >
-                        <div className="flex items-center gap-2">
-                          <Server className="w-4 h-4 text-neon-green" />
-                          <div>
-                            <span className="text-xs font-display font-bold text-foreground group-hover:text-neon-green transition-colors">{h.name || h.host}</span>
-                            {h.name && h.host !== h.name && (
-                              <span className="text-[9px] font-mono text-muted-foreground ml-2">{h.host}</span>
-                            )}
-                          </div>
-                        </div>
-                        <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-neon-green transition-colors" />
-                      </button>
-                    ))}
-                  </div>
+                  <>
+                    {multiSelect && selectedHosts.length > 0 && (
+                      <div className="flex items-center justify-between mb-3 px-1">
+                        <span className="text-[10px] font-mono text-neon-green">
+                          {selectedHosts.length} host{selectedHosts.length > 1 ? 's' : ''} selecionado{selectedHosts.length > 1 ? 's' : ''}
+                        </span>
+                        <button
+                          onClick={handleConfirmMultiSelect}
+                          className="px-4 py-1.5 rounded-lg text-xs font-display font-bold bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30 transition-all"
+                        >
+                          Confirmar Seleção →
+                        </button>
+                      </div>
+                    )}
+                    <div className="space-y-1.5 max-h-[300px] overflow-y-auto pr-1">
+                      {hosts.map((h) => {
+                        const isSelected = multiSelect && selectedHosts.some(s => s.id === h.hostid);
+                        return (
+                          <button
+                            key={h.hostid}
+                            onClick={() => handleSelectHost(h)}
+                            className={`w-full glass-card rounded-lg p-3 border transition-all group text-left flex items-center justify-between ${
+                              isSelected ? 'border-neon-green/50 bg-neon-green/5' : 'border-border/20 hover:border-neon-green/30'
+                            }`}
+                          >
+                            <div className="flex items-center gap-2">
+                              {multiSelect ? (
+                                <div className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
+                                  isSelected ? 'bg-neon-green border-neon-green' : 'border-muted-foreground/40'
+                                }`}>
+                                  {isSelected && <Check className="w-3 h-3 text-background" />}
+                                </div>
+                              ) : (
+                                <Server className="w-4 h-4 text-neon-green" />
+                              )}
+                              <div>
+                                <span className={`text-xs font-display font-bold transition-colors ${
+                                  isSelected ? 'text-neon-green' : 'text-foreground group-hover:text-neon-green'
+                                }`}>{h.name || h.host}</span>
+                                {h.name && h.host !== h.name && (
+                                  <span className="text-[9px] font-mono text-muted-foreground ml-2">{h.host}</span>
+                                )}
+                              </div>
+                            </div>
+                            {!multiSelect && <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/30 group-hover:text-neon-green transition-colors" />}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </>
                 )}
               </motion.div>
             )}

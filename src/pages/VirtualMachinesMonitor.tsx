@@ -7,10 +7,12 @@ import {
   Filter, MonitorCheck, Power, Gauge, ArrowLeft, Save,
 } from "lucide-react";
 import { useDashboardPersist } from "@/hooks/useDashboardPersist";
-import { useIdracLive } from "@/hooks/useIdracLive";
+import { useIdracLive, detectHostType, detectPrefix } from "@/hooks/useIdracLive";
+import type { ZabbixItem, IdracData } from "@/hooks/useIdracLive";
 import { extractVirtData } from "@/hooks/useVirtExtractors";
 import type { VirtData, VirtVM } from "@/hooks/useVirtExtractors";
 import IdracSetupWizard, { type IdracConfig } from "@/components/dashboard/IdracSetupWizard";
+import { supabase } from "@/integrations/supabase/client";
 
 /* ─── Local storage ── */
 
@@ -405,6 +407,11 @@ export default function VirtualMachinesMonitor() {
   const [config, setConfig] = useState<IdracConfig | null>(() => dashboardId ? loadConfig() : null);
   const [showSetup, setShowSetup] = useState(() => !dashboardId ? true : !loadConfig());
   const { data, dataLoading, lastRefresh, refresh, error, fetchItems } = useIdracLive();
+  
+  // Multi-host support
+  const [multiHostData, setMultiHostData] = useState<Map<string, IdracData>>(new Map());
+  const [multiLoading, setMultiLoading] = useState(false);
+  
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [filterStatus, setFilterStatus] = useState<FilterStatus>("all");
@@ -421,34 +428,107 @@ export default function VirtualMachinesMonitor() {
     saveDashboard(config.hostName || 'Virtual Machines', config);
   }, [config, saveDashboard]);
 
-  useEffect(() => {
-    if (config && !data && !dataLoading) {
-      fetchItems(config.connectionId, config.hostId);
+  // Multi-host fetch helper
+  const fetchMultipleHosts = useCallback(async (cfg: IdracConfig) => {
+    const hosts = cfg.hosts || [{ id: cfg.hostId, name: cfg.hostName }];
+    if (hosts.length <= 1) {
+      // Single host — use original path
+      fetchItems(cfg.connectionId, hosts[0].id);
+      return;
     }
-  }, [config, data, dataLoading, fetchItems]);
+    setMultiLoading(true);
+    const results = new Map<string, IdracData>();
+    await Promise.all(hosts.map(async (h) => {
+      try {
+        const { data: proxyData, error: proxyError } = await supabase.functions.invoke("zabbix-proxy", {
+          body: { connection_id: cfg.connectionId, method: "item.get", params: { hostids: [h.id], output: ["itemid", "name", "lastvalue", "lastclock", "units", "key_", "value_type"], sortfield: "name", limit: 2000 } },
+        });
+        if (proxyError || !proxyData?.result) return;
+        const itemMap = new Map<string, ZabbixItem>();
+        const raw = proxyData.result as ZabbixItem[];
+        for (const item of raw) {
+          itemMap.set(item.name, item);
+        }
+        const hostType = detectHostType(itemMap);
+        const prefix = detectPrefix(itemMap);
+        results.set(h.id, {
+          items: itemMap,
+          get: (name: string) => itemMap.get(name)?.lastvalue || "",
+          getItem: (name: string) => itemMap.get(name),
+          getAny: (...names: string[]) => { for (const n of names) { const v = itemMap.get(n)?.lastvalue; if (v) return v; } return ""; },
+          prefix,
+          hostType,
+        });
+      } catch { /* skip failed host */ }
+    }));
+    setMultiHostData(results);
+    setMultiLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (config && !data && !dataLoading && !multiLoading && multiHostData.size === 0) {
+      fetchMultipleHosts(config);
+    }
+  }, [config, data, dataLoading, multiLoading, multiHostData.size, fetchMultipleHosts]);
 
   const handleConfigComplete = useCallback((cfg: IdracConfig) => {
     saveConfig(cfg);
     setConfig(cfg);
     setShowSetup(false);
-    fetchItems(cfg.connectionId, cfg.hostId);
-  }, [fetchItems]);
+    setMultiHostData(new Map());
+    fetchMultipleHosts(cfg);
+  }, [fetchMultipleHosts]);
 
   const handleReconfigure = () => {
     clearConfig();
     setConfig(null);
+    setMultiHostData(new Map());
     setShowSetup(true);
   };
 
+  // Merge VMs from all hosts
   const virt = useMemo(() => {
-    if (!data) return null;
-    const v = extractVirtData(data);
-    // For VMware Guest, use the host name from config as the VM name
-    if (v && v.vms.length === 1 && v.vms[0].name === "This VM" && config?.hostName) {
-      v.vms[0].name = config.hostName;
+    const hosts = config?.hosts || (config ? [{ id: config.hostId, name: config.hostName }] : []);
+    
+    // Single host mode — use original data
+    if (hosts.length <= 1 && data) {
+      const v = extractVirtData(data);
+      if (v && v.vms.length === 1 && v.vms[0].name === "This VM" && config?.hostName) {
+        v.vms[0].name = config.hostName;
+      }
+      return v;
     }
-    return v;
-  }, [data, config]);
+    
+    // Multi-host mode — merge all
+    if (multiHostData.size === 0) return null;
+    
+    let allVMs: VirtVM[] = [];
+    let firstVirt: VirtData | null = null;
+    
+    for (const [hostId, hostData] of multiHostData) {
+      const v = extractVirtData(hostData);
+      if (!v) continue;
+      if (!firstVirt) firstVirt = v;
+      
+      // Tag VMs with their hypervisor name
+      const hostName = hosts.find(h => h.id === hostId)?.name || hostId;
+      for (const vm of v.vms) {
+        if (!vm.hypervisorName) vm.hypervisorName = hostName;
+        allVMs.push(vm);
+      }
+    }
+    
+    if (!firstVirt || allVMs.length === 0) return null;
+    
+    const running = allVMs.filter(v => v.status === "running");
+    return {
+      ...firstVirt,
+      vms: allVMs,
+      vmCount: allVMs.length,
+      runningCount: running.length,
+    };
+  }, [data, multiHostData, config]);
+  
 
   // Filter and sort VMs
   const filteredVMs = useMemo(() => {
@@ -518,7 +598,7 @@ export default function VirtualMachinesMonitor() {
   }, [virt?.cpu?.frequency]);
 
   if (showSetup) {
-    return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} title="Máquinas Virtuais" subtitle="Monitoramento individual de VMs" icon={MonitorCheck} />;
+    return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} title="Máquinas Virtuais" subtitle="Monitoramento individual de VMs" icon={MonitorCheck} multiSelect />;
   }
 
   const isVMware = virt?.type === "vmware";

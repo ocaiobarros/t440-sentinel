@@ -60,7 +60,7 @@ async function zabbixProxy(
 
 /* ─── Detect model prefix & host type ──────────── */
 
-function detectPrefix(items: Map<string, ZabbixItem>): string {
+export function detectPrefix(items: Map<string, ZabbixItem>): string {
   for (const name of items.keys()) {
     const m = name.match(/^(Dell [^:]+:\s)/);
     if (m) return m[1];
@@ -68,7 +68,7 @@ function detectPrefix(items: Map<string, ZabbixItem>): string {
   return "";
 }
 
-function detectHostType(items: Map<string, ZabbixItem>): "idrac" | "linux" | "vmware" | "vmware-guest" | "proxmox" | "unknown" {
+export function detectHostType(items: Map<string, ZabbixItem>): "idrac" | "linux" | "vmware" | "vmware-guest" | "proxmox" | "unknown" {
   let hasVmwareHv = false;
   let hasVmwareGuest = false;
   for (const name of items.keys()) {
