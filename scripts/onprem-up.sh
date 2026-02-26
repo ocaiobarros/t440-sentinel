@@ -252,7 +252,7 @@ wait_for_container "Database" "$DB_CONTAINER" 30
 # GoTrue v2.164 expects auth.factor_type enum to exist before its MFA migration.
 # If the init script created the auth schema but GoTrue hasn't run yet, we pre-create it.
 echo -e "  Preparando pré-requisitos do Auth..."
-docker exec "$DB_CONTAINER" psql -U supabase_admin -d postgres -c "
+docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c "
   CREATE SCHEMA IF NOT EXISTS auth;
   DO \$\$ BEGIN
     CREATE TYPE auth.factor_type AS ENUM ('totp','webauthn');
@@ -296,14 +296,14 @@ wait_for_container "Auth (GoTrue)" "$AUTH_CONTAINER" 60
 echo -e "\n${CYAN}[7/8] Aplicando schema e seed admin...${NC}"
 
 # Check if schema already applied (check for tenants table)
-SCHEMA_EXISTS=$(docker exec "$DB_CONTAINER" psql -U supabase_admin -d postgres -tAc \
+SCHEMA_EXISTS=$(docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -tAc \
   "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='tenants');" 2>/dev/null || echo "f")
 
 if [ "$SCHEMA_EXISTS" = "t" ]; then
   echo -e "  ${GREEN}✔${NC} Schema já aplicado (tabela 'tenants' encontrada)"
 else
   echo "  Aplicando schema_cblabs_full.sql..."
-  docker exec -i "$DB_CONTAINER" psql -U supabase_admin -d postgres < "$DEPLOY_DIR/schema_cblabs_full.sql"
+  docker exec -i "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres < "$DEPLOY_DIR/schema_cblabs_full.sql"
   echo -e "  ${GREEN}✔${NC} Schema aplicado"
 fi
 
