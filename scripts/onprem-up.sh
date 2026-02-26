@@ -149,9 +149,35 @@ wait_for_service() {
   return 1
 }
 
+wait_for_container() {
+  local name="$1"
+  local container_id="$2"
+  local max_tries="${3:-45}"
+  local i=0
+  while [ $i -lt $max_tries ]; do
+    local status
+    status=$(docker inspect --format '{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' "$container_id" 2>/dev/null || echo "unknown")
+    if [ "$status" = "healthy" ] || [ "$status" = "running" ]; then
+      echo -e "  ${GREEN}✔${NC} $name está pronto (${status})"
+      return 0
+    fi
+    sleep 2
+    i=$((i + 1))
+  done
+  echo -e "  ${RED}✘${NC} $name não ficou pronto após $((max_tries * 2))s"
+  docker logs "$container_id" --tail 80 2>/dev/null || true
+  return 1
+}
+
 KONG_URL="http://localhost:${KONG_HTTP_PORT:-8000}"
-wait_for_service "Kong Gateway" "$KONG_URL/rest/v1/" 30
-wait_for_service "Auth (GoTrue)" "$KONG_URL/auth/v1/health" 20
+wait_for_service "Kong Gateway" "$KONG_URL/rest/v1/" 45
+
+AUTH_CONTAINER=$(docker compose -f docker-compose.onprem.yml ps -q auth)
+if [ -z "$AUTH_CONTAINER" ]; then
+  echo -e "  ${RED}✘${NC} Container do Auth não encontrado"
+  exit 1
+fi
+wait_for_container "Auth (GoTrue)" "$AUTH_CONTAINER" 60
 
 # ─── 7. Aplicar Schema + Seed ─────────────────────────────
 echo -e "\n${CYAN}[7/7] Aplicando schema e seed admin...${NC}"
