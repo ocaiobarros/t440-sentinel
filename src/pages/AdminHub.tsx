@@ -338,9 +338,15 @@ export default function AdminHub() {
 
     setInviting(true);
     try {
+      // Auto-append @flowpulse.local for username-style logins (same as login page)
+      let emailToSend = inviteForm.email.trim().toLowerCase();
+      if (!emailToSend.includes("@")) {
+        emailToSend = `${emailToSend}@flowpulse.local`;
+      }
+
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: {
-          email: inviteForm.email.trim(),
+          email: emailToSend,
           display_name: inviteForm.display_name.trim(),
           role: inviteForm.role,
           password: inviteForm.password.trim() || undefined,
@@ -355,8 +361,8 @@ export default function AdminHub() {
       }
 
       const msg = inviteForm.password.trim()
-        ? `${inviteForm.email} criado com a senha definida.`
-        : `${inviteForm.email} foi adicionado ao time.`;
+        ? `${emailToSend} criado com a senha definida.`
+        : `${emailToSend} foi adicionado ao time.`;
       toast({ title: "Usuário adicionado", description: msg });
       setInviteOpen(false);
       setInviteForm({ email: "", display_name: "", role: "viewer", password: "" });
