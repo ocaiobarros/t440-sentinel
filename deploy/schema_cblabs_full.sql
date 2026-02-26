@@ -714,9 +714,305 @@ CREATE TRIGGER on_auth_user_created
 -- profile e role automaticamente.
 -- ═══════════════════════════════════════════════════
 
+-- ═══════════════════════════════════════════════════
+-- ─── FUNÇÕES AVANÇADAS ───────────────────────────
+-- ═══════════════════════════════════════════════════
+
+-- Webhook token verification
+CREATE OR REPLACE FUNCTION verify_webhook_token(p_token TEXT)
+RETURNS UUID
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO public, extensions, pg_temp
+AS $$
+  SELECT tenant_id FROM public.webhook_tokens
+  WHERE token_hash = encode(extensions.digest(p_token::bytea, 'sha256'), 'hex')
+    AND is_active = true
+  LIMIT 1;
+$$;
+
+-- Prevent tenant_id changes
+CREATE OR REPLACE FUNCTION prevent_tenant_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $$
+BEGIN
+  IF NEW.tenant_id <> OLD.tenant_id THEN
+    IF public.is_super_admin(auth.uid()) THEN RETURN NEW; END IF;
+    IF COALESCE(auth.role(), '') = 'service_role' THEN RETURN NEW; END IF;
+    IF COALESCE(current_setting('request.jwt.claim.role', true), '') = 'service_role' THEN RETURN NEW; END IF;
+    RAISE EXCEPTION 'tenant_id is immutable';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- Flow audit trigger function
+CREATE OR REPLACE FUNCTION flow_audit_trigger()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_email TEXT;
+  v_tenant UUID;
+  v_record_id UUID;
+  v_old JSONB;
+  v_new JSONB;
+BEGIN
+  v_user_id := auth.uid();
+  SELECT email INTO v_email FROM public.profiles WHERE id = v_user_id;
+  IF TG_OP = 'DELETE' THEN
+    v_tenant := OLD.tenant_id; v_record_id := OLD.id; v_old := to_jsonb(OLD); v_new := NULL;
+  ELSIF TG_OP = 'INSERT' THEN
+    v_tenant := NEW.tenant_id; v_record_id := NEW.id; v_old := NULL; v_new := to_jsonb(NEW);
+  ELSE
+    v_tenant := NEW.tenant_id; v_record_id := NEW.id; v_old := to_jsonb(OLD); v_new := to_jsonb(NEW);
+  END IF;
+  INSERT INTO public.flow_audit_logs (tenant_id, user_id, user_email, action, table_name, record_id, old_data, new_data)
+  VALUES (v_tenant, v_user_id, v_email, TG_OP, TG_TABLE_NAME, v_record_id, v_old, v_new);
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+-- Bump telemetry heartbeat
+CREATE OR REPLACE FUNCTION bump_telemetry_heartbeat(p_tenant_id UUID, p_source TEXT DEFAULT 'zabbix-webhook')
+RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $$
+BEGIN
+  INSERT INTO public.telemetry_heartbeat (tenant_id, last_webhook_at, last_webhook_source, event_count, updated_at)
+  VALUES (p_tenant_id, now(), p_source, 1, now())
+  ON CONFLICT (tenant_id) DO UPDATE SET
+    last_webhook_at = now(),
+    last_webhook_source = p_source,
+    event_count = telemetry_heartbeat.event_count + 1,
+    updated_at = now();
+END;
+$$;
+
+-- Validate maintenance window
+CREATE OR REPLACE FUNCTION validate_maintenance_window()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path TO public, pg_temp
+AS $$
+BEGIN
+  IF NEW.ends_at <= NEW.starts_at THEN
+    RAISE EXCEPTION 'ends_at must be after starts_at';
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- Touch dashboard on widget change
+CREATE OR REPLACE FUNCTION touch_dashboard_on_widget_change()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path TO public, pg_temp
+AS $$
+DECLARE v_dashboard_id UUID;
+BEGIN
+  v_dashboard_id := COALESCE(NEW.dashboard_id, OLD.dashboard_id);
+  UPDATE public.dashboards SET updated_at = now() WHERE id = v_dashboard_id;
+  RETURN COALESCE(NEW, OLD);
+END;
+$$;
+
+-- Check viability (find nearest CTOs)
+CREATE OR REPLACE FUNCTION check_viability(p_lat DOUBLE PRECISION, p_lon DOUBLE PRECISION, p_tenant_id UUID, p_map_id UUID)
+RETURNS TABLE(cto_id UUID, cto_name TEXT, distance_m DOUBLE PRECISION, capacity TEXT, occupied_ports INTEGER, free_ports INTEGER, status_calculated TEXT)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $$
+  SELECT * FROM (
+    SELECT
+      c.id AS cto_id, c.name AS cto_name,
+      (6371000.0 * acos(LEAST(1.0, GREATEST(-1.0,
+        cos(radians(p_lat)) * cos(radians(c.lat)) * cos(radians(c.lon) - radians(p_lon)) +
+        sin(radians(p_lat)) * sin(radians(c.lat))
+      )))) AS distance_m,
+      c.capacity::TEXT AS capacity, c.occupied_ports,
+      (c.capacity::TEXT::INT - c.occupied_ports) AS free_ports,
+      c.status_calculated::TEXT AS status_calculated
+    FROM public.flow_map_ctos c
+    WHERE c.tenant_id = p_tenant_id AND c.map_id = p_map_id
+      AND abs(c.lat - p_lat) < 0.002 AND abs(c.lon - p_lon) < 0.003
+  ) sub WHERE sub.distance_m <= 200 ORDER BY sub.distance_m ASC LIMIT 5;
+$$;
+
+-- Alert transition (ack/resolve)
+CREATE OR REPLACE FUNCTION alert_transition(p_alert_id UUID, p_to alert_status, p_user_id UUID, p_message TEXT DEFAULT NULL, p_payload JSONB DEFAULT '{}'::jsonb)
+RETURNS VOID
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $$
+DECLARE
+  v_from public.alert_status;
+  v_tenant UUID;
+  v_auth UUID;
+BEGIN
+  v_auth := auth.uid();
+  IF v_auth IS NULL THEN RAISE EXCEPTION 'not authenticated'; END IF;
+  IF p_user_id IS NULL OR p_user_id <> v_auth THEN RAISE EXCEPTION 'invalid user'; END IF;
+  SELECT status, tenant_id INTO v_from, v_tenant FROM public.alert_instances WHERE id = p_alert_id FOR UPDATE;
+  IF NOT FOUND THEN RAISE EXCEPTION 'alert not found'; END IF;
+  IF v_tenant <> public.get_user_tenant_id(v_auth) THEN RAISE EXCEPTION 'access denied'; END IF;
+  IF NOT (public.has_role(v_auth, v_tenant, 'admin') OR public.has_role(v_auth, v_tenant, 'editor')) THEN RAISE EXCEPTION 'insufficient role'; END IF;
+  IF v_from = 'resolved' AND p_to IN ('ack','resolved') THEN RAISE EXCEPTION 'invalid transition: resolved -> %', p_to; END IF;
+  IF v_from = 'ack' AND p_to = 'open' THEN RAISE EXCEPTION 'invalid transition: ack -> open'; END IF;
+  UPDATE public.alert_instances SET status = p_to,
+    acknowledged_at = CASE WHEN p_to = 'ack' THEN COALESCE(acknowledged_at, now()) ELSE acknowledged_at END,
+    acknowledged_by = CASE WHEN p_to = 'ack' THEN COALESCE(acknowledged_by, v_auth) ELSE acknowledged_by END,
+    resolved_at = CASE WHEN p_to = 'resolved' THEN COALESCE(resolved_at, now()) ELSE resolved_at END,
+    resolved_by = CASE WHEN p_to = 'resolved' THEN COALESCE(resolved_by, v_auth) ELSE resolved_by END,
+    updated_at = now()
+  WHERE id = p_alert_id;
+  INSERT INTO public.alert_events(tenant_id, alert_id, event_type, from_status, to_status, user_id, message, payload)
+  VALUES (v_tenant, p_alert_id,
+    CASE WHEN v_from = 'open' AND p_to = 'ack' THEN 'ACK' WHEN p_to = 'resolved' THEN 'RESOLVE' ELSE 'UPDATE' END,
+    v_from, p_to, v_auth, p_message, COALESCE(p_payload,'{}'::jsonb));
+END;
+$$;
+
+-- SLA apply on alert insert
+CREATE OR REPLACE FUNCTION alert_apply_sla()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path TO public, pg_temp
+AS $$
+DECLARE v_ack_seconds INT; v_resolve_seconds INT; v_sla_id UUID;
+BEGIN
+  SELECT sla_policy_id INTO v_sla_id FROM public.alert_rules WHERE id = NEW.rule_id;
+  IF v_sla_id IS NULL THEN RETURN NEW; END IF;
+  SELECT ack_target_seconds, resolve_target_seconds INTO v_ack_seconds, v_resolve_seconds FROM public.sla_policies WHERE id = v_sla_id;
+  IF NEW.ack_due_at IS NULL THEN NEW.ack_due_at := NEW.opened_at + make_interval(secs => v_ack_seconds); END IF;
+  IF NEW.resolve_due_at IS NULL THEN NEW.resolve_due_at := NEW.opened_at + make_interval(secs => v_resolve_seconds); END IF;
+  RETURN NEW;
+END;
+$$;
+
+-- SLA breach sweep
+CREATE OR REPLACE FUNCTION sla_sweep_breaches(p_tenant_id UUID DEFAULT NULL)
+RETURNS INTEGER
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $$
+DECLARE v_count INT := 0; v_c2 INT := 0;
+BEGIN
+  UPDATE public.alert_instances SET ack_breached_at = COALESCE(ack_breached_at, now()), updated_at = now()
+  WHERE status = 'open' AND suppressed = false AND ack_due_at IS NOT NULL AND ack_breached_at IS NULL AND now() > ack_due_at
+    AND (p_tenant_id IS NULL OR tenant_id = p_tenant_id);
+  GET DIAGNOSTICS v_count = ROW_COUNT;
+  UPDATE public.alert_instances SET resolve_breached_at = COALESCE(resolve_breached_at, now()), updated_at = now()
+  WHERE status IN ('open','ack') AND suppressed = false AND resolve_due_at IS NOT NULL AND resolve_breached_at IS NULL AND now() > resolve_due_at
+    AND (p_tenant_id IS NULL OR tenant_id = p_tenant_id);
+  GET DIAGNOSTICS v_c2 = ROW_COUNT;
+  RETURN v_count + v_c2;
+END;
+$$;
+
+-- Maintenance window check
+CREATE OR REPLACE FUNCTION is_in_maintenance(p_tenant_id UUID, p_now TIMESTAMPTZ, p_scope JSONB DEFAULT '{}'::jsonb)
+RETURNS UUID
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO public, pg_temp
+AS $$
+  SELECT mw.id FROM public.maintenance_windows mw
+  WHERE mw.tenant_id = p_tenant_id AND mw.is_active = true AND p_now >= mw.starts_at AND p_now < mw.ends_at
+    AND EXISTS (
+      SELECT 1 FROM public.maintenance_scopes ms
+      WHERE ms.maintenance_id = mw.id AND ms.tenant_id = p_tenant_id
+        AND (ms.scope_type = 'tenant_all'
+          OR (ms.scope_type = 'zabbix_connection' AND ms.scope_value = (p_scope->>'zabbix_connection_id'))
+          OR (ms.scope_type = 'dashboard' AND ms.scope_value = (p_scope->>'dashboard_id'))
+          OR (ms.scope_type = 'trigger' AND ms.scope_value = (p_scope->>'triggerid'))
+          OR (ms.scope_type = 'host' AND ms.scope_value = (p_scope->>'hostid'))
+          OR (ms.scope_type = 'hostgroup' AND ms.scope_value = (p_scope->>'hostgroupid'))
+          OR (ms.scope_type = 'tag' AND ms.scope_value = (p_scope->>'tag')))
+    )
+  ORDER BY mw.starts_at DESC LIMIT 1;
+$$;
+
+-- ═══════════════════════════════════════════════════
+-- ─── TOPOLOGICAL PROPAGATION ENGINE ──────────────
+-- ═══════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION get_map_effective_status(p_map_id UUID)
+RETURNS TABLE(host_id UUID, effective_status TEXT, is_root_cause BOOLEAN, depth INTEGER)
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path TO public, pg_temp
+SET row_security TO on
+AS $$
+WITH
+guard AS (
+  SELECT m.id FROM public.flow_maps m
+  WHERE m.id = p_map_id AND m.tenant_id = public.jwt_tenant_id()
+),
+map_nodes AS (
+  SELECT h.id, h.current_status
+  FROM public.flow_map_hosts h
+  JOIN guard g ON g.id = h.map_id
+),
+roots AS (
+  SELECT DISTINCT n.id FROM map_nodes n
+  WHERE n.current_status <> 'DOWN'
+    AND EXISTS (
+      SELECT 1 FROM public.flow_map_links l
+      JOIN guard g ON g.id = l.map_id
+      WHERE l.map_id = p_map_id
+        AND ((l.origin_host_id = n.id AND l.origin_role = 'CORE')
+          OR (l.dest_host_id = n.id AND l.dest_role = 'CORE'))
+    )
+),
+fallback_roots AS (
+  SELECT DISTINCT n.id FROM map_nodes n
+  WHERE n.current_status <> 'DOWN'
+    AND NOT EXISTS (SELECT 1 FROM roots)
+    AND EXISTS (
+      SELECT 1 FROM public.flow_map_links l
+      JOIN guard g ON g.id = l.map_id
+      WHERE l.map_id = p_map_id
+        AND (l.origin_host_id = n.id OR l.dest_host_id = n.id)
+    )
+),
+seed AS (
+  SELECT id FROM roots UNION SELECT id FROM fallback_roots
+),
+reachable AS (
+  WITH RECURSIVE r(id, depth, visited) AS (
+    SELECT s.id, 0, ARRAY[s.id] FROM seed s
+    UNION ALL
+    SELECT
+      CASE WHEN l.origin_host_id = r.id THEN l.dest_host_id ELSE l.origin_host_id END,
+      r.depth + 1,
+      r.visited || CASE WHEN l.origin_host_id = r.id THEN l.dest_host_id ELSE l.origin_host_id END
+    FROM r
+    JOIN public.flow_map_links l ON l.map_id = p_map_id AND (l.origin_host_id = r.id OR l.dest_host_id = r.id)
+    JOIN map_nodes nb ON nb.id = CASE WHEN l.origin_host_id = r.id THEN l.dest_host_id ELSE l.origin_host_id END
+    WHERE nb.current_status <> 'DOWN'
+      AND NOT (CASE WHEN l.origin_host_id = r.id THEN l.dest_host_id ELSE l.origin_host_id END = ANY(r.visited))
+  )
+  SELECT id, MIN(depth) AS depth FROM r GROUP BY id
+)
+SELECT
+  n.id AS host_id,
+  CASE
+    WHEN n.current_status = 'DOWN' THEN 'DOWN'
+    WHEN r.id IS NOT NULL THEN n.current_status::text
+    ELSE 'ISOLATED'
+  END AS effective_status,
+  (n.current_status = 'DOWN') AS is_root_cause,
+  COALESCE(r.depth, -1)::int AS depth
+FROM map_nodes n
+LEFT JOIN reachable r ON r.id = n.id;
+$$;
+
 COMMIT;
 
 -- ═══════════════════════════════════════════════════
--- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v1.1
+-- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v1.2
 -- © 2026 CBLabs
 -- ═══════════════════════════════════════════════════
