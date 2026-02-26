@@ -53,15 +53,9 @@ DO $$ BEGIN
     'tenant_all', 'zabbix_connection', 'dashboard', 'trigger', 'host', 'hostgroup', 'tag'
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
--- ─── TABELA DE AUTH (SUBSTITUI auth.users) ────────────────
-CREATE TABLE IF NOT EXISTS auth_users (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  email TEXT UNIQUE NOT NULL,
-  encrypted_password TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
-);
+-- ─── AUTH.USERS ───────────────────────────────────────────
+-- GoTrue gerencia auth.users automaticamente.
+-- Não criamos tabela shadow — referenciamos auth.users diretamente.
 
 -- ─── TENANTS ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tenants (
@@ -74,7 +68,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 
 -- ─── PROFILES ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS profiles (
-  id UUID PRIMARY KEY REFERENCES auth_users(id) ON DELETE CASCADE,
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   display_name TEXT,
   email TEXT,
@@ -89,7 +83,7 @@ CREATE TABLE IF NOT EXISTS profiles (
 -- ─── USER ROLES ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS user_roles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  user_id UUID NOT NULL REFERENCES auth_users(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   tenant_id UUID NOT NULL REFERENCES tenants(id),
   role app_role NOT NULL DEFAULT 'viewer',
   created_at TIMESTAMPTZ DEFAULT now(),

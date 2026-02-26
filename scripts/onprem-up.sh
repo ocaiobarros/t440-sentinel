@@ -357,6 +357,10 @@ wait_for_container "Auth (GoTrue)" "$AUTH_CONTAINER" 60
 # ─── 7. Aplicar Schema + Seed ─────────────────────────────
 echo -e "\n${CYAN}[7/8] Aplicando schema e seed admin...${NC}"
 
+# Ensure postgres can reference auth.users for FK constraints
+docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -c \
+  "GRANT USAGE ON SCHEMA auth TO postgres; GRANT REFERENCES ON ALL TABLES IN SCHEMA auth TO postgres;" 2>/dev/null || true
+
 # Check if schema already applied (check for tenants table)
 SCHEMA_EXISTS=$(docker exec "$DB_CONTAINER" psql -v ON_ERROR_STOP=1 -U postgres -d postgres -tAc \
   "SELECT EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='public' AND table_name='tenants');" 2>/dev/null || echo "f")

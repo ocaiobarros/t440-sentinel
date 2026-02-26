@@ -76,6 +76,8 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO supabase_auth_admin, supabase_sto
 -- Ensure auth schema exists for GoTrue
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
 GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
+GRANT USAGE ON SCHEMA auth TO postgres;
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_auth_admin IN SCHEMA auth GRANT REFERENCES ON TABLES TO postgres;
 
 -- Ensure storage schema exists
 CREATE SCHEMA IF NOT EXISTS storage AUTHORIZATION supabase_storage_admin;
