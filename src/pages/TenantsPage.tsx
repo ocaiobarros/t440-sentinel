@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Building2, Search, Plus, Pencil, Shield, Server, Map,
   Activity, Calendar, Globe, Settings2, Users, ImageIcon,
-  Database, Eye, EyeOff,
+  Database, Eye, EyeOff, Trash2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -59,6 +59,9 @@ export default function TenantsPage() {
   const [editSlug, setEditSlug] = useState("");
   const [newName, setNewName] = useState("");
   const [newSlug, setNewSlug] = useState("");
+  const [deleteDialog, setDeleteDialog] = useState(false);
+  const [deletingTenantId, setDeletingTenantId] = useState<string | null>(null);
+  const [deleteConfirmSlug, setDeleteConfirmSlug] = useState("");
 
   /* ── queries ── */
   const { data: tenants = [], isLoading } = useQuery({
@@ -129,6 +132,22 @@ export default function TenantsPage() {
       setNewSlug("");
     },
     onError: (e: Error) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
+  });
+
+  const deleteTenant = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("tenants").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tenants-admin"] });
+      toast({ title: "Organização excluída" });
+      setDeleteDialog(false);
+      setDeletingTenantId(null);
+      setDeleteConfirmSlug("");
+      if (selectedTenantId === deletingTenantId) setSelectedTenantId(null);
+    },
+    onError: (e: Error) => toast({ title: "Erro ao excluir", description: e.message, variant: "destructive" }),
   });
 
   /* ── filter ── */
@@ -223,6 +242,9 @@ export default function TenantsPage() {
                           </Button>
                           <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={e => { e.stopPropagation(); setSelectedTenantId(t.id); }} title="Detalhes">
                             <Eye className="w-3.5 h-3.5" />
+                          </Button>
+                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive hover:text-destructive" onClick={e => { e.stopPropagation(); setDeletingTenantId(t.id); setDeleteConfirmSlug(""); setDeleteDialog(true); }} title="Excluir">
+                            <Trash2 className="w-3.5 h-3.5" />
                           </Button>
                         </div>
                       </TableCell>
@@ -369,6 +391,40 @@ export default function TenantsPage() {
               onClick={() => createTenant.mutate({ name: newName.trim(), slug: newSlug.trim() })}
             >
               {createTenant.isPending ? "Criando..." : "Criar Organização"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Dialog */}
+      <Dialog open={deleteDialog} onOpenChange={setDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="text-destructive">Excluir Organização</DialogTitle>
+          </DialogHeader>
+          {(() => {
+            const t = tenants.find(x => x.id === deletingTenantId);
+            if (!t) return null;
+            return (
+              <div className="space-y-3 py-2">
+                <p className="text-sm text-muted-foreground">
+                  Esta ação é <strong>irreversível</strong>. Todos os dados da organização <strong>{t.name}</strong> serão permanentemente excluídos.
+                </p>
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Digite <span className="font-mono font-bold text-foreground">{t.slug}</span> para confirmar</Label>
+                  <Input value={deleteConfirmSlug} onChange={e => setDeleteConfirmSlug(e.target.value)} className="h-9 text-sm font-mono" placeholder={t.slug} />
+                </div>
+              </div>
+            );
+          })()}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialog(false)}>Cancelar</Button>
+            <Button
+              variant="destructive"
+              disabled={deleteConfirmSlug !== tenants.find(x => x.id === deletingTenantId)?.slug || deleteTenant.isPending}
+              onClick={() => deletingTenantId && deleteTenant.mutate(deletingTenantId)}
+            >
+              {deleteTenant.isPending ? "Excluindo..." : "Excluir Permanentemente"}
             </Button>
           </DialogFooter>
         </DialogContent>
