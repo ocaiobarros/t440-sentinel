@@ -1,9 +1,10 @@
 #!/bin/bash
 # ╔══════════════════════════════════════════════════════════════════╗
 # ║  FLOWPULSE — On-Premise Docker Bootstrap (Idempotente)          ║
-# ║  Uso: bash scripts/onprem-up.sh [--fix]                         ║
+# ║  Uso: bash scripts/onprem-up.sh [--fix] [--verbose]              ║
 # ║                                                                  ║
-# ║  --fix   Limpa volumes, reseta Git e refaz tudo do zero          ║
+# ║  --fix       Limpa volumes, reseta Git e refaz tudo do zero      ║
+# ║  --verbose   Coleta logs detalhados de todos os serviços          ║
 # ╚══════════════════════════════════════════════════════════════════╝
 
 set -euo pipefail
@@ -15,6 +16,7 @@ COMPOSE_FILE="$DEPLOY_DIR/docker-compose.onprem.yml"
 ENV_FILE="$DEPLOY_DIR/.env"
 ENV_EXAMPLE="$DEPLOY_DIR/.env.onprem.docker.example"
 FIX_MODE=false
+VERBOSE=false
 
 CYAN='\033[0;36m'
 GREEN='\033[0;32m'
@@ -26,13 +28,27 @@ NC='\033[0m'
 for arg in "$@"; do
   case "$arg" in
     --fix) FIX_MODE=true ;;
+    --verbose|-v) VERBOSE=true ;;
     -h|--help)
-      echo "Uso: $0 [--fix]"
-      echo "  --fix   Hard-reset Git, destrói volumes Docker e reconstrói tudo"
+      echo "Uso: $0 [--fix] [--verbose]"
+      echo "  --fix       Hard-reset Git, destrói volumes Docker e reconstrói tudo"
+      echo "  --verbose   Coleta logs detalhados de auth, kong, db em caso de falha"
       exit 0
       ;;
   esac
 done
+
+# Helper: dump service logs when verbose mode is on or on critical failure
+dump_logs() {
+  local context="${1:-falha}"
+  echo -e "\n${YELLOW}═══ Logs detalhados ($context) ═══${NC}"
+  cd "$DEPLOY_DIR"
+  for svc in db auth kong rest realtime storage functions; do
+    echo -e "\n${CYAN}── $svc ──${NC}"
+    docker compose -f docker-compose.onprem.yml logs "$svc" --tail 80 2>/dev/null || echo "(sem logs)"
+  done
+  cd "$PROJECT_ROOT"
+}
 
 echo -e "${CYAN}"
 echo "╔══════════════════════════════════════════════════════════════╗"
@@ -355,10 +371,7 @@ fi
 docker restart "$AUTH_CONTAINER" >/dev/null 2>&1 || true
 sleep 3
 if ! wait_for_service "Auth (GoTrue)" "$KONG_URL/auth/v1/health" 90; then
-  echo -e "  ${YELLOW}⚠${NC}  Coletando logs detalhados do Auth..."
-  docker compose -f docker-compose.onprem.yml logs auth --tail 200 2>/dev/null || true
-  echo -e "  ${YELLOW}⚠${NC}  Coletando logs do Kong (rotas auth)..."
-  docker compose -f docker-compose.onprem.yml logs kong --tail 120 2>/dev/null || true
+  dump_logs "Auth não ficou pronto"
   exit 1
 fi
 
@@ -553,6 +566,9 @@ else
   echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
   echo -e "${YELLOW}║   ⚠️  FlowPulse On-Premise — PARCIALMENTE PRONTO           ║${NC}"
   echo -e "${YELLOW}║   Verifique os erros acima e tente:                         ║${NC}"
-  echo -e "${YELLOW}║     bash scripts/onprem-up.sh --fix                         ║${NC}"
+  echo -e "${YELLOW}║     bash scripts/onprem-up.sh --fix --verbose               ║${NC}"
   echo -e "${YELLOW}╚══════════════════════════════════════════════════════════════╝${NC}"
+  if $VERBOSE; then
+    dump_logs "smoke parcial"
+  fi
 fi

@@ -8,7 +8,9 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 ENV_FILE="$SCRIPT_DIR/../deploy/.env"
+REPORT_FILE="$PROJECT_ROOT/smoke-report.txt"
 if [ -f "$ENV_FILE" ]; then
   set -a
   # shellcheck disable=SC1090
@@ -25,6 +27,14 @@ CYAN='\033[0;36m'
 NC='\033[0m'
 PASS=0
 FAIL=0
+
+# Report accumulator (plain text, no ANSI)
+REPORT_LINES=()
+report() {
+  local status="$1"
+  local desc="$2"
+  REPORT_LINES+=("[$status] $desc")
+}
 
 ANON_HEADER="${ANON_KEY:-eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0}"
 
@@ -53,11 +63,10 @@ echo -e "${CYAN}[1/8] Health Check${NC}"
 HEALTH=$(curl -sS --max-time 5 "${BASE}/healthz" 2>/dev/null || echo '{}')
 if echo "$HEALTH" | grep -q '"ok"'; then
   echo -e "  ${GREEN}✔${NC} GET /healthz retorna OK"
-  ((PASS++))
+  ((PASS++)); report "PASS" "Healthz (Nginx)"
 else
   echo -e "  ${RED}✘${NC} GET /healthz não retornou payload esperado"
-  echo "    Resposta: $(echo "$HEALTH" | head -c 180)"
-  ((FAIL++))
+  ((FAIL++)); report "FAIL" "Healthz (Nginx)"
 fi
 
 # ─── 2. Auth Health ──────────────────────────────────────
@@ -65,11 +74,10 @@ echo -e "\n${CYAN}[2/8] Auth (GoTrue)${NC}"
 AUTH_HEALTH=$(curl -sS --max-time 5 "${API}/auth/v1/health" 2>/dev/null || echo '{}')
 if echo "$AUTH_HEALTH" | grep -qi 'alive\|ok\|healthy'; then
   echo -e "  ${GREEN}✔${NC} GoTrue health"
-  ((PASS++))
+  ((PASS++)); report "PASS" "Auth GoTrue health"
 else
   echo -e "  ${RED}✘${NC} GoTrue health falhou"
-  echo "    Resposta: $(echo "$AUTH_HEALTH" | head -c 180)"
-  ((FAIL++))
+  ((FAIL++)); report "FAIL" "Auth GoTrue health"
 fi
 
 # ─── 3. Login Admin ──────────────────────────────────────
@@ -85,7 +93,7 @@ ADMIN_TENANT=""
 
 if [ -n "$TOKEN" ]; then
   echo -e "  ${GREEN}✔${NC} Login admin bem-sucedido"
-  ((PASS++))
+  ((PASS++)); report "PASS" "Login admin"
 
   USER_RESP=$(curl -sS --max-time 10 "${API}/auth/v1/user" \
     -H "apikey: ${ANON_HEADER}" \
@@ -94,7 +102,7 @@ if [ -n "$TOKEN" ]; then
 else
   echo -e "  ${RED}✘${NC} Login admin falhou"
   echo "    Resposta: $(echo "$LOGIN_RESP" | head -c 200)"
-  ((FAIL++))
+  ((FAIL++)); report "FAIL" "Login admin"
 fi
 
 # ─── 4. REST API ─────────────────────────────────────────
@@ -107,10 +115,10 @@ if [ -n "$TOKEN" ]; then
 
   if [ "$REST_CODE" = "200" ]; then
     echo -e "  ${GREEN}✔${NC} GET /rest/v1/tenants respondeu 200"
-    ((PASS++))
+    ((PASS++)); report "PASS" "REST GET tenants"
   else
     echo -e "  ${RED}✘${NC} GET /rest/v1/tenants retornou HTTP $REST_CODE"
-    ((FAIL++))
+    ((FAIL++)); report "FAIL" "REST GET tenants (HTTP $REST_CODE)"
   fi
 
   RPC_CODE=$(curl -sS --max-time 8 -o /dev/null -w "%{http_code}" -X POST \
@@ -122,14 +130,14 @@ if [ -n "$TOKEN" ]; then
 
   if [ "$RPC_CODE" = "200" ]; then
     echo -e "  ${GREEN}✔${NC} RPC get_user_tenant_id respondeu 200"
-    ((PASS++))
+    ((PASS++)); report "PASS" "RPC get_user_tenant_id"
   else
     echo -e "  ${RED}✘${NC} RPC get_user_tenant_id retornou HTTP $RPC_CODE"
-    ((FAIL++))
+    ((FAIL++)); report "FAIL" "RPC get_user_tenant_id (HTTP $RPC_CODE)"
   fi
 else
   echo -e "  ${RED}✘${NC} Pulando — sem token"
-  ((FAIL += 2))
+  ((FAIL += 2)); report "FAIL" "REST (sem token)"; report "FAIL" "RPC (sem token)"
 fi
 
 # ─── 5. Trigger handle_new_user ───────────────────────────
@@ -142,10 +150,10 @@ if [ -n "$TOKEN" ] && [ -n "$ADMIN_ID" ]; then
   if echo "$PROFILE_RESP" | grep -q '"tenant_id"'; then
     echo -e "  ${GREEN}✔${NC} Perfil auto-provisionado"
     ADMIN_TENANT=$(echo "$PROFILE_RESP" | grep -o '"tenant_id":"[^"]*"' | head -1 | cut -d'"' -f4)
-    ((PASS++))
+    ((PASS++)); report "PASS" "Trigger: perfil auto-provisionado"
   else
     echo -e "  ${RED}✘${NC} Perfil não encontrado para admin"
-    ((FAIL++))
+    ((FAIL++)); report "FAIL" "Trigger: perfil auto-provisionado"
   fi
 
   ROLE_RESP=$(curl -sS --max-time 8 "${API}/rest/v1/user_roles?select=role,user_id,tenant_id&user_id=eq.${ADMIN_ID}&role=eq.admin&limit=1" \
@@ -154,24 +162,24 @@ if [ -n "$TOKEN" ] && [ -n "$ADMIN_ID" ]; then
 
   if echo "$ROLE_RESP" | grep -q '"admin"'; then
     echo -e "  ${GREEN}✔${NC} Role admin atribuída automaticamente"
-    ((PASS++))
+    ((PASS++)); report "PASS" "Trigger: role admin atribuída"
   else
     echo -e "  ${RED}✘${NC} Role admin não encontrada no user_roles"
-    ((FAIL++))
+    ((FAIL++)); report "FAIL" "Trigger: role admin atribuída"
   fi
 else
   echo -e "  ${RED}✘${NC} Não foi possível validar trigger (token/id ausente)"
-  ((FAIL += 2))
+  ((FAIL += 2)); report "FAIL" "Trigger: perfil (sem token)"; report "FAIL" "Trigger: role (sem token)"
 fi
 
 # ─── 6. RLS cross-tenant ──────────────────────────────────
 echo -e "\n${CYAN}[6/8] Isolamento RLS cross-tenant${NC}"
 if [ -z "${SERVICE_ROLE_KEY:-}" ]; then
   echo -e "  ${RED}✘${NC} SERVICE_ROLE_KEY ausente no ambiente (.env)"
-  ((FAIL++))
+  ((FAIL++)); report "FAIL" "RLS: SERVICE_ROLE_KEY ausente"
 elif [ -z "$ADMIN_TENANT" ]; then
   echo -e "  ${RED}✘${NC} Tenant do admin não identificado"
-  ((FAIL++))
+  ((FAIL++)); report "FAIL" "RLS: tenant não identificado"
 else
   GHOST_EMAIL="rls-smoke-$(date +%s)@flowpulse.local"
   GHOST_PASSWORD="RlsTest@9999"
@@ -200,14 +208,14 @@ else
       CROSS_MIN=$(echo "$CROSS_RESP" | tr -d '[:space:]')
       if [ "$CROSS_MIN" = "[]" ]; then
         echo -e "  ${GREEN}✔${NC} RLS bloqueou acesso cross-tenant"
-        ((PASS++))
+        ((PASS++)); report "PASS" "RLS: isolamento cross-tenant"
       else
         echo -e "  ${RED}✘${NC} RLS violada: usuário ghost acessou tenant de admin"
-        ((FAIL++))
+        ((FAIL++)); report "FAIL" "RLS: isolamento cross-tenant VIOLADO"
       fi
     else
       echo -e "  ${RED}✘${NC} Não foi possível autenticar usuário ghost"
-      ((FAIL++))
+      ((FAIL++)); report "FAIL" "RLS: ghost login falhou"
     fi
 
     curl -sS --max-time 8 -X DELETE "${API}/auth/v1/admin/users/${GHOST_ID}" \
@@ -215,7 +223,7 @@ else
       -H "Authorization: Bearer ${SERVICE_ROLE_KEY}" >/dev/null 2>&1 || true
   else
     echo -e "  ${RED}✘${NC} Não foi possível criar usuário ghost"
-    ((FAIL++))
+    ((FAIL++)); report "FAIL" "RLS: ghost user creation"
   fi
 fi
 
@@ -228,10 +236,10 @@ FUNC_CODE=$(curl -sS --max-time 10 -o /dev/null -w "%{http_code}" -X POST \
 
 if [[ "$FUNC_CODE" =~ ^2[0-9][0-9]$|^401$|^403$ ]]; then
   echo -e "  ${GREEN}✔${NC} Endpoint de function respondeu (HTTP $FUNC_CODE)"
-  ((PASS++))
+  ((PASS++)); report "PASS" "Edge Function system-status (HTTP $FUNC_CODE)"
 else
   echo -e "  ${RED}✘${NC} Function retornou HTTP $FUNC_CODE"
-  ((FAIL++))
+  ((FAIL++)); report "FAIL" "Edge Function system-status (HTTP $FUNC_CODE)"
 fi
 
 # ─── 8. UI ───────────────────────────────────────────────
@@ -239,15 +247,44 @@ echo -e "\n${CYAN}[8/8] Frontend (Nginx)${NC}"
 UI_RESP=$(curl -sS --max-time 5 -o /dev/null -w "%{http_code}" "${BASE}/" 2>/dev/null || echo "000")
 if [ "$UI_RESP" = "200" ]; then
   echo -e "  ${GREEN}✔${NC} UI acessível (HTTP 200)"
-  ((PASS++))
+  ((PASS++)); report "PASS" "Frontend Nginx (HTTP 200)"
 else
   echo -e "  ${RED}✘${NC} UI retornou HTTP $UI_RESP"
-  ((FAIL++))
+  ((FAIL++)); report "FAIL" "Frontend Nginx (HTTP $UI_RESP)"
 fi
 
-# ─── Resultado ────────────────────────────────────────────
+# ─── Resultado + Relatório ────────────────────────────────
 echo ""
 TOTAL=$((PASS + FAIL))
+
+# Write smoke-report.txt
+{
+  echo "╔══════════════════════════════════════════════════════════════╗"
+  echo "║  FlowPulse On-Premise — Smoke Test Report                   ║"
+  echo "╚══════════════════════════════════════════════════════════════╝"
+  echo ""
+  echo "Timestamp: $(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  echo "Server:    $(hostname 2>/dev/null || echo 'unknown')"
+  echo "UI URL:    ${BASE}"
+  echo "API URL:   ${API}"
+  echo ""
+  echo "═══ Resultados: ${PASS}/${TOTAL} passaram, ${FAIL} falharam ═══"
+  echo ""
+  for line in "${REPORT_LINES[@]}"; do
+    echo "  $line"
+  done
+  echo ""
+  if [ "$FAIL" -eq 0 ]; then
+    echo "VEREDICTO: ✅ APROVADO"
+  else
+    echo "VEREDICTO: ❌ REPROVADO"
+  fi
+  echo ""
+  echo "--- fim do relatório ---"
+} > "$REPORT_FILE"
+
+echo -e "${CYAN}📄 Relatório salvo em: ${REPORT_FILE}${NC}"
+
 if [ "$FAIL" -eq 0 ]; then
   echo -e "${GREEN}═══ RESULTADO: ${PASS}/${TOTAL} testes passaram ═══${NC}"
   exit 0
