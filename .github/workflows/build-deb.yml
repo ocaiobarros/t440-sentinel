@@ -1,0 +1,180 @@
+name: Build FlowPulse .deb Package
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Package version (e.g. 3.0.0)'
+        required: true
+        default: '3.0.0'
+
+env:
+  NODE_EMBEDDED_VERSION: '22.16.0'
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js (for building)
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Determine version
+        id: version
+        run: |
+          if [ "${{ github.event_name }}" = "push" ]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            VERSION="${{ github.event.inputs.version }}"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Building version: ${VERSION}"
+
+      # ─── Build Frontend ────────────────────────────
+      - name: Build frontend
+        env:
+          VITE_SUPABASE_URL: 'http://localhost:3060'
+          VITE_SUPABASE_PUBLISHABLE_KEY: 'flowpulse-onpremise-anon-key'
+        run: |
+          npm ci --ignore-scripts
+          npm run build
+
+      # ─── Prepare Backend ───────────────────────────
+      - name: Prepare backend with dependencies
+        run: |
+          mkdir -p out/server
+          cp deploy/server.js out/server/
+          cp deploy/schema_cblabs_full.sql out/server/schema.sql
+
+          cat > out/server/package.json <<'EOF'
+          {
+            "name": "flowpulse-server",
+            "version": "${{ steps.version.outputs.version }}",
+            "private": true,
+            "main": "server.js",
+            "dependencies": {
+              "express": "^4.21.0",
+              "pg": "^8.13.0",
+              "bcryptjs": "^2.4.3",
+              "jsonwebtoken": "^9.0.2",
+              "cors": "^2.8.5",
+              "multer": "^1.4.5-lts.1",
+              "dotenv": "^16.4.7"
+            }
+          }
+          EOF
+
+          cd out/server
+          npm install --omit=dev --ignore-scripts
+
+      # ─── Download Node.js Runtime ──────────────────
+      - name: Download embedded Node.js runtime
+        run: |
+          NODE_TAR="node-v${NODE_EMBEDDED_VERSION}-linux-x64.tar.xz"
+          curl -fSL -o "/tmp/${NODE_TAR}" "https://nodejs.org/dist/v${NODE_EMBEDDED_VERSION}/${NODE_TAR}"
+          mkdir -p out/node
+          tar -xJf "/tmp/${NODE_TAR}" -C out/node --strip-components=1
+          # Keep only the node binary
+          find out/node/bin -not -name "node" -not -type d -delete 2>/dev/null || true
+
+      # ─── Assemble Package Tree ─────────────────────
+      - name: Assemble .deb package tree
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          PKG="build/flowpulse_${VERSION}"
+
+          # DEBIAN
+          mkdir -p "${PKG}/DEBIAN"
+          cp packaging/DEBIAN/control "${PKG}/DEBIAN/"
+          cp packaging/DEBIAN/conffiles "${PKG}/DEBIAN/"
+          cp packaging/DEBIAN/postinst "${PKG}/DEBIAN/"
+          cp packaging/DEBIAN/prerm "${PKG}/DEBIAN/"
+          cp packaging/DEBIAN/postrm "${PKG}/DEBIAN/"
+          sed -i "s/^Version:.*/Version: ${VERSION}/" "${PKG}/DEBIAN/control"
+          chmod 755 "${PKG}/DEBIAN/postinst" "${PKG}/DEBIAN/prerm" "${PKG}/DEBIAN/postrm"
+
+          # Frontend
+          mkdir -p "${PKG}/usr/share/flowpulse/web"
+          cp -a dist/* "${PKG}/usr/share/flowpulse/web/"
+
+          # Backend
+          mkdir -p "${PKG}/usr/lib/flowpulse/server"
+          cp -a out/server/* "${PKG}/usr/lib/flowpulse/server/"
+
+          # Node runtime
+          mkdir -p "${PKG}/opt/flowpulse/node"
+          cp -a out/node/bin "${PKG}/opt/flowpulse/node/"
+          cp -a out/node/lib "${PKG}/opt/flowpulse/node/"
+
+          # Config
+          mkdir -p "${PKG}/etc/flowpulse"
+          cp packaging/flowpulse.env "${PKG}/etc/flowpulse/flowpulse.env"
+
+          # systemd
+          mkdir -p "${PKG}/lib/systemd/system"
+          cp packaging/flowpulse.service "${PKG}/lib/systemd/system/"
+
+          # Nginx
+          mkdir -p "${PKG}/etc/nginx/sites-available"
+          cp packaging/nginx-flowpulse.conf "${PKG}/etc/nginx/sites-available/flowpulse"
+
+          # Data dir
+          mkdir -p "${PKG}/var/lib/flowpulse/data"
+
+          # Installed size
+          INSTALLED_SIZE=$(du -sk "${PKG}" | awk '{print $1}')
+          sed -i "/^Description:/i Installed-Size: ${INSTALLED_SIZE}" "${PKG}/DEBIAN/control"
+
+      # ─── Build .deb ────────────────────────────────
+      - name: Build .deb package
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+          dpkg-deb --root-owner-group --build "build/flowpulse_${VERSION}" "build/flowpulse_${VERSION}_amd64.deb"
+          ls -lh build/*.deb
+
+      # ─── Upload Artifact ───────────────────────────
+      - name: Upload .deb artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: flowpulse-deb
+          path: build/*.deb
+          retention-days: 90
+
+      # ─── Create GitHub Release (on tag) ────────────
+      - name: Create Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: build/*.deb
+          generate_release_notes: true
+          body: |
+            ## FlowPulse Intelligence v${{ steps.version.outputs.version }}
+
+            ### Instalação
+            ```bash
+            apt install ./flowpulse_${{ steps.version.outputs.version }}_amd64.deb
+            ```
+
+            ### Upgrade
+            ```bash
+            dpkg -i flowpulse_${{ steps.version.outputs.version }}_amd64.deb
+            ```
+
+            ### Conteúdo
+            - Node.js ${{ env.NODE_EMBEDDED_VERSION }} embutido
+            - Frontend React compilado
+            - Backend Express + dependências
+            - systemd hardened service
+            - Nginx config + security headers
+            - PostgreSQL schema provisioning automático

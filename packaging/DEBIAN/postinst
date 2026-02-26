@@ -1,0 +1,93 @@
+#!/bin/bash
+set -e
+
+case "$1" in
+  configure)
+    # ─── Usuário de serviço ──────────────────────────
+    if ! id flowpulse >/dev/null 2>&1; then
+      adduser --system --group --home /var/lib/flowpulse --shell /usr/sbin/nologin flowpulse
+      echo "flowpulse: usuário de serviço criado"
+    fi
+
+    # ─── Diretórios de dados ─────────────────────────
+    install -d -o flowpulse -g flowpulse -m 750 /var/lib/flowpulse
+    install -d -o flowpulse -g flowpulse -m 750 /var/lib/flowpulse/data
+
+    # ─── Permissões da aplicação ─────────────────────
+    chown -R flowpulse:flowpulse /usr/lib/flowpulse
+    chown -R flowpulse:flowpulse /usr/share/flowpulse
+
+    # ─── Secrets (só gera se ainda tem placeholders) ─
+    ENV="/etc/flowpulse/flowpulse.env"
+    if [ -f "$ENV" ] && grep -q "__GENERATE__" "$ENV"; then
+      DB_PASS="$(openssl rand -hex 24)"
+      JWT_SECRET="$(openssl rand -hex 32)"
+      ZKEY="$(openssl rand -hex 32)"
+      sed -i \
+        -e "s|DB_PASS=__GENERATE__|DB_PASS=${DB_PASS}|" \
+        -e "s|JWT_SECRET=__GENERATE__|JWT_SECRET=${JWT_SECRET}|" \
+        -e "s|ZABBIX_ENCRYPTION_KEY=__GENERATE__|ZABBIX_ENCRYPTION_KEY=${ZKEY}|" \
+        "$ENV"
+      echo "flowpulse: secrets gerados automaticamente"
+    fi
+    chmod 640 "$ENV"
+    chgrp flowpulse "$ENV"
+
+    # ─── PostgreSQL: criar role + banco ──────────────
+    DB_PASS_VALUE=$(grep '^DB_PASS=' "$ENV" | cut -d= -f2-)
+    DB_NAME_VALUE=$(grep '^DB_NAME=' "$ENV" | cut -d= -f2- || echo "flowpulsedb")
+    DB_USER_VALUE=$(grep '^DB_USER=' "$ENV" | cut -d= -f2- || echo "flowpulse")
+
+    if systemctl is-active --quiet postgresql; then
+      # Criar role se não existir
+      sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER_VALUE}'" 2>/dev/null | grep -q 1 || \
+        sudo -u postgres psql -c "CREATE USER ${DB_USER_VALUE} WITH PASSWORD '${DB_PASS_VALUE}'" 2>/dev/null || true
+
+      # Criar banco se não existir
+      sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME_VALUE}'" 2>/dev/null | grep -q 1 || \
+        sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME_VALUE} OWNER ${DB_USER_VALUE}" 2>/dev/null || true
+
+      # Extensões
+      sudo -u postgres psql -d "${DB_NAME_VALUE}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null || true
+      sudo -u postgres psql -d "${DB_NAME_VALUE}" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' 2>/dev/null || true
+
+      # Schema (idempotente — usa IF NOT EXISTS)
+      if [ -f /usr/lib/flowpulse/server/schema.sql ]; then
+        PGPASSWORD="${DB_PASS_VALUE}" psql -h 127.0.0.1 -U "${DB_USER_VALUE}" -d "${DB_NAME_VALUE}" \
+          -f /usr/lib/flowpulse/server/schema.sql 2>/dev/null || true
+        echo "flowpulse: schema aplicado"
+      fi
+    else
+      echo "flowpulse: AVISO — PostgreSQL não está rodando. Configure o banco manualmente."
+    fi
+
+    # ─── systemd ─────────────────────────────────────
+    systemctl daemon-reload
+    systemctl enable flowpulse
+    systemctl restart flowpulse || true
+    echo "flowpulse: serviço habilitado e iniciado"
+
+    # ─── Nginx ───────────────────────────────────────
+    if [ -f /etc/nginx/sites-available/flowpulse ]; then
+      ln -sf /etc/nginx/sites-available/flowpulse /etc/nginx/sites-enabled/flowpulse
+      rm -f /etc/nginx/sites-enabled/default 2>/dev/null || true
+      nginx -t 2>/dev/null && systemctl reload nginx || true
+      echo "flowpulse: nginx configurado"
+    fi
+
+    echo ""
+    echo "╔══════════════════════════════════════════════════╗"
+    echo "║   ✅ FlowPulse instalado com sucesso!            ║"
+    echo "║                                                  ║"
+    echo "║   Acesse: http://$(hostname -I | awk '{print $1}')  ║"
+    echo "║   Login:  admin@flowpulse.local / admin@123      ║"
+    echo "║   ⚠ Troque a senha no primeiro acesso!           ║"
+    echo "║                                                  ║"
+    echo "║   Config: /etc/flowpulse/flowpulse.env           ║"
+    echo "║   Logs:   journalctl -u flowpulse -f             ║"
+    echo "╚══════════════════════════════════════════════════╝"
+    echo ""
+  ;;
+esac
+
+exit 0
