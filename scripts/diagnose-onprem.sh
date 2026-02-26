@@ -56,7 +56,7 @@ echo "────────────────────────�
 
 # Auth
 AUTH_HEALTH=$(curl -sf "${KONG_URL}/auth/v1/health" 2>/dev/null || echo "FAIL")
-if echo "$AUTH_HEALTH" | grep -qi "alive\|ok\|healthy"; then
+if echo "$AUTH_HEALTH" | grep -qi "alive\|ok\|healthy\|GoTrue"; then
   ok "Auth (GoTrue): UP"
 else
   fail "Auth (GoTrue): $AUTH_HEALTH"
