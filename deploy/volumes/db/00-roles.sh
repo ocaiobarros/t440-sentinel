@@ -14,23 +14,29 @@ DB_NAME="${POSTGRES_DB:-postgres}"
 psql -v ON_ERROR_STOP=1 --username "$DB_USER" --dbname "$DB_NAME" <<-EOSQL
 
 -- Supabase requires these roles to exist
-DO \$\$ BEGIN
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+    CREATE ROLE postgres LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION BYPASSRLS;
+  END IF;
+END $$;
+
+DO $$ BEGIN
   CREATE ROLE authenticator NOINHERIT LOGIN PASSWORD '${PW}';
 EXCEPTION WHEN duplicate_object THEN
   ALTER ROLE authenticator PASSWORD '${PW}';
-END \$\$;
+END $$;
 
-DO \$\$ BEGIN
+DO $$ BEGIN
   CREATE ROLE anon NOLOGIN NOINHERIT;
-EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-DO \$\$ BEGIN
+DO $$ BEGIN
   CREATE ROLE authenticated NOLOGIN NOINHERIT;
-EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
-DO \$\$ BEGIN
+DO $$ BEGIN
   CREATE ROLE service_role NOLOGIN NOINHERIT BYPASSRLS;
-EXCEPTION WHEN duplicate_object THEN NULL; END \$\$;
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO \$\$ BEGIN
   CREATE ROLE supabase_auth_admin NOINHERIT LOGIN PASSWORD '${PW}';

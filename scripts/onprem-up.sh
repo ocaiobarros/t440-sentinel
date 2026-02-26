@@ -339,6 +339,12 @@ wait_for_container "Database" "$DB_CONTAINER" 30
 # If the init script created the auth schema but GoTrue hasn't run yet, we pre-create it.
 echo -e "  Preparando pré-requisitos do Auth..."
 docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres -c "
+  DO \$\$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'postgres') THEN
+      CREATE ROLE postgres LOGIN SUPERUSER CREATEDB CREATEROLE REPLICATION BYPASSRLS;
+    END IF;
+  END \$\$;
+
   CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
   GRANT USAGE, CREATE ON SCHEMA auth TO supabase_auth_admin;
   ALTER ROLE supabase_auth_admin SET search_path = auth, public;
