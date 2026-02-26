@@ -6,10 +6,12 @@
 
 set -e
 
-# POSTGRES_PASSWORD is available as env var in the container
+# DB init defaults (postgres image may not provide POSTGRES_USER/POSTGRES_DB explicitly)
 PW="${POSTGRES_PASSWORD:-your-super-secret-and-long-postgres-password}"
+DB_USER="${POSTGRES_USER:-postgres}"
+DB_NAME="${POSTGRES_DB:-postgres}"
 
-psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<-EOSQL
+psql -v ON_ERROR_STOP=1 --username "$DB_USER" --dbname "$DB_NAME" <<-EOSQL
 
 -- Supabase requires these roles to exist
 DO \$\$ BEGIN
