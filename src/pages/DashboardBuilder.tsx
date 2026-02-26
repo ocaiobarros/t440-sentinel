@@ -88,17 +88,28 @@ export default function DashboardBuilder() {
     queryKey: ["builder-dashboard", dashboardId],
     queryFn: async () => {
       if (!dashboardId) return null;
-      const { data: dash } = await supabase
+
+      const { data: dash, error: dashErr } = await supabase
         .from("dashboards")
         .select("*")
         .eq("id", dashboardId)
         .single();
-      if (!dash) throw new Error("Dashboard not found");
 
-      const { data: widgets } = await supabase
+      if (dashErr) {
+        throw new Error(`Falha ao carregar dashboard: ${dashErr.message}`);
+      }
+      if (!dash) {
+        throw new Error("Dashboard não encontrado ou sem permissão");
+      }
+
+      const { data: widgets, error: widgetsErr } = await supabase
         .from("widgets")
         .select("*")
         .eq("dashboard_id", dashboardId);
+
+      if (widgetsErr) {
+        throw new Error(`Falha ao carregar widgets: ${widgetsErr.message}`);
+      }
 
       const loaded: DashboardConfig = {
         id: dash.id,
@@ -252,35 +263,46 @@ export default function DashboardBuilder() {
       if (!session?.session) throw new Error("Not authenticated");
 
       const userId = session.session.user.id;
-      const { data: tenantData } = await supabase.rpc("get_user_tenant_id", { p_user_id: userId });
-      const tenantId = tenantData as string;
+      const { data: tenantData, error: tenantErr } = await supabase.rpc("get_user_tenant_id", { p_user_id: userId });
+      if (tenantErr) throw tenantErr;
+      const tenantId = tenantData as string | null;
+      if (!tenantId) throw new Error("Tenant não identificado para o usuário autenticado");
 
       let dashId = config.id;
 
       if (dashId) {
-        await supabase.from("dashboards").update({
-          name: config.name,
-          description: config.description,
-          zabbix_connection_id: config.zabbix_connection_id,
-          settings: config.settings as any,
-        }).eq("id", dashId);
+        const { error: updateErr } = await supabase
+          .from("dashboards")
+          .update({
+            name: config.name,
+            description: config.description,
+            zabbix_connection_id: config.zabbix_connection_id,
+            settings: config.settings as any,
+          })
+          .eq("id", dashId);
+        if (updateErr) throw updateErr;
       } else {
-        const { data, error } = await supabase.from("dashboards").insert({
-          tenant_id: tenantId,
-          name: config.name,
-          description: config.description,
-          zabbix_connection_id: config.zabbix_connection_id,
-          settings: config.settings as any,
-          created_by: userId,
-          category: categoryParam,
-        } as any).select("id").single();
+        const { data, error } = await supabase
+          .from("dashboards")
+          .insert({
+            tenant_id: tenantId,
+            name: config.name,
+            description: config.description,
+            zabbix_connection_id: config.zabbix_connection_id,
+            settings: config.settings as any,
+            created_by: userId,
+            category: categoryParam,
+          } as any)
+          .select("id")
+          .single();
         if (error) throw error;
         dashId = data.id;
         setConfig((prev) => ({ ...prev, id: dashId }));
       }
 
       // Sync widgets: delete all then re-insert
-      await supabase.from("widgets").delete().eq("dashboard_id", dashId!);
+      const { error: deleteErr } = await supabase.from("widgets").delete().eq("dashboard_id", dashId!);
+      if (deleteErr) throw deleteErr;
 
       if (config.widgets.length > 0) {
         const widgetRows = config.widgets.map((w) => ({
@@ -316,7 +338,14 @@ export default function DashboardBuilder() {
       if (isNew && dashId) navigate(`/builder/${dashId}`, { replace: true });
     },
     onError: (err) => {
-      toast({ title: "Erro ao salvar", description: (err as Error).message, variant: "destructive" });
+      const e = err as { message?: string; code?: string; details?: string; hint?: string };
+      const details = [e.message, e.code ? `code: ${e.code}` : null, e.details, e.hint].filter(Boolean).join(" | ");
+      toast({
+        title: "Erro ao salvar",
+        description: details || "Falha inesperada ao persistir dashboard",
+        variant: "destructive",
+      });
+      console.error("[DashboardBuilder] save failed", err);
     },
   });
 
