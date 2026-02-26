@@ -55,7 +55,9 @@ if command -v git &>/dev/null && [ -d ".git" ]; then
       # Preserve .env
       [ -f "$ENV_FILE" ] && cp "$ENV_FILE" /tmp/flowpulse-env-backup
       git fetch origin 2>/dev/null || true
-      git reset --hard origin/main 2>/dev/null || git checkout -- . 2>/dev/null || true
+      git checkout -- . 2>/dev/null || true
+      git clean -fd 2>/dev/null || true
+      git pull --ff-only origin main 2>/dev/null || git reset --hard origin/main 2>/dev/null || true
       [ -f /tmp/flowpulse-env-backup ] && cp /tmp/flowpulse-env-backup "$ENV_FILE"
       echo -e "  ${GREEN}✔${NC} Repositório resetado para origin/main"
     else
@@ -112,17 +114,44 @@ fi
 
 # ─── 2. Preparar .env ─────────────────────────────────────
 echo -e "\n${CYAN}[2/8] Preparando variáveis de ambiente...${NC}"
+KEYS_GENERATED=false
+
 if [ ! -f "$ENV_FILE" ]; then
   if [ -f "$ENV_EXAMPLE" ]; then
     cp "$ENV_EXAMPLE" "$ENV_FILE"
     echo -e "  ${GREEN}✔${NC} .env criado a partir do template"
-    echo -e "  ⚠️  Edite $ENV_FILE antes de usar em produção!"
+    
+    # Auto-generate secure keys on first deploy
+    echo "  Gerando chaves JWT seguras..."
+    if bash "$SCRIPT_DIR/generate-keys.sh" --apply "$ENV_FILE" --quiet; then
+      echo -e "  ${GREEN}✔${NC} Chaves JWT geradas automaticamente (produção)"
+      KEYS_GENERATED=true
+    else
+      echo -e "  ${YELLOW}⚠${NC}  Falha ao gerar chaves — usando demo keys (NÃO USE EM PRODUÇÃO!)"
+    fi
   else
     echo -e "  ${RED}❌ Template .env.onprem.docker.example não encontrado${NC}"
     exit 1
   fi
 else
   echo -e "  ${GREEN}✔${NC} .env já existe"
+  
+  # Check if still using demo keys
+  CURRENT_JWT=$(grep '^JWT_SECRET=' "$ENV_FILE" | cut -d= -f2)
+  if [ "$CURRENT_JWT" = "super-secret-jwt-token-with-at-least-32-characters-long" ] || \
+     [ "$CURRENT_JWT" = "your-super-secret-jwt-token-with-at-least-32-characters-long" ]; then
+    echo -e "  ${YELLOW}⚠${NC}  Demo JWT keys detectadas!"
+    if $FIX_MODE; then
+      echo "  Regenerando chaves JWT seguras..."
+      if bash "$SCRIPT_DIR/generate-keys.sh" --apply "$ENV_FILE" --quiet; then
+        echo -e "  ${GREEN}✔${NC} Chaves JWT regeneradas (produção)"
+        KEYS_GENERATED=true
+      fi
+    else
+      echo -e "  ${YELLOW}  Rode com --fix para gerar automaticamente, ou:${NC}"
+      echo -e "  ${YELLOW}  bash scripts/generate-keys.sh --apply deploy/.env${NC}"
+    fi
+  fi
 fi
 
 # Source .env for variable interpolation
@@ -425,6 +454,11 @@ if $SMOKE_OK; then
   echo -e "${GREEN}║   📡 API:       http://localhost:${KONG_HTTP_PORT:-8000}      ║${NC}"
   echo -e "${GREEN}║                                                              ║${NC}"
   echo -e "${GREEN}╚══════════════════════════════════════════════════════════════╝${NC}"
+  if $KEYS_GENERATED; then
+    echo ""
+    echo -e "${YELLOW}🔐 IMPORTANTE: Chaves JWT foram geradas automaticamente.${NC}"
+    echo -e "${YELLOW}   Salve o arquivo deploy/.env em local seguro!${NC}"
+  fi
 else
   echo -e "${YELLOW}╔══════════════════════════════════════════════════════════════╗${NC}"
   echo -e "${YELLOW}║   ⚠️  FlowPulse On-Premise — PARCIALMENTE PRONTO           ║${NC}"
