@@ -123,6 +123,10 @@ fi
 # ─── 5. Subir Docker Compose ──────────────────────────────
 echo -e "\n${CYAN}[5/7] Iniciando containers...${NC}"
 cd "$DEPLOY_DIR"
+
+# Ensure init scripts are executable (required by docker-entrypoint-initdb.d)
+chmod +x "$DEPLOY_DIR/volumes/db/00-roles.sh" 2>/dev/null || true
+
 docker compose -f docker-compose.onprem.yml --env-file .env up -d --remove-orphans
 
 # ─── 6. Aguardar healthchecks ─────────────────────────────
