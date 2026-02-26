@@ -17,7 +17,7 @@ import { useToast } from "@/hooks/use-toast";
 import {
   Building2, Search, Plus, Pencil, Shield, Server, Map,
   Activity, Calendar, Globe, Settings2, Users, ImageIcon,
-  Database, Eye, EyeOff, Trash2,
+  Database, Eye, EyeOff, Trash2, X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -260,10 +260,15 @@ export default function TenantsPage() {
         {selectedTenant && (
           <Card className="w-80 flex-shrink-0 border-border/50">
             <CardHeader className="p-4 pb-2">
-              <CardTitle className="text-sm flex items-center gap-2">
-                <Building2 className="w-4 h-4 text-primary" />
-                {selectedTenant.name}
-              </CardTitle>
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <Building2 className="w-4 h-4 text-primary" />
+                  {selectedTenant.name}
+                </CardTitle>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0" onClick={() => setSelectedTenantId(null)}>
+                  <X className="w-3.5 h-3.5" />
+                </Button>
+              </div>
               <p className="text-[10px] font-mono text-muted-foreground">{selectedTenant.slug}</p>
             </CardHeader>
             <CardContent className="p-4 pt-0 space-y-4">
