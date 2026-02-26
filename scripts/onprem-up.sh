@@ -511,6 +511,12 @@ else
   echo -e "  ${GREEN}✔${NC} Schema aplicado"
 fi
 
+# Reload PostgREST schema cache so RPCs become visible
+echo -e "  Recarregando schema cache do PostgREST..."
+docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -c "NOTIFY pgrst, 'reload schema';" 2>/dev/null || true
+sleep 2
+echo -e "  ${GREEN}✔${NC} PostgREST schema cache atualizado"
+
 # Seed admin user via GoTrue API
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@flowpulse.local}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin@123}"
