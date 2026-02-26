@@ -600,37 +600,125 @@ BEGIN
 END $$;
 
 -- ═══════════════════════════════════════════════════
--- ─── SEED: ADMIN PADRÃO ──────────────────────────
+-- ─── FUNÇÕES DE DOMÍNIO ───────────────────────────
 -- ═══════════════════════════════════════════════════
 
-DO $$
+-- Resolve tenant_id a partir do perfil do user
+CREATE OR REPLACE FUNCTION get_user_tenant_id(p_user_id UUID)
+RETURNS UUID
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+SET row_security = off
+AS $$
+  SELECT tenant_id FROM public.profiles WHERE id = p_user_id LIMIT 1;
+$$;
+
+-- JWT tenant helper
+CREATE OR REPLACE FUNCTION jwt_tenant_id()
+RETURNS UUID
+LANGUAGE sql STABLE
+SET search_path = public, pg_temp
+AS $$
+  SELECT COALESCE(
+    NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'tenant_id', '')::uuid,
+    public.get_user_tenant_id(auth.uid())
+  )
+$$;
+
+-- Role check helpers
+CREATE OR REPLACE FUNCTION has_role(p_user_id UUID, p_tenant_id UUID, p_role app_role)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+SET row_security = off
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = p_user_id AND tenant_id = p_tenant_id AND role = p_role
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION has_any_role(p_user_id UUID, p_tenant_id UUID, p_roles app_role[])
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+SET row_security = off
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.user_roles
+    WHERE user_id = p_user_id AND tenant_id = p_tenant_id AND role = ANY(p_roles)
+  );
+$$;
+
+CREATE OR REPLACE FUNCTION is_super_admin(p_user_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public, pg_temp
+SET row_security = off
+AS $$
+  SELECT EXISTS (
+    SELECT 1 FROM public.profiles
+    WHERE id = p_user_id AND email IN ('caio.barros@madeplant.com.br', 'admin@flowpulse.local')
+  );
+$$;
+
+-- ═══════════════════════════════════════════════════
+-- ─── TRIGGER: AUTO-PROVISION ON SIGNUP ────────────
+-- ═══════════════════════════════════════════════════
+
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER
+LANGUAGE plpgsql SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
 DECLARE
-  v_tenant_id UUID;
-  v_user_id UUID;
-  v_hash TEXT;
+  new_tenant_id UUID;
+  user_slug TEXT;
+  user_name TEXT;
 BEGIN
-  -- Só cria se não existir nenhum perfil
-  IF NOT EXISTS (SELECT 1 FROM profiles LIMIT 1) THEN
-    v_tenant_id := uuid_generate_v4();
-    v_user_id := uuid_generate_v4();
-    v_hash := crypt('admin@123', gen_salt('bf', 12));
+  user_name := COALESCE(
+    NEW.raw_user_meta_data->>'display_name',
+    NEW.raw_user_meta_data->>'full_name',
+    split_part(NEW.email, '@', 1)
+  );
+  user_slug := lower(regexp_replace(user_name, '[^a-zA-Z0-9]+', '-', 'g'));
 
-    INSERT INTO tenants (id, name, slug) VALUES (v_tenant_id, 'CBLabs', 'cblabs');
+  INSERT INTO public.tenants (name, slug)
+  VALUES (user_name || '''s Org', user_slug || '-' || substr(NEW.id::text, 1, 8))
+  RETURNING id INTO new_tenant_id;
 
-    INSERT INTO auth_users (id, email, encrypted_password)
-    VALUES (v_user_id, 'admin@flowpulse.local', v_hash);
+  INSERT INTO public.profiles (id, tenant_id, display_name, email)
+  VALUES (NEW.id, new_tenant_id, user_name, NEW.email);
 
-    INSERT INTO profiles (id, tenant_id, display_name, email)
-    VALUES (v_user_id, v_tenant_id, 'Administrador', 'admin@flowpulse.local');
+  INSERT INTO public.user_roles (user_id, tenant_id, role)
+  VALUES (NEW.id, new_tenant_id, 'admin');
 
-    INSERT INTO user_roles (user_id, tenant_id, role)
-    VALUES (v_user_id, v_tenant_id, 'admin');
+  -- Inject tenant_id into JWT app_metadata
+  UPDATE auth.users
+  SET raw_app_meta_data = jsonb_set(
+    COALESCE(raw_app_meta_data, '{}'::jsonb),
+    '{tenant_id}',
+    to_jsonb(new_tenant_id::text)
+  )
+  WHERE id = NEW.id;
 
-    RAISE NOTICE '✅ Admin seed criado: admin / admin@123';
-  ELSE
-    RAISE NOTICE '⏭️ Seed ignorado — já existem perfis.';
-  END IF;
-END $$;
+  RETURN NEW;
+END;
+$$;
+
+-- Attach trigger to auth.users (GoTrue creates users there)
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW
+  EXECUTE FUNCTION handle_new_user();
+
+-- ═══════════════════════════════════════════════════
+-- ─── SEED: ADMIN PADRÃO ──────────────────────────
+-- Seed é criado via GoTrue Admin API no onprem-up.sh
+-- O trigger handle_new_user cuida de criar tenant,
+-- profile e role automaticamente.
+-- ═══════════════════════════════════════════════════
 
 COMMIT;
 
