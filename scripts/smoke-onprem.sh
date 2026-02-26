@@ -75,9 +75,10 @@ fi
 # ─── 2. Auth Health (with retry — Kong may still be starting) ─
 echo -e "\n${CYAN}[2/8] Auth (GoTrue)${NC}"
 AUTH_OK=false
-for _try in 1 2 3 4 5; do
-  AUTH_HEALTH=$(curl -sS --max-time 5 "${API}/auth/v1/health" 2>/dev/null || echo '{}')
-  if echo "$AUTH_HEALTH" | grep -qi 'alive\|ok\|healthy'; then
+for _try in 1 2 3 4 5 6 7 8; do
+  AUTH_CODE=$(curl -sS --max-time 5 -o /tmp/auth_health.json -w "%{http_code}" "${API}/auth/v1/health" 2>/dev/null || echo "000")
+  AUTH_HEALTH=$(cat /tmp/auth_health.json 2>/dev/null || echo '{}')
+  if [ "$AUTH_CODE" = "200" ] || echo "$AUTH_HEALTH" | grep -qi 'alive\|ok\|healthy\|gotrue'; then
     AUTH_OK=true
     break
   fi
