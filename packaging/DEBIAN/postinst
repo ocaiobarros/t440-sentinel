@@ -34,7 +34,7 @@ case "$1" in
     else
       echo "flowpulse: secrets já configurados — preservados"
     fi
-    chmod 640 "$ENV"
+    chmod 600 "$ENV"
     chown root:flowpulse "$ENV"
 
     # ─── Ler valores do .env ─────────────────────────
@@ -46,7 +46,6 @@ case "$1" in
     # ─── PostgreSQL: SOMENTE se DB é local ───────────
     if [ "$DB_HOST_VALUE" = "127.0.0.1" ] || [ "$DB_HOST_VALUE" = "localhost" ]; then
       if systemctl is-active --quiet postgresql; then
-        # Criar role se não existir (não altera senha se já existe)
         if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER_VALUE}'" 2>/dev/null | grep -q 1; then
           sudo -u postgres psql -c "CREATE USER ${DB_USER_VALUE} WITH PASSWORD '${DB_PASS_VALUE}'" 2>/dev/null || true
           echo "flowpulse: usuário PostgreSQL criado"
@@ -54,7 +53,6 @@ case "$1" in
           echo "flowpulse: usuário PostgreSQL já existe — senha preservada"
         fi
 
-        # Criar banco se não existir
         if ! sudo -u postgres psql -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME_VALUE}'" 2>/dev/null | grep -q 1; then
           sudo -u postgres psql -c "CREATE DATABASE ${DB_NAME_VALUE} OWNER ${DB_USER_VALUE}" 2>/dev/null || true
           echo "flowpulse: banco '${DB_NAME_VALUE}' criado"
@@ -62,11 +60,9 @@ case "$1" in
           echo "flowpulse: banco '${DB_NAME_VALUE}' já existe"
         fi
 
-        # Extensões (idempotente)
         sudo -u postgres psql -d "${DB_NAME_VALUE}" -c 'CREATE EXTENSION IF NOT EXISTS "uuid-ossp";' 2>/dev/null || true
         sudo -u postgres psql -d "${DB_NAME_VALUE}" -c 'CREATE EXTENSION IF NOT EXISTS "pgcrypto";' 2>/dev/null || true
 
-        # ─── Migrations ─────────────────────────────
         AUTO_MIGRATE=$(grep '^AUTO_MIGRATE=' "$ENV" | cut -d= -f2- || echo "0")
         if [ "$AUTO_MIGRATE" = "1" ] && [ -f /usr/lib/flowpulse/server/schema.sql ]; then
           echo "flowpulse: AUTO_MIGRATE=1 — aplicando schema..."
@@ -77,7 +73,6 @@ case "$1" in
           echo "flowpulse: AUTO_MIGRATE=0 (padrão) — schema NÃO aplicado automaticamente."
           echo "           Para aplicar manualmente:"
           echo "           PGPASSWORD=\$DB_PASS psql -h 127.0.0.1 -U ${DB_USER_VALUE} -d ${DB_NAME_VALUE} -f /usr/lib/flowpulse/server/schema.sql"
-          echo "           Ou defina AUTO_MIGRATE=1 em /etc/flowpulse/flowpulse.env e reinstale."
         fi
       else
         echo "flowpulse: AVISO — PostgreSQL local não está rodando."

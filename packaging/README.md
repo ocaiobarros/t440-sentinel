@@ -1,47 +1,56 @@
-# FlowPulse — Packaging Debian (.deb)
+# FlowPulse — Produto On-Premise (Pacote Debian)
 
 ## Visão Geral
 
-O FlowPulse é empacotado como um `.deb` autossuficiente para instalação em servidores Debian 13+.
+O FlowPulse é distribuído como um pacote `.deb` **autossuficiente** para servidores Debian 13+ (Trixie).
 
-O pacote inclui:
-- **Frontend React** compilado em `/usr/share/flowpulse/web/`
-- **Backend Express** com `node_modules` em `/usr/lib/flowpulse/server/`
-- **Node.js 22 LTS** embutido em `/opt/flowpulse/node/`
-- **Config** em `/etc/flowpulse/flowpulse.env` (conffile preservado em upgrades)
-- **systemd unit** com hardening completo
-- **Nginx config** com security headers
+O servidor do cliente **não precisa de**:
+- Git
+- Node.js / npm / bun
+- Acesso à internet
+- Compilação de qualquer tipo
 
-## Build Local
+O pacote inclui tudo que é necessário pré-compilado:
 
-```bash
-# Na raiz do projeto
-bash packaging/build-deb.sh 3.0.0
-```
+| Componente | Caminho no servidor | Descrição |
+|---|---|---|
+| Frontend React | `/usr/share/flowpulse/web/` | SPA compilada (servida pelo Nginx) |
+| Backend Express | `/usr/lib/flowpulse/server/` | API + `node_modules` pré-instalados |
+| Node.js 22 LTS | `/opt/flowpulse/node/` | Runtime embutido (não usa node do sistema) |
+| Config | `/etc/flowpulse/flowpulse.env` | Conffile preservado em upgrades |
+| systemd | `/lib/systemd/system/flowpulse.service` | Serviço com hardening completo |
+| Nginx | `/etc/nginx/sites-available/flowpulse` | Split estático + proxy API |
 
-Resultado: `build/flowpulse_3.0.0_amd64.deb`
+## Pré-requisitos no servidor
 
-## Build via CI (GitHub Actions)
-
-O workflow `.github/workflows/build-deb.yml` gera o `.deb` automaticamente:
-
-- **Em tags `v*`**: cria Release no GitHub com o `.deb` anexado
-- **Manual**: via `workflow_dispatch` informando a versão
-
-## Instalação no Servidor
+Apenas pacotes do Debian (instalados automaticamente via `Depends:`):
 
 ```bash
-# Instalar (resolve dependências automaticamente)
-apt install ./flowpulse_3.0.0_amd64.deb
+apt install nginx postgresql systemd
 ```
 
-O `postinst` faz automaticamente:
+## Instalação
+
+```bash
+# 1. Copie o .deb para o servidor
+scp flowpulse_3.0.0_amd64.deb root@servidor:/tmp/
+
+# 2. Verifique a integridade
+sha256sum -c SHA256SUMS
+
+# 3. Instale
+dpkg -i /tmp/flowpulse_3.0.0_amd64.deb || apt -f install -y
+
+# 4. Verifique o serviço
+systemctl status flowpulse
+```
+
+Pronto. O `postinst` faz automaticamente:
 1. Cria usuário de serviço `flowpulse`
-2. Gera secrets (JWT, DB password, Zabbix key)
-3. Cria banco PostgreSQL + extensões
-4. Aplica schema
-5. Habilita e inicia o serviço
-6. Configura Nginx
+2. Gera secrets (JWT, DB password, Zabbix key) — **apenas na primeira instalação**
+3. Cria banco PostgreSQL + extensões (se DB local)
+4. Habilita e inicia o serviço via systemd
+5. Configura Nginx (split estático + API proxy)
 
 ## Upgrade
 
@@ -49,7 +58,23 @@ O `postinst` faz automaticamente:
 dpkg -i flowpulse_3.1.0_amd64.deb
 ```
 
-O `/etc/flowpulse/flowpulse.env` é marcado como **conffile** — o `dpkg` pergunta antes de sobrescrever.
+O `/etc/flowpulse/flowpulse.env` é marcado como **conffile** — o `dpkg` pergunta antes de sobrescrever. Secrets nunca são regenerados em upgrade.
+
+## Migrations de banco
+
+Por padrão, `AUTO_MIGRATE=0` (seguro para enterprise). O schema **não** é aplicado automaticamente em upgrades.
+
+Para aplicar manualmente:
+```bash
+source /etc/flowpulse/flowpulse.env
+PGPASSWORD=$DB_PASS psql -h 127.0.0.1 -U $DB_USER -d $DB_NAME \
+  -f /usr/lib/flowpulse/server/schema.sql
+```
+
+Para habilitar migrations automáticas:
+```bash
+sed -i 's/AUTO_MIGRATE=0/AUTO_MIGRATE=1/' /etc/flowpulse/flowpulse.env
+```
 
 ## Remoção
 
@@ -61,14 +86,54 @@ apt remove flowpulse
 apt purge flowpulse
 ```
 
-## Estrutura no Servidor
+## Build do pacote (apenas para desenvolvedores)
+
+### Via CI (GitHub Actions) — recomendado
+
+O workflow `.github/workflows/build-deb.yml` gera o `.deb` automaticamente:
+- **Em tags `v*`**: cria Release no GitHub com `.deb` + `SHA256SUMS`
+- **Manual**: via `workflow_dispatch` informando a versão
+
+### Build local
+
+**Pré-requisitos de build** (não são necessários no servidor do cliente):
+```bash
+apt install -y nodejs npm xz-utils build-essential dpkg-dev
+```
+
+```bash
+# package-lock.json DEVE estar commitado e sincronizado
+npm install   # gera/atualiza lockfile se necessário
+bash packaging/build-deb.sh 3.0.0
+ls -lh build/*.deb
+```
+
+O build usa **`npm ci`** (determinístico). Se `package-lock.json` estiver fora de sincronia com `package.json`, o build **falha** com erro claro.
+
+## Arquitetura
 
 ```
-/usr/lib/flowpulse/server/    ← Backend + node_modules
-/usr/share/flowpulse/web/     ← Frontend compilado
-/opt/flowpulse/node/          ← Node.js runtime embutido
-/etc/flowpulse/flowpulse.env  ← Configuração (conffile)
-/var/lib/flowpulse/data/      ← Storage local
-/lib/systemd/system/flowpulse.service
-/etc/nginx/sites-available/flowpulse
+┌─────────────────────────────────────────────────────┐
+│                     Nginx :80                       │
+│  ┌──────────────┐    ┌────────────────────────────┐ │
+│  │ /assets/*    │    │ /auth/ /rest/ /functions/  │ │
+│  │ Static files │    │ /storage/ /realtime/       │ │
+│  │ (cache 1y)   │    │ → proxy 127.0.0.1:3060    │ │
+│  └──────┬───────┘    └────────────┬───────────────┘ │
+│         │                         │                  │
+│  /usr/share/flowpulse/web    /opt/flowpulse/node     │
+│                               + /usr/lib/flowpulse   │
+│                                       │              │
+│                              PostgreSQL :5432        │
+│                              /var/lib/flowpulse      │
+└─────────────────────────────────────────────────────┘
 ```
+
+## Segurança
+
+- Serviço roda como usuário `flowpulse` (não-root)
+- systemd: `ProtectSystem=strict`, `NoNewPrivileges=true`, `PrivateTmp=true`
+- Apenas `/var/lib/flowpulse` é gravável pelo serviço
+- Config com permissão `600` (root:flowpulse)
+- Node.js embutido com `PROVENANCE` (hash, origem, data)
+- Nginx com security headers (CSP, X-Frame-Options, etc.)

@@ -41,13 +41,13 @@ jobs:
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "Building version: ${VERSION}"
 
-      # ─── Build Frontend ────────────────────────────
+      # ─── Build Frontend (deterministic — npm ci only) ─
       - name: Build frontend
         env:
           VITE_SUPABASE_URL: 'http://localhost:3060'
           VITE_SUPABASE_PUBLISHABLE_KEY: 'flowpulse-onpremise-anon-key'
         run: |
-          npm ci --ignore-scripts
+          npm ci
           npm run build
 
       # ─── Prepare Backend ───────────────────────────
@@ -87,7 +87,6 @@ jobs:
           tar -xJf "/tmp/${NODE_TAR}" -C out/node --strip-components=1
           find out/node/bin -not -name "node" -not -type d -delete 2>/dev/null || true
 
-          # Registrar origem/versão para compliance
           echo "node_version=${NODE_EMBEDDED_VERSION}" > out/node/PROVENANCE
           echo "source=https://nodejs.org/dist/v${NODE_EMBEDDED_VERSION}/${NODE_TAR}" >> out/node/PROVENANCE
           echo "sha256=$(sha256sum /tmp/${NODE_TAR} | awk '{print $1}')" >> out/node/PROVENANCE
@@ -148,14 +147,14 @@ jobs:
           dpkg-deb --root-owner-group --build "build/flowpulse_${VERSION}" "build/flowpulse_${VERSION}_amd64.deb"
           ls -lh build/*.deb
 
-      # ─── Lint package ──────────────────────────────
+      # ─── Lint package (FAIL on errors) ─────────────
       - name: Lint .deb with lintian
         run: |
           sudo apt-get install -y lintian > /dev/null 2>&1
           VERSION="${{ steps.version.outputs.version }}"
-          # --suppress-tags para avisos esperados (embedded node, etc.)
           lintian --suppress-tags embedded-library,binary-without-manpage,no-changelog \
-            "build/flowpulse_${VERSION}_amd64.deb" || true
+            --fail-on error \
+            "build/flowpulse_${VERSION}_amd64.deb"
 
       # ─── Generate checksums ────────────────────────
       - name: Generate SHA256 checksums
@@ -188,10 +187,7 @@ jobs:
 
             ### Instalação
             ```bash
-            # Verificar integridade
             sha256sum -c SHA256SUMS
-
-            # Instalar
             apt install ./flowpulse_${{ steps.version.outputs.version }}_amd64.deb
             ```
 

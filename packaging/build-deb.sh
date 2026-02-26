@@ -45,9 +45,11 @@ NODE_BUILD_VERSION=$(node -v)
 echo -e "  node: ${GREEN}${NODE_BUILD_VERSION}${NC}"
 echo -e "  npm:  ${GREEN}$(npm -v)${NC}"
 
-# Verificar se xz está disponível (para descompactar Node runtime)
 command -v xz >/dev/null 2>&1 || command -v unxz >/dev/null 2>&1 || \
   die "'xz-utils' não encontrado. Instale com: apt install xz-utils"
+
+# ── CRITICAL: package-lock.json MUST exist ────────
+[ -f "package-lock.json" ] || die "package-lock.json não encontrado. Gere com 'npm install' e commite o lockfile."
 
 echo -e "${GREEN}✔ Ambiente validado${NC}"
 
@@ -57,25 +59,18 @@ mkdir -p "${PROJECT_ROOT}/build"
 echo -e "${YELLOW}→ Build dir: ${BUILD_DIR}${NC}"
 
 # ═══════════════════════════════════════════════════
-# 1. BUILD DO FRONTEND
+# 1. BUILD DO FRONTEND (determinístico — npm ci only)
 # ═══════════════════════════════════════════════════
 echo -e "\n${CYAN}[1/6] Compilando frontend...${NC}"
 
 export VITE_SUPABASE_URL="http://localhost:3060"
 export VITE_SUPABASE_PUBLISHABLE_KEY="flowpulse-onpremise-anon-key"
 
-# Usar npm ci se package-lock.json existe, senão npm install
-if [ -f "package-lock.json" ]; then
-  echo -e "  ${YELLOW}→ npm ci (determinístico via lockfile)${NC}"
-  npm ci || die "npm ci falhou. Verifique package-lock.json e dependências."
-else
-  echo -e "  ${YELLOW}→ npm install (sem lockfile — gerando)${NC}"
-  npm install || die "npm install falhou. Verifique dependências."
-fi
+echo -e "  ${YELLOW}→ npm ci (determinístico via lockfile)${NC}"
+npm ci || die "npm ci falhou. Execute 'npm install' localmente e commite package-lock.json."
 
 npm run build || die "npm run build falhou. Verifique erros do Vite acima."
 
-# Validar que dist/ foi gerado
 [ -d "dist" ] && [ -f "dist/index.html" ] || die "Build não gerou dist/index.html"
 
 echo -e "${GREEN}✔ Frontend compilado ($(find dist -type f | wc -l) arquivos)${NC}"
@@ -113,7 +108,6 @@ cd "$SRVTMP"
 npm install --omit=dev --ignore-scripts || die "Falha ao instalar deps do backend"
 cd "$PROJECT_ROOT"
 
-# Validar que express está presente
 [ -d "$SRVTMP/node_modules/express" ] || die "express não instalado no backend"
 
 echo -e "${GREEN}✔ Backend preparado ($(du -sh "$SRVTMP/node_modules" | awk '{print $1}') de deps)${NC}"
@@ -137,11 +131,9 @@ fi
 NODETMP=$(mktemp -d)
 tar -xJf "$NODE_CACHE" -C "$NODETMP" --strip-components=1 || die "Falha ao extrair Node.js"
 
-# Validar binário
 "$NODETMP/bin/node" -v >/dev/null 2>&1 || die "Binário Node.js inválido"
 EMBEDDED_V=$("$NODETMP/bin/node" -v)
 
-# Gerar PROVENANCE para compliance
 NODE_SHA256=$(sha256sum "$NODE_CACHE" | awk '{print $1}')
 cat > "$NODETMP/PROVENANCE" <<EOF
 node_version=${NODE_VERSION}
@@ -159,7 +151,6 @@ echo -e "${GREEN}✔ Node.js ${EMBEDDED_V} obtido (sha256: ${NODE_SHA256:0:16}..
 # ═══════════════════════════════════════════════════
 echo -e "\n${CYAN}[4/6] Montando árvore do pacote...${NC}"
 
-# DEBIAN
 mkdir -p "$BUILD_DIR/DEBIAN"
 for f in control conffiles postinst prerm postrm; do
   src="packaging/DEBIAN/$f"
@@ -183,7 +174,6 @@ mkdir -p "$BUILD_DIR/opt/flowpulse/node"
 cp -a "$NODETMP/bin" "$BUILD_DIR/opt/flowpulse/node/"
 cp -a "$NODETMP/lib" "$BUILD_DIR/opt/flowpulse/node/"
 cp "$NODETMP/PROVENANCE" "$BUILD_DIR/opt/flowpulse/node/"
-# Manter só o binário principal
 find "$BUILD_DIR/opt/flowpulse/node/bin" -not -name "node" -not -type d -delete 2>/dev/null || true
 
 # Config → /etc/flowpulse
