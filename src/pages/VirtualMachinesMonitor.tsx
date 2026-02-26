@@ -425,7 +425,7 @@ export default function VirtualMachinesMonitor() {
 
   const handleSave = useCallback(() => {
     if (!config) return;
-    saveDashboard(config.hostName || 'Virtual Machines', config);
+    saveDashboard(config.dashboardName || config.hostName || 'Virtual Machines', config);
   }, [config, saveDashboard]);
 
   // Multi-host fetch helper
@@ -493,7 +493,7 @@ export default function VirtualMachinesMonitor() {
     // Single host mode — use original data
     if (hosts.length <= 1 && data) {
       const v = extractVirtData(data);
-      if (v && v.vms.length === 1 && v.vms[0].name === "This VM" && config?.hostName) {
+      if (v && v.vms.length === 1 && (v.vms[0].name === "This VM" || v.vms[0].name === "VM") && config?.hostName) {
         v.vms[0].name = config.hostName;
       }
       return v;
@@ -514,7 +514,7 @@ export default function VirtualMachinesMonitor() {
       const hostName = hosts.find(h => h.id === hostId)?.name || hostId;
       for (const vm of v.vms) {
         if (!vm.hypervisorName) vm.hypervisorName = hostName;
-        if (vm.name === "This VM") vm.name = hostName;
+        if (vm.name === "This VM" || vm.name === "VM") vm.name = hostName;
         allVMs.push(vm);
       }
     }

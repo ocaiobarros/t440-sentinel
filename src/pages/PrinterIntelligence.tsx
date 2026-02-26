@@ -864,7 +864,7 @@ export default function PrinterIntelligence() {
 
   const handleSave = useCallback(() => {
     if (!config) return;
-    saveDashboard(config.hostgroupName || "Impressoras", config);
+    saveDashboard(config.dashboardName || config.hostgroupName || "Impressoras", config);
   }, [config, saveDashboard]);
 
   // Fetch printer data

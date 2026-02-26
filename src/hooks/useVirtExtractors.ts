@@ -444,14 +444,13 @@ export function extractVMwareGuestData(d: IdracData): VirtData {
   const clusterName = get("Cluster name") || "";
   const dcName = get("Datacenter name") || "";
 
-  // Use the Zabbix host name — we don't have a direct "VM name" item, 
-  // so we derive it from the host's visible name
-  const vmName = d.items.values().next()?.value?.name?.split(":")?.[0]?.trim() || "VM";
-  // Actually use cluster/hv info for context; the VM name is the host itself
-  // We'll use a generic approach — the host name from config is the VM name
+  // Derive VM name from Zabbix items or inventory
+  let vmName = get("System name") || get("Host name") || "";
+  if (!vmName && d.inventory?.name) vmName = d.inventory.name;
+  if (!vmName) vmName = "VM"; // Will be overridden by the page using config.hostName
 
   const vm: VirtVM = {
-    name: "This VM", // Will be overridden by the page using config.hostName
+    name: vmName,
     status: vmStatus,
     cpuUsage: cpuPct,
     cpuUsageHz: cpuUsageHzValue || get("CPU usage") || "",

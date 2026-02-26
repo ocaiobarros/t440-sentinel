@@ -13,6 +13,8 @@ export interface IdracConfig {
   hostgroupName: string;
   hostId: string;
   hostName: string;
+  /** User-defined dashboard name */
+  dashboardName?: string;
   /** Multi-host selection (optional, used by VM monitor) */
   hosts?: Array<{ id: string; name: string }>;
 }
@@ -76,13 +78,14 @@ async function zabbixProxy(connectionId: string, method: string, params: Record<
 
 export default function IdracSetupWizard({ onComplete, existingConfig, title = "Server Monitor", subtitle = "Dell iDRAC (T440, R440, R720, R740) • Linux/SNMP (Huawei 2288H)", icon: HeaderIcon = MonitorSpeaker, multiSelect = false }: Props) {
   const { connections, isLoading: connectionsLoading } = useZabbixConnections();
-  const [step, setStep] = useState(0); // 0=connection, 1=hostgroup, 2=host
+  const [step, setStep] = useState(0); // 0=connection, 1=hostgroup, 2=host, 3=name
 
   // Selections
   const [selectedConnection, setSelectedConnection] = useState<{ id: string; name: string } | null>(null);
   const [selectedGroup, setSelectedGroup] = useState<{ id: string; name: string } | null>(null);
   const [selectedHost, setSelectedHost] = useState<{ id: string; name: string } | null>(null);
   const [selectedHosts, setSelectedHosts] = useState<Array<{ id: string; name: string }>>([]);
+  const [dashboardName, setDashboardName] = useState("");
 
   // Data
   const [hostgroups, setHostgroups] = useState<ZabbixHostGroup[]>([]);
@@ -150,32 +153,47 @@ export default function IdracSetupWizard({ onComplete, existingConfig, title = "
       });
       return;
     }
-    const config: IdracConfig = {
-      connectionId: selectedConnection!.id,
-      connectionName: selectedConnection!.name,
-      hostgroupId: selectedGroup!.id,
-      hostgroupName: selectedGroup!.name,
-      hostId: host.hostid,
-      hostName: host.name || host.host,
-    };
-    saveIdracConfig(config);
-    onComplete(config);
+    // Single select → go to name step
+    setSelectedHost({ id: host.hostid, name: host.name || host.host });
+    setDashboardName(host.name || host.host);
+    setStep(3);
   };
 
   const handleConfirmMultiSelect = () => {
     if (selectedHosts.length === 0) return;
-    const first = selectedHosts[0];
-    const config: IdracConfig = {
-      connectionId: selectedConnection!.id,
-      connectionName: selectedConnection!.name,
-      hostgroupId: selectedGroup!.id,
-      hostgroupName: selectedGroup!.name,
-      hostId: first.id,
-      hostName: selectedHosts.map(h => h.name).join(", "),
-      hosts: selectedHosts,
-    };
-    saveIdracConfig(config);
-    onComplete(config);
+    setDashboardName(selectedHosts.map(h => h.name).join(", "));
+    setStep(3);
+  };
+
+  const handleConfirmName = () => {
+    const name = dashboardName.trim() || "Painel sem nome";
+    if (multiSelect && selectedHosts.length > 0) {
+      const first = selectedHosts[0];
+      const config: IdracConfig = {
+        connectionId: selectedConnection!.id,
+        connectionName: selectedConnection!.name,
+        hostgroupId: selectedGroup!.id,
+        hostgroupName: selectedGroup!.name,
+        hostId: first.id,
+        hostName: selectedHosts.map(h => h.name).join(", "),
+        hosts: selectedHosts,
+        dashboardName: name,
+      };
+      saveIdracConfig(config);
+      onComplete(config);
+    } else if (selectedHost) {
+      const config: IdracConfig = {
+        connectionId: selectedConnection!.id,
+        connectionName: selectedConnection!.name,
+        hostgroupId: selectedGroup!.id,
+        hostgroupName: selectedGroup!.name,
+        hostId: selectedHost.id,
+        hostName: selectedHost.name,
+        dashboardName: name,
+      };
+      saveIdracConfig(config);
+      onComplete(config);
+    }
   };
 
   const activeConnections = connections.filter((c) => c.is_active);
@@ -184,6 +202,7 @@ export default function IdracSetupWizard({ onComplete, existingConfig, title = "
     { icon: Wifi, label: "Conexão Zabbix", description: "Selecione o servidor Zabbix" },
     { icon: Network, label: "Grupo de Hosts", description: "Selecione o grupo de hosts" },
     { icon: Server, label: "Host", description: "Selecione o servidor para monitorar" },
+    { icon: Settings2, label: "Nome", description: "Defina o nome do painel" },
   ];
 
   return (
@@ -384,6 +403,47 @@ export default function IdracSetupWizard({ onComplete, existingConfig, title = "
                     </div>
                   </>
                 )}
+              </motion.div>
+            )}
+
+            {/* Step 3: Dashboard Name */}
+            {step === 3 && (
+              <motion.div key="step3" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <h3 className="text-sm font-display font-bold text-foreground">Nome do Painel</h3>
+                    <p className="text-[10px] text-muted-foreground font-mono">
+                      Defina um nome para identificar este painel na listagem
+                    </p>
+                  </div>
+                  <button onClick={() => setStep(2)} className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+                    <ChevronLeft className="w-3 h-3" /> Voltar
+                  </button>
+                </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="text-[10px] font-mono text-muted-foreground uppercase tracking-wider mb-2 block">Nome do painel</label>
+                    <input
+                      type="text"
+                      value={dashboardName}
+                      onChange={(e) => setDashboardName(e.target.value)}
+                      onKeyDown={(e) => { if (e.key === "Enter") handleConfirmName(); }}
+                      placeholder="Ex: Servidores Produção, VMs Datacenter..."
+                      className="w-full bg-background/50 border border-border/30 rounded-lg px-4 py-3 text-sm font-display text-foreground placeholder:text-muted-foreground/40 focus:outline-none focus:border-neon-green/50 transition-colors"
+                      autoFocus
+                    />
+                  </div>
+                  <div className="text-[9px] font-mono text-muted-foreground/50">
+                    Host{multiSelect && selectedHosts.length > 1 ? 's' : ''}: <span className="text-neon-cyan">{multiSelect ? selectedHosts.map(h => h.name).join(", ") : selectedHost?.name}</span>
+                  </div>
+                  <button
+                    onClick={handleConfirmName}
+                    disabled={!dashboardName.trim()}
+                    className="w-full px-4 py-3 rounded-lg text-sm font-display font-bold bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30 transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                  >
+                    Iniciar Monitoramento →
+                  </button>
+                </div>
               </motion.div>
             )}
           </AnimatePresence>

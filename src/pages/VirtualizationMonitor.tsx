@@ -322,7 +322,7 @@ export default function VirtualizationMonitor() {
 
   const handleSave = useCallback(() => {
     if (!config) return;
-    saveDashboard(config.hostName || 'Virtualização', config);
+    saveDashboard(config.dashboardName || config.hostName || 'Virtualização', config);
   }, [config, saveDashboard]);
 
   useEffect(() => {

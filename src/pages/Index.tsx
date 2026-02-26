@@ -51,7 +51,7 @@ const Index = () => {
 
   const handleSave = useCallback(() => {
     if (!config) return;
-    const name = config.hostName || 'Server Monitor';
+    const name = config.dashboardName || config.hostName || 'Server Monitor';
     saveDashboard(name, config);
   }, [config, saveDashboard]);
 
