@@ -1,271 +1,295 @@
-# FlowPulse Intelligence — Guia Universal de Instalação On-Premise
+# FlowPulse Intelligence — Guia de Instalação On-Premise
 
-**© 2026 CBLabs — Versão 2.1**
+**© 2026 CBLabs — Versão 3.0 (Hardened)**
 
-Este guia cobre a instalação completa do FlowPulse em servidores Debian 13 (Trixie) para operação 100% local, sem dependência de nuvem.
+Instalação completa do FlowPulse em servidores Debian 13 (Trixie) para operação 100% local, sem dependência de nuvem.
 
 ---
 
 ## Requisitos do Sistema
 
-| Componente    | Mínimo Recomendado         |
-|---------------|---------------------------|
-| **OS**        | Debian 13 (Trixie) / Ubuntu 22.04+ |
-| **CPU**       | 2 vCPUs                   |
-| **RAM**       | 4 GB                      |
-| **Disco**     | 20 GB livres              |
-| **Node.js**   | v20 LTS                   |
-| **PostgreSQL**| 15+                       |
-| **Nginx**     | 1.22+                     |
+| Componente    | Mínimo Recomendado              |
+|---------------|--------------------------------|
+| **OS**        | Debian 13 (Trixie)             |
+| **CPU**       | 2 vCPUs                        |
+| **RAM**       | 4 GB                           |
+| **Disco**     | 20 GB livres                   |
+| **Node.js**   | v20 LTS (repo Debian)          |
+| **PostgreSQL**| 15+                            |
+| **Nginx**     | 1.22+                          |
+
+> ⚠️ **Node.js 20 LTS entra em EOL em 30/04/2026.** Planeje migração para Node 22 LTS antes dessa data.
 
 ---
 
-## Passo 1 — Preparar o Servidor Debian
+## Passo 0 — Preparar o Servidor
 
 ```bash
-# Atualizar sistema
-sudo apt update && sudo apt upgrade -y
-
-# Instalar dependências base
-sudo apt install -y curl git build-essential
-```
-
-### Instalar Node.js 20 LTS
-
-```bash
-curl -fsSL https://deb.nodesource.com/setup_20.x | sudo bash -
-sudo apt install -y nodejs
-node -v  # Deve exibir v20.x.x
-```
-
-### Instalar PostgreSQL
-
-```bash
-sudo apt install -y postgresql
-sudo systemctl enable postgresql
-sudo systemctl start postgresql
-```
-
-### Instalar Nginx
-
-```bash
-sudo apt install -y nginx
-sudo systemctl enable nginx
+apt update && apt upgrade -y
+apt install -y git nginx postgresql postgresql-contrib ca-certificates curl sudo
 ```
 
 ---
 
-## Passo 2 — Clonar o Repositório
+## Passo 1 — Instalar Node.js (repositório Debian)
+
+O Debian 13 já entrega Node.js 20.x nos repositórios oficiais. **Não use NodeSource.**
+
+```bash
+apt install -y nodejs npm
+node -v   # Deve exibir v20.x.x
+npm -v
+```
+
+---
+
+## Passo 2 — Configurar PostgreSQL
+
+```bash
+sudo -u postgres psql <<'SQL'
+CREATE USER flowpulse WITH PASSWORD 'SUA_SENHA_FORTE_AQUI';
+CREATE DATABASE flowpulsedb OWNER flowpulse;
+\c flowpulsedb
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+SQL
+```
+
+> Use uma senha com pelo menos 12 caracteres.
+
+---
+
+## Passo 3 — Criar Usuário de Serviço
+
+O serviço **nunca** roda como root.
+
+```bash
+adduser --system --group --home /opt/flowpulse --shell /usr/sbin/nologin flowpulse
+
+mkdir -p /opt/flowpulse /var/lib/flowpulse/data
+chown -R flowpulse:flowpulse /opt/flowpulse /var/lib/flowpulse
+chmod 750 /opt/flowpulse /var/lib/flowpulse
+```
+
+---
+
+## Passo 4 — Clonar e Compilar o Frontend
 
 ```bash
 cd /root
 git clone https://github.com/ocaiobarros/FlowPulse.git
 cd FlowPulse
-```
 
----
-
-## Passo 3 — Compilar o Frontend
-
-**IMPORTANTE:** Antes do build, exporte as variáveis apontando para o IP do servidor local.
-
-```bash
 # Substitua pelo IP real do servidor na rede
-export VITE_SUPABASE_URL="http://SEU_IP_AQUI:3060"
+export VITE_SUPABASE_URL="http://SEU_IP:3060"
 export VITE_SUPABASE_PUBLISHABLE_KEY="flowpulse-onpremise-anon-key"
 
-# Instalar dependências e compilar
-npm install --legacy-peer-deps
+npm ci
 npm run build
 ```
 
-Isso gera a pasta `dist/` com o frontend pronto.
+> As variáveis `VITE_SUPABASE_*` são necessárias porque o frontend usa o cliente Supabase JS, que é redirecionado para o servidor Express local.
 
 ---
 
-## Passo 4 — Executar o Instalador Automático
+## Passo 5 — Deploy do Backend + Frontend
 
 ```bash
-# Copiar o build para dentro do deploy
-cp -r dist/ deploy/dist/
-
-# Executar o instalador
-cd deploy
-chmod +x install.sh
-sudo bash install.sh
-```
-
-### O instalador irá:
-
-1. ✅ Verificar e instalar dependências (Node.js, PostgreSQL, Nginx)
-2. ✅ Solicitar credenciais do banco interativamente
-3. ✅ Criar o banco de dados e o usuário PostgreSQL
-4. ✅ Aplicar o schema completo com seed do admin
-5. ✅ Gerar JWT_SECRET e arquivo `.env` automaticamente
-6. ✅ Instalar dependências do servidor Express
-7. ✅ Configurar serviço systemd (`flowpulse`)
-8. ✅ Configurar Nginx como reverse proxy
-
-### Dados solicitados pelo instalador:
-
-| Pergunta | Padrão | Descrição |
-|----------|--------|-----------|
-| Host do PostgreSQL | `127.0.0.1` | Deixe padrão para banco local |
-| Porta do PostgreSQL | `5432` | Padrão do PostgreSQL |
-| Nome do banco | `flowpulse` | Nome do database |
-| Usuário do banco | `flowpulse` | Usuário PostgreSQL |
-| Senha do banco | `flowpulse` | Senha do usuário |
-| IP do servidor | auto-detectado | IP que o frontend usará para acessar a API |
-
----
-
-## Passo 5 — Iniciar o Nginx (se necessário)
-
-```bash
-sudo systemctl start nginx
-sudo systemctl enable nginx
+cp deploy/server.js /opt/flowpulse/server.js
+cp -r dist/ /opt/flowpulse/dist/
+chown -R flowpulse:flowpulse /opt/flowpulse
 ```
 
 ---
 
-## Passo 6 — Verificar a Instalação
+## Passo 6 — Instalar Dependências do Backend
 
 ```bash
-# Verificar se o serviço está rodando
-sudo systemctl status flowpulse
+cat > /opt/flowpulse/package.json <<'EOF'
+{
+  "name": "flowpulse-server",
+  "version": "3.0.0",
+  "private": true,
+  "main": "server.js",
+  "dependencies": {
+    "express": "^4.21.0",
+    "pg": "^8.13.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "cors": "^2.8.5",
+    "multer": "^1.4.5-lts.1",
+    "dotenv": "^16.4.5"
+  }
+}
+EOF
 
-# Ver logs em tempo real
-sudo journalctl -u flowpulse -f
+cd /opt/flowpulse
+sudo -u flowpulse npm install --omit=dev
+```
 
-# Testar a API
-curl http://localhost:3060/rest/v1/
+---
 
-# Testar a autenticação
-curl -X POST http://localhost:3060/auth/v1/token?grant_type=password \
+## Passo 7 — Configurar Variáveis de Ambiente
+
+```bash
+# Gerar secrets fortes automaticamente
+JWT_SECRET="$(openssl rand -hex 32)"
+ZABBIX_KEY="$(openssl rand -hex 32)"
+
+cat > /opt/flowpulse/.env <<EOF
+PORT=3060
+DB_HOST=127.0.0.1
+DB_PORT=5432
+DB_NAME=flowpulsedb
+DB_USER=flowpulse
+DB_PASS=SUA_SENHA_FORTE_AQUI
+JWT_SECRET=${JWT_SECRET}
+JWT_EXPIRY=24h
+STORAGE_DIR=/var/lib/flowpulse/data
+STATIC_DIR=/opt/flowpulse/dist
+ZABBIX_ENCRYPTION_KEY=${ZABBIX_KEY}
+EOF
+
+chown flowpulse:flowpulse /opt/flowpulse/.env
+chmod 600 /opt/flowpulse/.env
+```
+
+> O `.env` fica com permissão **600** — só o usuário `flowpulse` pode ler.
+
+---
+
+## Passo 8 — Aplicar Schema do Banco
+
+```bash
+cd /root/FlowPulse
+PGPASSWORD="SUA_SENHA_FORTE_AQUI" psql -h 127.0.0.1 -U flowpulse -d flowpulsedb \
+  -f deploy/schema_cblabs_full.sql
+```
+
+---
+
+## Passo 9 — Criar Serviço systemd (com Hardening)
+
+```bash
+cat > /etc/systemd/system/flowpulse.service <<'EOF'
+[Unit]
+Description=FlowPulse Intelligence Server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+User=flowpulse
+Group=flowpulse
+WorkingDirectory=/opt/flowpulse
+Environment=NODE_ENV=production
+EnvironmentFile=/opt/flowpulse/.env
+ExecStart=/usr/bin/node /opt/flowpulse/server.js
+Restart=always
+RestartSec=3
+
+# Hardening
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/flowpulse /opt/flowpulse
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+RestrictNamespaces=true
+RestrictRealtime=true
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now flowpulse
+```
+
+---
+
+## Passo 10 — Configurar Nginx
+
+```bash
+cat > /etc/nginx/sites-available/flowpulse <<'NGINX'
+server {
+    listen 80;
+    server_name _;
+
+    client_max_body_size 20M;
+
+    # Security headers
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    location / {
+        proxy_pass http://127.0.0.1:3060;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_cache_bypass $http_upgrade;
+        proxy_read_timeout 300s;
+    }
+}
+NGINX
+
+ln -sf /etc/nginx/sites-available/flowpulse /etc/nginx/sites-enabled/flowpulse
+rm -f /etc/nginx/sites-enabled/default
+nginx -t && systemctl restart nginx
+systemctl enable nginx
+```
+
+---
+
+## Passo 11 — Verificar Instalação
+
+```bash
+# Status dos serviços
+systemctl status flowpulse --no-pager -l
+systemctl status nginx --no-pager
+
+# Verificar portas
+ss -tlnp | grep -E ':80|:3060'
+
+# Testar resposta do servidor
+curl -i http://127.0.0.1:3060/ | head
+
+# Testar autenticação
+curl -s -X POST 'http://localhost:3060/auth/v1/token?grant_type=password' \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@flowpulse.local","password":"admin@123"}'
 ```
 
 ---
 
-## Passo 7 — Acessar o Sistema
-
-Abra o navegador e acesse:
-
-```
-http://SEU_IP_AQUI
-```
-
-### Credenciais padrão:
+## Credenciais Padrão
 
 | Campo | Valor |
 |-------|-------|
-| **Usuário** | `admin` |
+| **Usuário** | `admin@flowpulse.local` |
 | **Senha** | `admin@123` |
 
-> ⚠️ **IMPORTANTE:** Troque a senha no primeiro acesso!
+> ⚠️ **TROQUE A SENHA NO PRIMEIRO ACESSO!** Credenciais padrão são um risco de segurança.
 
 ---
 
-## Passo 8 — Configurar Chave de Criptografia Zabbix (Opcional)
-
-Se for utilizar integrações com Zabbix, configure a chave de criptografia:
+## Configurar HTTPS (Recomendado para Produção)
 
 ```bash
-# Gerar chave segura
-ZABBIX_KEY=$(openssl rand -hex 32)
-
-# Adicionar ao .env do servidor
-echo "ZABBIX_ENCRYPTION_KEY=$ZABBIX_KEY" >> /opt/flowpulse/.env
-
-# Reiniciar o serviço
-sudo systemctl restart flowpulse
-```
-
----
-
-## Estrutura Final no Servidor
-
-```
-/opt/flowpulse/
-├── server.js              ← API Express (substitui Supabase)
-├── dist/                  ← Frontend compilado (servido pelo Nginx)
-├── .env                   ← Configurações (JWT, DB, etc.)
-├── node_modules/          ← Dependências do servidor
-└── schema_cblabs_full.sql ← Schema de referência
-
-/var/lib/flowpulse/data/   ← Storage local (avatares, logos, uploads)
-```
-
----
-
-## Gestão do Serviço
-
-```bash
-# Status do serviço
-sudo systemctl status flowpulse
-
-# Reiniciar
-sudo systemctl restart flowpulse
-
-# Parar
-sudo systemctl stop flowpulse
-
-# Logs em tempo real
-sudo journalctl -u flowpulse -f
-
-# Logs das últimas 100 linhas
-sudo journalctl -u flowpulse -n 100 --no-pager
-```
-
----
-
-## Atualização do Sistema
-
-Para atualizar o FlowPulse em um servidor já instalado:
-
-```bash
-# 1. No servidor, acessar o repositório
-cd /root/FlowPulse
-git pull origin main
-
-# 2. Recompilar o frontend
-export VITE_SUPABASE_URL="http://SEU_IP_AQUI:3060"
-export VITE_SUPABASE_PUBLISHABLE_KEY="flowpulse-onpremise-anon-key"
-npm install --legacy-peer-deps
-npm run build
-
-# 3. Copiar o novo build
-sudo cp -r dist/* /opt/flowpulse/dist/
-
-# 4. Atualizar o server.js (se houver mudanças no backend)
-sudo cp deploy/server.js /opt/flowpulse/server.js
-
-# 5. Reiniciar o serviço
-sudo systemctl restart flowpulse
-```
-
-### Atualizar o Schema (se houver novas tabelas):
-
-```bash
-# Aplicar novo schema (idempotente — usa IF NOT EXISTS)
-PGPASSWORD="flowpulse" psql -h 127.0.0.1 -U flowpulse -d flowpulse \
-  -f /root/FlowPulse/deploy/schema_cblabs_full.sql
-```
-
----
-
-## Configuração HTTPS (Recomendado para Produção)
-
-```bash
-# Instalar Certbot
-sudo apt install -y certbot python3-certbot-nginx
-
-# Gerar certificado (substitua pelo seu domínio)
-sudo certbot --nginx -d flowpulse.seudominio.com.br
-
-# Renovação automática
-sudo certbot renew --dry-run
+apt install -y certbot python3-certbot-nginx
+certbot --nginx -d flowpulse.seudominio.com.br
+certbot renew --dry-run
 ```
 
 ---
@@ -273,80 +297,94 @@ sudo certbot renew --dry-run
 ## Firewall (Recomendado)
 
 ```bash
-# Instalar UFW
-sudo apt install -y ufw
+apt install -y ufw
+ufw allow 22/tcp    # SSH
+ufw allow 80/tcp    # HTTP
+ufw allow 443/tcp   # HTTPS
+ufw enable
+```
 
-# Regras básicas
-sudo ufw allow 22/tcp     # SSH
-sudo ufw allow 80/tcp     # HTTP
-sudo ufw allow 443/tcp    # HTTPS
-sudo ufw allow 3060/tcp   # API FlowPulse (opcional, se não usar Nginx)
+> Não exponha a porta 3060 externamente — o Nginx faz o proxy.
 
-sudo ufw enable
+---
+
+## Gestão do Serviço
+
+```bash
+systemctl status flowpulse          # Status
+systemctl restart flowpulse         # Reiniciar
+systemctl stop flowpulse            # Parar
+journalctl -u flowpulse -f          # Logs em tempo real
+journalctl -u flowpulse -n 100      # Últimas 100 linhas
 ```
 
 ---
 
-## Backup do Banco de Dados
+## Atualizar para Nova Versão
+
+```bash
+cd /root/FlowPulse
+git pull origin main
+
+export VITE_SUPABASE_URL="http://SEU_IP:3060"
+export VITE_SUPABASE_PUBLISHABLE_KEY="flowpulse-onpremise-anon-key"
+npm ci && npm run build
+
+cp -r dist/ /opt/flowpulse/dist/
+cp deploy/server.js /opt/flowpulse/server.js
+chown -R flowpulse:flowpulse /opt/flowpulse
+systemctl restart flowpulse
+```
+
+### Atualizar Schema (se houver novas tabelas):
+
+```bash
+PGPASSWORD="SUA_SENHA" psql -h 127.0.0.1 -U flowpulse -d flowpulsedb \
+  -f /root/FlowPulse/deploy/schema_cblabs_full.sql
+```
+
+---
+
+## Backup do Banco
 
 ```bash
 # Backup completo
-pg_dump -h 127.0.0.1 -U flowpulse -d flowpulse -F c -f /backup/flowpulse_$(date +%Y%m%d).dump
+PGPASSWORD="SUA_SENHA" pg_dump -h 127.0.0.1 -U flowpulse -d flowpulsedb \
+  -F c -f /backup/flowpulse_$(date +%Y%m%d).dump
 
-# Restaurar backup
-pg_restore -h 127.0.0.1 -U flowpulse -d flowpulse -c /backup/flowpulse_20260225.dump
+# Restaurar
+pg_restore -h 127.0.0.1 -U flowpulse -d flowpulsedb -c /backup/flowpulse_YYYYMMDD.dump
 ```
 
-### Cron para backup diário:
+### Cron para backup diário (3h da manhã):
 
 ```bash
-# Editar crontab
-sudo crontab -e
-
-# Adicionar linha (backup às 3h da manhã)
-0 3 * * * PGPASSWORD="flowpulse" pg_dump -h 127.0.0.1 -U flowpulse -d flowpulse -F c -f /backup/flowpulse_$(date +\%Y\%m\%d).dump
+crontab -e
+# Adicionar:
+0 3 * * * PGPASSWORD="SUA_SENHA" pg_dump -h 127.0.0.1 -U flowpulse -d flowpulsedb -F c -f /backup/flowpulse_$(date +\%Y\%m\%d).dump
 ```
 
 ---
 
 ## Troubleshooting
 
-### O frontend carrega mas não exibe módulos?
+| Problema | Solução |
+|----------|---------|
+| Módulos não aparecem | `systemctl status flowpulse` + verificar `.env` |
+| 502 Bad Gateway | `ss -tlnp \| grep 3060` — se vazio, `systemctl restart flowpulse` |
+| Banco não conecta | `systemctl status postgresql` + testar `psql` manual |
+| Login não funciona | Verificar se schema foi aplicado e admin existe |
+| `MODULE_NOT_FOUND` | `cd /opt/flowpulse && sudo -u flowpulse npm install --omit=dev` |
 
-- Verifique se o serviço está rodando: `systemctl status flowpulse`
-- Teste o endpoint de auth: `curl http://localhost:3060/auth/v1/token?grant_type=password -H "Content-Type: application/json" -d '{"email":"admin@flowpulse.local","password":"admin@123"}'`
-- Verifique se o `.env` tem o `JWT_SECRET` correto
+---
 
-### Erro "502 Bad Gateway" no Nginx?
+## Decisões Estratégicas
 
-```bash
-# Verificar se o Node.js está escutando na porta 3060
-ss -tlnp | grep 3060
-
-# Se não estiver, reiniciar o serviço
-sudo systemctl restart flowpulse
-```
-
-### Banco de dados não conecta?
-
-```bash
-# Verificar se o PostgreSQL está rodando
-sudo systemctl status postgresql
-
-# Testar conexão manual
-PGPASSWORD="flowpulse" psql -h 127.0.0.1 -U flowpulse -d flowpulse -c "SELECT 1;"
-```
-
-### Login com "admin" não funciona?
-
-O sistema aceita login simplificado (só `admin` ao invés de `admin@flowpulse.local`). Se não funcionar:
-
-```bash
-# Resetar o admin via SQL
-PGPASSWORD="flowpulse" psql -h 127.0.0.1 -U flowpulse -d flowpulse -c "
-  UPDATE profiles SET email = 'admin@flowpulse.local' WHERE email LIKE 'admin%';
-"
-```
+| Decisão | Ação |
+|---------|------|
+| Node.js 20 EOL (30/04/2026) | Migrar para Node 22 LTS antes da data |
+| HTTPS | Configurar Certbot antes de expor à internet |
+| Backups | Ativar cron de backup diário no dia 1 |
 
 ---
 
