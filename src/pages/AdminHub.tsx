@@ -1149,9 +1149,12 @@ export default function AdminHub() {
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">E-mail *</Label>
-              <Input type="email" value={inviteForm.email}
+              <Input type="text" value={inviteForm.email}
                 onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="usuario@empresa.com" className="bg-muted/50 border-border" />
+                placeholder="admin ou usuario@empresa.com" className="bg-muted/50 border-border" />
+              <p className="text-[10px] text-muted-foreground">
+                Usernames sem <span className="font-mono text-primary">@</span> serão completados automaticamente com <span className="font-mono text-primary">@flowpulse.local</span>
+              </p>
             </div>
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Nome de exibição</Label>
