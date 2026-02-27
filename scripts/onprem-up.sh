@@ -618,6 +618,50 @@ if [ -n "$ADMIN_ID" ]; then
                   || echo -e "  ${RED}✘${NC} Falha no seed manual"
   else
     echo -e "  ${GREEN}✔${NC} Profile do admin já existe (trigger OK)"
+    # Even if profile exists, ensure tenant_id is in JWT app_metadata (critical for RLS)
+    echo -e "  Verificando tenant_id no JWT app_metadata..."
+    docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -c "
+      DO \$\$
+      DECLARE
+        v_tenant_id UUID;
+        v_user_id UUID := '${ADMIN_ID}'::UUID;
+        v_current_tenant TEXT;
+      BEGIN
+        -- Get tenant_id from profile
+        SELECT tenant_id INTO v_tenant_id FROM public.profiles WHERE id = v_user_id;
+        IF v_tenant_id IS NULL THEN
+          RAISE NOTICE 'No tenant_id found in profile for %', v_user_id;
+          RETURN;
+        END IF;
+
+        -- Check if already set in app_metadata
+        SELECT raw_app_meta_data->>'tenant_id' INTO v_current_tenant
+        FROM auth.users WHERE id = v_user_id;
+
+        IF v_current_tenant IS DISTINCT FROM v_tenant_id::text THEN
+          UPDATE auth.users
+          SET raw_app_meta_data = jsonb_set(
+            COALESCE(raw_app_meta_data, '{}'::jsonb),
+            '{tenant_id}',
+            to_jsonb(v_tenant_id::text)
+          )
+          WHERE id = v_user_id;
+          RAISE NOTICE 'Injected tenant_id=% into JWT for user=%', v_tenant_id, v_user_id;
+        END IF;
+
+        -- Ensure admin role exists
+        IF NOT EXISTS (
+          SELECT 1 FROM public.user_roles
+          WHERE user_id = v_user_id AND tenant_id = v_tenant_id AND role = 'admin'
+        ) THEN
+          DELETE FROM public.user_roles WHERE user_id = v_user_id;
+          INSERT INTO public.user_roles (user_id, tenant_id, role)
+          VALUES (v_user_id, v_tenant_id, 'admin');
+          RAISE NOTICE 'Admin role restored for user=%', v_user_id;
+        END IF;
+      END \$\$;
+    " 2>/dev/null && echo -e "  ${GREEN}✔${NC} JWT app_metadata e role verificados" \
+                  || echo -e "  ${YELLOW}⚠${NC}  Falha ao verificar app_metadata (não-crítico)"
   fi
 else
   echo -e "  ${YELLOW}⚠${NC}  Não foi possível resolver ADMIN_ID para validar seed"
