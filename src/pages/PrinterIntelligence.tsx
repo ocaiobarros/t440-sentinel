@@ -980,6 +980,14 @@ export default function PrinterIntelligence() {
     baseCounterMutation.mutate({ hostId, value, hostName: printer?.host.name || printer?.host.host || "" });
   }, [printerData, baseCounterMutation]);
 
+  // Memoize filtered printers and alert count (must be before early returns to keep hooks order stable)
+  const filteredPrinters = useMemo(() =>
+    printerData.filter((p) =>
+      !hostFilter || (p.host.name || p.host.host).toLowerCase().includes(hostFilter.toLowerCase())
+    ), [printerData, hostFilter]);
+
+  const alertCount = useMemo(() => printerData.filter((p) => p.hasAlert).length, [printerData]);
+
   // Dev performance logging
   perfLog("PrinterIntelligence", printerData.length > 0);
 
@@ -1005,13 +1013,6 @@ export default function PrinterIntelligence() {
     );
   }
 
-  // Memoize filtered printers and alert count
-  const filteredPrinters = useMemo(() =>
-    printerData.filter((p) =>
-      !hostFilter || (p.host.name || p.host.host).toLowerCase().includes(hostFilter.toLowerCase())
-    ), [printerData, hostFilter]);
-
-  const alertCount = useMemo(() => printerData.filter((p) => p.hasAlert).length, [printerData]);
 
   return (
     <div className={`min-h-screen bg-background grid-pattern scanlines relative ${isKiosk ? "p-4" : "p-4 md:p-6 lg:p-8"}`}>
