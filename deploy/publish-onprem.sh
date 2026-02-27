@@ -43,27 +43,43 @@ npm audit fix 2>/dev/null || warn "Some vulnerabilities remain (run 'npm audit' 
 
 # ─── 4) Create .env.local for on-prem build ──────────────────────
 # Vite precedence: .env.local > .env — ensures local URLs override cloud
+ONPREM_URL=""
+ONPREM_ANON=""
 if [ -f "$DEPLOY_DIR/.env" ]; then
   ONPREM_URL=$(grep '^SITE_URL=' "$DEPLOY_DIR/.env" | cut -d= -f2-)
   ONPREM_ANON=$(grep '^ANON_KEY=' "$DEPLOY_DIR/.env" | cut -d= -f2-)
-  if [ -n "$ONPREM_URL" ] && [ -n "$ONPREM_ANON" ]; then
-    cat > "$PROJECT_DIR/.env.local" <<ENVLOCAL
+fi
+
+if [ -n "$ONPREM_URL" ] && [ -n "$ONPREM_ANON" ]; then
+  # Write .env.local (Vite highest precedence)
+  cat > "$PROJECT_DIR/.env.local" <<ENVLOCAL
 VITE_SUPABASE_URL=${ONPREM_URL}
 VITE_SUPABASE_PUBLISHABLE_KEY=${ONPREM_ANON}
 VITE_SUPABASE_PROJECT_ID=self-hosted
 ENVLOCAL
-    info "Build override: VITE_SUPABASE_URL=${ONPREM_URL} (via .env.local)"
-  else
-    warn "deploy/.env missing SITE_URL or ANON_KEY — build will use root .env"
-  fi
+  # Also export so Vite definitely picks them up
+  export VITE_SUPABASE_URL="${ONPREM_URL}"
+  export VITE_SUPABASE_PUBLISHABLE_KEY="${ONPREM_ANON}"
+  export VITE_SUPABASE_PROJECT_ID="self-hosted"
+  info "Build override: VITE_SUPABASE_URL=${ONPREM_URL}"
+  info "Build override: VITE_SUPABASE_PUBLISHABLE_KEY=${ONPREM_ANON:0:20}..."
 else
-  warn "deploy/.env not found — build will use root .env (cloud)"
+  warn "deploy/.env missing SITE_URL or ANON_KEY — build will use root .env"
 fi
 
 # ─── 5) Build ─────────────────────────────────────────────────────
 info "Building frontend (Vite)..."
 npm run build || fail "Build failed!"
 info "Build complete: $(du -sh dist | cut -f1) total"
+
+# Validate key was embedded in the build
+if grep -q 'supabaseKey is required' "$PROJECT_DIR/dist/assets/"*.js 2>/dev/null; then
+  fail "Build did NOT embed the Supabase key! Check deploy/.env"
+fi
+KEY_CHECK=$(grep -c "${ONPREM_ANON:0:30}" "$PROJECT_DIR/dist/assets/index-"*.js 2>/dev/null || echo "0")
+if [ "$KEY_CHECK" = "0" ] && [ -n "$ONPREM_ANON" ]; then
+  warn "ANON_KEY not found in built JS — the app may fail to start"
+fi
 
 # Cleanup temporary .env.local
 rm -f "$PROJECT_DIR/.env.local"
