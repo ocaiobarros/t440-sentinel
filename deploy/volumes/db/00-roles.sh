@@ -86,8 +86,12 @@ GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO supabase_auth_admin, supabase_sto
 -- Ensure auth schema exists for GoTrue
 CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
 GRANT ALL ON SCHEMA auth TO supabase_auth_admin;
-GRANT USAGE ON SCHEMA auth TO postgres, supabase_admin;
+GRANT USAGE ON SCHEMA auth TO postgres, supabase_admin, authenticated, anon, service_role;
 ALTER DEFAULT PRIVILEGES FOR ROLE supabase_auth_admin IN SCHEMA auth GRANT REFERENCES ON TABLES TO postgres, supabase_admin;
+
+-- PostgREST (authenticator) needs to call auth.uid()/auth.jwt() inside RLS policies
+-- These functions are created by GoTrue migrations; grant EXECUTE after they exist
+ALTER DEFAULT PRIVILEGES FOR ROLE supabase_auth_admin IN SCHEMA auth GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;
 
 -- GoTrue migrations need postgres to SELECT from auth tables
 GRANT SELECT ON ALL TABLES IN SCHEMA auth TO postgres;

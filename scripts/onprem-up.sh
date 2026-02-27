@@ -426,7 +426,7 @@ docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_E
 
   CREATE SCHEMA IF NOT EXISTS auth AUTHORIZATION supabase_auth_admin;
   GRANT USAGE, CREATE ON SCHEMA auth TO supabase_auth_admin;
-  GRANT USAGE ON SCHEMA auth TO postgres, supabase_admin;
+  GRANT USAGE ON SCHEMA auth TO postgres, supabase_admin, authenticated, anon, service_role;
   GRANT SELECT ON ALL TABLES IN SCHEMA auth TO postgres;
   ALTER DEFAULT PRIVILEGES FOR ROLE supabase_auth_admin IN SCHEMA auth GRANT SELECT ON TABLES TO postgres;
   ALTER DEFAULT PRIVILEGES FOR ROLE supabase_auth_admin IN SCHEMA auth GRANT REFERENCES ON TABLES TO postgres, supabase_admin;
@@ -500,9 +500,13 @@ wait_for_service "Kong Gateway" "$KONG_URL/rest/v1/" 30 || true
 # ─── 7. Aplicar Schema + Seed ─────────────────────────────
 echo -e "\n${CYAN}[7/8] Aplicando schema e seed admin...${NC}"
 
-# Ensure postgres can reference auth.users for FK constraints
-docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres -c \
-  "GRANT USAGE ON SCHEMA auth TO supabase_admin; GRANT REFERENCES ON ALL TABLES IN SCHEMA auth TO supabase_admin;" 2>/dev/null || true
+# Ensure PostgREST roles can access auth schema functions (auth.uid, auth.jwt, auth.role)
+docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres -c "
+  GRANT USAGE ON SCHEMA auth TO supabase_admin, authenticated, anon, service_role;
+  GRANT REFERENCES ON ALL TABLES IN SCHEMA auth TO supabase_admin;
+  -- Critical: allow RLS evaluation of auth.uid()/auth.jwt()/auth.role()
+  GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA auth TO anon, authenticated, service_role;
+" 2>/dev/null || true
 
 # Check if schema already applied
 SCHEMA_EXISTS=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -v ON_ERROR_STOP=1 -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
