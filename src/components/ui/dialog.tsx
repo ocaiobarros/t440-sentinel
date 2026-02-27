@@ -1,5 +1,6 @@
 import * as React from "react";
 import * as DialogPrimitive from "@radix-ui/react-dialog";
+import * as VisuallyHidden from "@radix-ui/react-visually-hidden";
 import { X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
@@ -46,6 +47,9 @@ const DialogContent = React.forwardRef<
         <X className="h-4 w-4" />
         <span className="sr-only">Close</span>
       </DialogPrimitive.Close>
+      <VisuallyHidden.Root asChild>
+        <DialogPrimitive.Description />
+      </VisuallyHidden.Root>
     </DialogPrimitive.Content>
   </DialogPortal>
 ));
