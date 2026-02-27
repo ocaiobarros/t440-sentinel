@@ -41,10 +41,32 @@ npx browserslist@latest --update-db 2>/dev/null || warn "browserslist update ski
 info "Running npm audit fix (safe only)..."
 npm audit fix 2>/dev/null || warn "Some vulnerabilities remain (run 'npm audit' for details)"
 
-# ─── 4) Build ─────────────────────────────────────────────────────
+# ─── 4) Create .env.local for on-prem build ──────────────────────
+# Vite precedence: .env.local > .env — ensures local URLs override cloud
+if [ -f "$DEPLOY_DIR/.env" ]; then
+  ONPREM_URL=$(grep '^SITE_URL=' "$DEPLOY_DIR/.env" | cut -d= -f2-)
+  ONPREM_ANON=$(grep '^ANON_KEY=' "$DEPLOY_DIR/.env" | cut -d= -f2-)
+  if [ -n "$ONPREM_URL" ] && [ -n "$ONPREM_ANON" ]; then
+    cat > "$PROJECT_DIR/.env.local" <<ENVLOCAL
+VITE_SUPABASE_URL=${ONPREM_URL}
+VITE_SUPABASE_PUBLISHABLE_KEY=${ONPREM_ANON}
+VITE_SUPABASE_PROJECT_ID=self-hosted
+ENVLOCAL
+    info "Build override: VITE_SUPABASE_URL=${ONPREM_URL} (via .env.local)"
+  else
+    warn "deploy/.env missing SITE_URL or ANON_KEY — build will use root .env"
+  fi
+else
+  warn "deploy/.env not found — build will use root .env (cloud)"
+fi
+
+# ─── 5) Build ─────────────────────────────────────────────────────
 info "Building frontend (Vite)..."
 npm run build || fail "Build failed!"
 info "Build complete: $(du -sh dist | cut -f1) total"
+
+# Cleanup temporary .env.local
+rm -f "$PROJECT_DIR/.env.local"
 
 # ─── 5) Deploy to Docker Nginx container ──────────────────────────
 # The compose file mounts deploy/dist as read-only, so we copy to that path
