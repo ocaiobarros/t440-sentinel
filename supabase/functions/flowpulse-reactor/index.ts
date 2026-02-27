@@ -308,6 +308,20 @@ Deno.serve(async (req) => {
       const channelName = `dashboard:${dashboardId}`;
       const channel = supabase.channel(channelName);
 
+      // Must subscribe before sending — Realtime requires an active connection
+      await new Promise<void>((resolve, reject) => {
+        const timeout = setTimeout(() => reject(new Error(`channel subscribe timeout: ${channelName}`)), 5000);
+        channel.subscribe((status) => {
+          if (status === "SUBSCRIBED") {
+            clearTimeout(timeout);
+            resolve();
+          } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+            clearTimeout(timeout);
+            reject(new Error(`channel subscribe failed: ${status}`));
+          }
+        });
+      });
+
       for (const [, evt] of keyMap) {
         await channel.send({
           type: "broadcast",
