@@ -11,6 +11,7 @@ import { toast } from "sonner";
 
 /* ─── Types ─── */
 interface SystemData {
+  _source?: "agent" | "demo";
   os: { name: string; kernel: string; arch: string };
   app_version: string;
   uptime: { system_seconds: number; app_seconds: number };
@@ -83,7 +84,15 @@ export default function SystemStatus() {
           </div>
           <div>
             <h1 className="text-xl font-bold text-foreground font-display tracking-tight">{t("systemStatus.title")}</h1>
-            <p className="text-xs text-muted-foreground">{t("systemStatus.subtitle")}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs text-muted-foreground">{t("systemStatus.subtitle")}</p>
+              {data._source === "demo" && (
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">DEMO</span>
+              )}
+              {data._source === "agent" && (
+                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-[hsl(var(--neon-green))]/20 text-[hsl(var(--neon-green))] border border-[hsl(var(--neon-green))]/30">LIVE</span>
+              )}
+            </div>
           </div>
         </div>
         <button

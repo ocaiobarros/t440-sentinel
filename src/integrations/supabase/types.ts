@@ -1512,6 +1512,32 @@ export type Database = {
           },
         ]
       }
+      system_status_snapshots: {
+        Row: {
+          collected_at: string
+          payload: Json
+          tenant_id: string
+        }
+        Insert: {
+          collected_at?: string
+          payload?: Json
+          tenant_id: string
+        }
+        Update: {
+          collected_at?: string
+          payload?: Json
+          tenant_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "system_status_snapshots_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: true
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       telemetry_config: {
         Row: {
           config_key: string

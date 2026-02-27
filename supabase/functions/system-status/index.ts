@@ -1,4 +1,4 @@
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,32 +35,35 @@ Deno.serve(async (req) => {
       });
     }
 
-    // Get DB size
+    // Try to read real data from system_status_snapshots
     const serviceRole = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const sbAdmin = createClient(supabaseUrl, serviceRole);
 
-    let dbSizeMb = 0;
-    try {
-      const { data: sizeData } = await sbAdmin.rpc("exec_sql" as any, {
-        sql: "SELECT pg_database_size(current_database()) as size",
-      });
-      if (sizeData?.[0]?.size) {
-        dbSizeMb = Math.round(Number(sizeData[0].size) / (1024 * 1024));
+    // Get user tenant
+    const { data: tenantId } = await sbAdmin.rpc("get_user_tenant_id", { p_user_id: user.id });
+
+    if (tenantId) {
+      const { data: snapshot } = await sbAdmin
+        .from("system_status_snapshots")
+        .select("payload, collected_at")
+        .eq("tenant_id", tenantId)
+        .single();
+
+      if (snapshot?.payload) {
+        // Return real data from agent
+        const payload = snapshot.payload as Record<string, unknown>;
+        payload.collected_at = snapshot.collected_at;
+        payload._source = "agent";
+        return new Response(JSON.stringify(payload), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
-    } catch {
-      // fallback — no exec_sql available, estimate from table count
-      dbSizeMb = 0;
     }
 
-    // Build system info
-    // In a real self-hosted deployment, an agent would provide these via a local API.
-    // For Cloud, we return what we can determine + sensible placeholders.
+    // Fallback: simulated data for Cloud or when no agent is running
     const now = Date.now();
-    // Simulate stable uptime based on a fixed epoch
-    const bootEpoch = 1740000000000; // ~Feb 2025
+    const bootEpoch = 1740000000000;
     const appEpoch = 1740200000000;
-    const uptimeSeconds = Math.floor((now - bootEpoch) / 1000);
-    const appUptimeSeconds = Math.floor((now - appEpoch) / 1000);
 
     const numCores = 4;
     const coreLoads = Array.from({ length: numCores }, (_, i) => ({
@@ -71,30 +74,14 @@ Deno.serve(async (req) => {
 
     const totalRamGb = 15.8;
     const usedRamGb = +(2.0 + Math.random() * 0.4).toFixed(1);
-    const totalSwapGb = 2.0;
-    const usedSwapGb = +(0.1 + Math.random() * 0.1).toFixed(2);
-
-    const disks = [
-      { mount: "/", totalGb: 50, usedGb: +(18 + Math.random() * 2).toFixed(1) },
-      { mount: "/data", totalGb: 200, usedGb: +(45 + Math.random() * 5).toFixed(1) },
-    ];
-
-    const services = [
-      { name: "flowpulse-api", status: "running" as const, pid: 1842 },
-      { name: "postgresql", status: "running" as const, pid: 923 },
-      { name: "bgp-collector", status: "running" as const, pid: 2105 },
-    ];
 
     const payload = {
-      os: {
-        name: "Debian GNU/Linux 12 (bookworm)",
-        kernel: "6.1.0-28-amd64",
-        arch: "x86_64",
-      },
+      _source: "demo",
+      os: { name: "Debian GNU/Linux 12 (bookworm)", kernel: "6.1.0-28-amd64", arch: "x86_64" },
       app_version: "2.4.1",
       uptime: {
-        system_seconds: uptimeSeconds,
-        app_seconds: appUptimeSeconds,
+        system_seconds: Math.floor((now - bootEpoch) / 1000),
+        app_seconds: Math.floor((now - appEpoch) / 1000),
       },
       cpu: {
         model: "Intel Xeon E-2278G @ 3.40GHz",
@@ -108,20 +95,17 @@ Deno.serve(async (req) => {
         used_gb: usedRamGb,
         percent: Math.round((usedRamGb / totalRamGb) * 100),
       },
-      swap: {
-        total_gb: totalSwapGb,
-        used_gb: usedSwapGb,
-        percent: Math.round((usedSwapGb / totalSwapGb) * 100),
-      },
-      disks: disks.map((d) => ({
-        ...d,
-        percent: Math.round((Number(d.usedGb) / d.totalGb) * 100),
-      })),
-      database: {
-        size_mb: dbSizeMb || 142,
-        engine: "PostgreSQL 15",
-      },
-      services,
+      swap: { total_gb: 2.0, used_gb: 0.17, percent: 9 },
+      disks: [
+        { mount: "/", totalGb: 50, usedGb: 18.1, percent: 36 },
+        { mount: "/data", totalGb: 200, usedGb: 46, percent: 23 },
+      ],
+      database: { size_mb: 142, engine: "PostgreSQL 15" },
+      services: [
+        { name: "flowpulse-api", status: "running", pid: 1842 },
+        { name: "postgresql", status: "running", pid: 923 },
+        { name: "bgp-collector", status: "running", pid: 2105 },
+      ],
       collected_at: new Date().toISOString(),
     };
 

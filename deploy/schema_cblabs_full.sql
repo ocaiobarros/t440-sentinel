@@ -1010,6 +1010,19 @@ FROM map_nodes n
 LEFT JOIN reachable r ON r.id = n.id;
 $$;
 
+-- ─── System Status Snapshots (agent-collected host metrics) ──
+CREATE TABLE IF NOT EXISTS system_status_snapshots (
+  tenant_id uuid NOT NULL REFERENCES tenants(id),
+  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
+  collected_at timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id)
+);
+ALTER TABLE system_status_snapshots ENABLE ROW LEVEL SECURITY;
+DO $$ BEGIN
+  CREATE POLICY ss_select ON system_status_snapshots
+    FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 COMMIT;
 
 -- ═══════════════════════════════════════════════════
