@@ -80,9 +80,16 @@ export interface VirtVM {
   uncommittedStorage?: string;
 }
 
+export interface VirtNetworkInterface {
+  name: string;
+  bytesIn: string;
+  bytesOut: string;
+}
+
 export interface VirtNetwork {
   bytesIn: string;
   bytesOut: string;
+  interfaces: VirtNetworkInterface[];
 }
 
 export interface VirtData {
@@ -145,6 +152,29 @@ export function extractVMwareData(d: IdracData): VirtData {
     });
   }
 
+  // Network interfaces — discover per-NIC items
+  const nicNames = new Set<string>();
+  for (const [name] of d.items) {
+    const m = name.match(/^VMware: (?:Number of bytes (?:received|transmitted)) on interface (.+)$/);
+    if (m) nicNames.add(m[1]);
+  }
+  const interfaces: VirtNetworkInterface[] = [];
+  let totalIn = 0, totalOut = 0;
+  for (const nic of nicNames) {
+    const rxVal = get(`Number of bytes received on interface ${nic}`) || "";
+    const txVal = get(`Number of bytes transmitted on interface ${nic}`) || "";
+    interfaces.push({ name: nic, bytesIn: rxVal, bytesOut: txVal });
+    totalIn += parseFloat(rxVal) || 0;
+    totalOut += parseFloat(txVal) || 0;
+  }
+  // Fallback to generic items if no per-interface found
+  const genericIn = get("Number of bytes received") || "";
+  const genericOut = get("Number of bytes transmitted") || "";
+  if (interfaces.length === 0 && (genericIn || genericOut)) {
+    totalIn = parseFloat(genericIn) || 0;
+    totalOut = parseFloat(genericOut) || 0;
+  }
+
   const cpuPct = parsePercent(get("CPU usage in percents") || get("CPU utilization"));
   const memTotal = get("Total memory");
   const memUsed = get("Used memory");
@@ -183,8 +213,9 @@ export function extractVMwareData(d: IdracData): VirtData {
       ballooned: get("Ballooned memory"),
     },
     network: {
-      bytesIn: get("Number of bytes received"),
-      bytesOut: get("Number of bytes transmitted"),
+      bytesIn: totalIn > 0 ? String(totalIn) : genericIn,
+      bytesOut: totalOut > 0 ? String(totalOut) : genericOut,
+      interfaces,
     },
     datastores,
     vms: [],
@@ -366,6 +397,7 @@ export function extractProxmoxData(d: IdracData): VirtData {
     network: {
       bytesIn: nodeGet("Incoming data, rate"),
       bytesOut: nodeGet("Outgoing data, rate"),
+      interfaces: [],
     },
     datastores: storages,
     vms,
@@ -529,6 +561,7 @@ export function extractVMwareGuestData(d: IdracData): VirtData {
     network: {
       bytesIn: vm.netIn,
       bytesOut: vm.netOut,
+      interfaces: [],
     },
     datastores,
     vms: [vm],

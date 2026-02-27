@@ -603,14 +603,22 @@ export default function VirtualizationMonitor() {
                 transition={{ delay: 0.4 }}
                 className="glass-card rounded-xl p-5 border border-border/30"
               >
-                <div className="flex items-center gap-2 mb-4">
-                  <Network className="w-4 h-4" style={{ color: accentColor }} />
-                  <span className="text-xs font-display font-bold uppercase tracking-wider text-foreground">
-                    Adaptadores de Rede
-                  </span>
+                <div className="flex items-center justify-between mb-4">
+                  <div className="flex items-center gap-2">
+                    <Network className="w-4 h-4" style={{ color: accentColor }} />
+                    <span className="text-xs font-display font-bold uppercase tracking-wider text-foreground">
+                      Adaptadores de Rede
+                    </span>
+                  </div>
+                  {virt.network.interfaces.length > 0 && (
+                    <span className="text-[10px] font-mono text-muted-foreground">
+                      {virt.network.interfaces.length} interface{virt.network.interfaces.length > 1 ? "s" : ""}
+                    </span>
+                  )}
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/* Download (RX) */}
+
+                {/* Total aggregated */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -620,17 +628,14 @@ export default function VirtualizationMonitor() {
                       boxShadow: `0 0 20px hsl(142 100% 50% / 0.1), inset 0 1px 0 hsl(0 0% 100% / 0.03)`,
                     }}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <ArrowDownToLine className="w-5 h-5" style={{ color: "hsl(142, 100%, 50%)" }} />
-                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">DOWNLOAD (RX)</span>
-                      </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ArrowDownToLine className="w-5 h-5" style={{ color: "hsl(142, 100%, 50%)" }} />
+                      <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">DOWNLOAD (RX) — TOTAL</span>
                     </div>
                     <div className="text-4xl font-mono-data font-black leading-none" style={{ color: "hsl(142, 100%, 50%)", textShadow: "0 0 20px hsl(142 100% 50% / 0.3)" }}>
                       {formatToMbps(virt.network.bytesIn)}
                     </div>
                   </motion.div>
-                  {/* Upload (TX) */}
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -641,17 +646,46 @@ export default function VirtualizationMonitor() {
                       boxShadow: `0 0 20px hsl(210 100% 56% / 0.1), inset 0 1px 0 hsl(0 0% 100% / 0.03)`,
                     }}
                   >
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="flex items-center gap-2">
-                        <ArrowUpFromLine className="w-5 h-5" style={{ color: "hsl(210, 100%, 56%)" }} />
-                        <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">UPLOAD (TX)</span>
-                      </div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <ArrowUpFromLine className="w-5 h-5" style={{ color: "hsl(210, 100%, 56%)" }} />
+                      <span className="text-sm font-display font-black text-foreground uppercase tracking-wide">UPLOAD (TX) — TOTAL</span>
                     </div>
                     <div className="text-4xl font-mono-data font-black leading-none" style={{ color: "hsl(210, 100%, 56%)", textShadow: "0 0 20px hsl(210 100% 56% / 0.3)" }}>
                       {formatToMbps(virt.network.bytesOut)}
                     </div>
                   </motion.div>
                 </div>
+
+                {/* Per-interface breakdown */}
+                {virt.network.interfaces.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
+                    {virt.network.interfaces.map((nic, i) => (
+                      <motion.div
+                        key={nic.name}
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.1 + i * 0.03 }}
+                        className="rounded-lg border border-border/20 p-3 relative overflow-hidden"
+                        style={{ background: "hsl(220 35% 7% / 0.8)" }}
+                      >
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <Network className="w-3 h-3 text-muted-foreground/60" />
+                          <span className="text-[10px] font-mono font-bold text-foreground/80 uppercase truncate">{nic.name}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-[11px] font-mono">
+                          <div className="flex items-center gap-1">
+                            <ArrowDownToLine className="w-3 h-3" style={{ color: "hsl(142, 100%, 50%)" }} />
+                            <span style={{ color: "hsl(142, 100%, 50%)" }}>{formatToMbps(nic.bytesIn)}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <ArrowUpFromLine className="w-3 h-3" style={{ color: "hsl(210, 100%, 56%)" }} />
+                            <span style={{ color: "hsl(210, 100%, 56%)" }}>{formatToMbps(nic.bytesOut)}</span>
+                          </div>
+                        </div>
+                      </motion.div>
+                    ))}
+                  </div>
+                )}
               </motion.div>
 
 
