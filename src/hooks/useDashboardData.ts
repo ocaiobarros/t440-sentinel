@@ -27,11 +27,20 @@ interface Dashboard {
   widgets: DashboardWidget[];
 }
 
+const REALTIME_DISABLE_UNTIL_KEY = "flowpulse:realtime:disable_until";
+const REALTIME_DISABLE_COOLDOWN_MS = 5 * 60 * 1000;
+
+function isRealtimeAllowedNow() {
+  const until = Number(localStorage.getItem(REALTIME_DISABLE_UNTIL_KEY) || "0");
+  return !until || Date.now() >= until;
+}
+
 export function useDashboardData(dashboardId: string | null, pollIntervalOverride?: number) {
   const [telemetryCache, setTelemetryCache] = useState<Map<string, TelemetryCacheEntry>>(new Map());
   const [isPollingActive, setIsPollingActive] = useState(false);
   const [isEmergencyMode, setIsEmergencyMode] = useState(false);
   const [lastPollLatencyMs, setLastPollLatencyMs] = useState<number | null>(null);
+  const [realtimeEnabled, setRealtimeEnabled] = useState<boolean>(() => isRealtimeAllowedNow());
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inflightRef = useRef(false); // congestion control
   const dashboardRef = useRef<Dashboard | null>(null);
@@ -104,16 +113,36 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     setIsEmergencyMode(acOff);
   }, [telemetryCache]);
 
+  const handleRealtimeStatus = useCallback((status: string) => {
+    if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+      localStorage.setItem(
+        REALTIME_DISABLE_UNTIL_KEY,
+        String(Date.now() + REALTIME_DISABLE_COOLDOWN_MS),
+      );
+      setRealtimeEnabled(false);
+    }
+  }, []);
+
   // Realtime subscription
   const { seedCache, clearCache } = useDashboardRealtime({
     dashboardId,
     onUpdate: setTelemetryCache,
-    enabled: !!dashboardId,
+    enabled: !!dashboardId && realtimeEnabled,
+    onStatusChange: handleRealtimeStatus,
     priorityKeys,
   });
 
   // Replay warm start
   const { replayKeys } = useDashboardReplay({ dashboardId });
+
+  // Re-enable realtime automatically when cooldown expires
+  useEffect(() => {
+    setRealtimeEnabled(isRealtimeAllowedNow());
+    const timer = window.setInterval(() => {
+      setRealtimeEnabled(isRealtimeAllowedNow());
+    }, 10000);
+    return () => window.clearInterval(timer);
+  }, [dashboardId]);
 
   // Seed cache from replay once widgets are loaded + persist metadata to IndexedDB
   useEffect(() => {

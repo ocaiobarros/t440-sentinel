@@ -19,6 +19,8 @@ interface UseDashboardRealtimeOptions {
   flushIntervalMs?: number;
   /** Enable/disable the subscription */
   enabled?: boolean;
+  /** Callback for channel connection status changes */
+  onStatusChange?: (status: string) => void;
   /** Keys that bypass the flush buffer and trigger immediate onUpdate */
   priorityKeys?: string[];
 }
@@ -35,6 +37,7 @@ export function useDashboardRealtime({
   onUpdate,
   flushIntervalMs = 250,
   enabled = true,
+  onStatusChange,
   priorityKeys = [],
 }: UseDashboardRealtimeOptions) {
   const cacheRef = useRef<Map<string, TelemetryCacheEntry>>(new Map());
@@ -43,6 +46,8 @@ export function useDashboardRealtime({
   onUpdateRef.current = onUpdate;
   const priorityKeysRef = useRef(priorityKeys);
   priorityKeysRef.current = priorityKeys;
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
 
   // Handle incoming broadcast
   const handleBroadcast = useCallback((payload: TelemetryBroadcast) => {
@@ -95,7 +100,9 @@ export function useDashboardRealtime({
           handleBroadcast(msg.payload as TelemetryBroadcast);
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        onStatusChangeRef.current?.(status);
+      });
 
     return () => {
       supabase.removeChannel(channel);
