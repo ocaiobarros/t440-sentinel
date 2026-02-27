@@ -29,6 +29,8 @@ export interface IdracData {
   hostType: "idrac" | "linux" | "vmware" | "vmware-guest" | "proxmox" | "unknown";
   /** Host inventory from Zabbix (if available) */
   inventory?: Record<string, string>;
+  /** Zabbix visible host name (host.name) */
+  zabbixHostName?: string;
 }
 
 interface UseIdracLiveReturn {
@@ -144,6 +146,16 @@ export function useIdracLive(): UseIdracLiveReturn {
       const map = new Map<string, ZabbixItem>();
       items.forEach((item) => map.set(item.name, item));
 
+      // Fetch host visible name
+      let zabbixHostName = "";
+      try {
+        const hostResult = await zabbixProxy(connectionId, "host.get", {
+          hostids: hostId,
+          output: ["hostid", "name"],
+        }) as Array<{ name?: string }>;
+        if (hostResult?.[0]?.name) zabbixHostName = hostResult[0].name;
+      } catch { /* ignore */ }
+
       const prefix = detectPrefix(map);
       const hostType = detectHostType(map);
 
@@ -181,6 +193,7 @@ export function useIdracLive(): UseIdracLiveReturn {
         prefix,
         hostType,
         inventory,
+        zabbixHostName: zabbixHostName || undefined,
       });
       setLastRefresh(new Date());
     } catch (err) {
