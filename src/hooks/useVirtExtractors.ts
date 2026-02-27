@@ -155,14 +155,18 @@ export function extractVMwareData(d: IdracData): VirtData {
   // Network interfaces — discover per-NIC items
   const nicNames = new Set<string>();
   for (const [name] of d.items) {
-    const m = name.match(/^VMware: (?:Number of bytes (?:received|transmitted)) on interface (.+)$/);
+    // Match both "VMware: Number of bytes received on interface vmnic0" and without prefix
+    const m = name.match(/^(?:VMware:\s?)?Number of bytes (?:received|transmitted) on interface (.+)$/);
     if (m) nicNames.add(m[1]);
   }
   const interfaces: VirtNetworkInterface[] = [];
   let totalIn = 0, totalOut = 0;
   for (const nic of nicNames) {
-    const rxVal = get(`Number of bytes received on interface ${nic}`) || "";
-    const txVal = get(`Number of bytes transmitted on interface ${nic}`) || "";
+    // Use d.get() which checks "VMware: " prefix, AND also try direct map access
+    const rxVal = get(`Number of bytes received on interface ${nic}`)
+      || d.items.get(`Number of bytes received on interface ${nic}`)?.lastvalue || "";
+    const txVal = get(`Number of bytes transmitted on interface ${nic}`)
+      || d.items.get(`Number of bytes transmitted on interface ${nic}`)?.lastvalue || "";
     interfaces.push({ name: nic, bytesIn: rxVal, bytesOut: txVal });
     totalIn += parseFloat(rxVal) || 0;
     totalOut += parseFloat(txVal) || 0;

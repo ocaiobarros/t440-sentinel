@@ -524,7 +524,7 @@ export default function VirtualizationMonitor() {
                     icon={MemoryStick}
                     color={virt.memory.usedPercent > 85 ? "hsl(0,90%,50%)" : virt.memory.usedPercent > 60 ? "hsl(43,100%,50%)" : "hsl(210,100%,56%)"}
                     glowColor="hsl(210 100% 56% / 0.5)"
-                    subtitle={`${virt.memory.used} / ${virt.memory.total}`}
+                    subtitle={`${formatBytesHuman(virt.memory.used)} / ${formatBytesHuman(virt.memory.total)}`}
                   />
                   {/* Network */}
                   <div className="flex flex-col items-center gap-3">
