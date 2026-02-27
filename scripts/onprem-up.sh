@@ -533,12 +533,62 @@ SIGNUP_RESP=$(curl -sS -X POST "$KONG_URL/auth/v1/admin/users" \
     \"user_metadata\": {\"display_name\": \"Administrador\"}
   }" 2>/dev/null || echo '{}')
 
+ADMIN_ID=""
 if echo "$SIGNUP_RESP" | grep -q '"id"'; then
+  ADMIN_ID=$(echo "$SIGNUP_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
   echo -e "  ${GREEN}✔${NC} Admin criado: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}"
 elif echo "$SIGNUP_RESP" | grep -qi 'already registered\|duplicate\|exists'; then
   echo -e "  ${GREEN}✔${NC} Admin já existe"
+  # Fetch existing admin ID
+  ADMIN_ID=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+    "SELECT id FROM auth.users WHERE email = '${ADMIN_EMAIL}' LIMIT 1;" 2>/dev/null || echo "")
 else
   echo -e "  ⚠️  Resposta do seed: $(echo "$SIGNUP_RESP" | head -c 200)"
+fi
+
+# ─── Fallback: ensure profile, tenant & role exist even if trigger didn't fire ───
+if [ -n "$ADMIN_ID" ]; then
+  PROFILE_EXISTS=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+    "SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = '${ADMIN_ID}');" 2>/dev/null || echo "f")
+
+  if [ "$PROFILE_EXISTS" != "t" ]; then
+    echo -e "  ${YELLOW}⚠${NC}  Trigger handle_new_user não disparou — aplicando seed manual..."
+    docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -c "
+      DO \$\$
+      DECLARE
+        v_tenant_id UUID;
+        v_user_id UUID := '${ADMIN_ID}'::UUID;
+        v_email TEXT := '${ADMIN_EMAIL}';
+      BEGIN
+        -- Create tenant
+        INSERT INTO public.tenants (name, slug)
+        VALUES ('Administrador''s Org', 'admin-' || substr(v_user_id::text, 1, 8))
+        RETURNING id INTO v_tenant_id;
+
+        -- Create profile
+        INSERT INTO public.profiles (id, tenant_id, display_name, email)
+        VALUES (v_user_id, v_tenant_id, 'Administrador', v_email);
+
+        -- Create admin role
+        INSERT INTO public.user_roles (user_id, tenant_id, role)
+        VALUES (v_user_id, v_tenant_id, 'admin');
+
+        -- Inject tenant_id into JWT app_metadata
+        UPDATE auth.users
+        SET raw_app_meta_data = jsonb_set(
+          COALESCE(raw_app_meta_data, '{}'::jsonb),
+          '{tenant_id}',
+          to_jsonb(v_tenant_id::text)
+        )
+        WHERE id = v_user_id;
+
+        RAISE NOTICE 'Admin seed manual aplicado: tenant=%, user=%', v_tenant_id, v_user_id;
+      END \$\$;
+    " 2>/dev/null && echo -e "  ${GREEN}✔${NC} Profile, tenant e role criados manualmente" \
+                  || echo -e "  ${RED}✘${NC} Falha no seed manual"
+  else
+    echo -e "  ${GREEN}✔${NC} Profile do admin já existe (trigger OK)"
+  fi
 fi
 
 # ─── 8. Smoke Test ────────────────────────────────────────
