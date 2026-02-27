@@ -3,6 +3,19 @@ import { HardDrive, Database, Shield, Battery } from 'lucide-react';
 import { parseStatus, parseDiskState, parseRaidLevel, parseRaidVolumeState } from '@/data/serverData';
 import { StatusIndicator } from './StatusCard';
 
+function formatSizeHuman(raw: string): string {
+  if (!raw || raw === "0" || raw === "") return "—";
+  // Already formatted (e.g. "1.45 TB")
+  if (/[A-Za-z]/.test(raw) && /\d/.test(raw)) return raw;
+  const num = parseFloat(raw);
+  if (isNaN(num) || num === 0) return "—";
+  if (num >= 1024 ** 4) return `${(num / (1024 ** 4)).toFixed(2)} TB`;
+  if (num >= 1024 ** 3) return `${(num / (1024 ** 3)).toFixed(2)} GB`;
+  if (num >= 1024 ** 2) return `${(num / (1024 ** 2)).toFixed(2)} MB`;
+  if (num >= 1024) return `${(num / 1024).toFixed(2)} KB`;
+  return `${num} B`;
+}
+
 interface DiskData {
   id: number;
   size: string;
@@ -120,7 +133,7 @@ const StorageSection = ({ disks, raidController, volumes }: Props) => {
               return (
                 <div key={d.id} className="flex items-center justify-between text-xs font-mono py-1 border-b border-border/30 last:border-0">
                   <span className="text-muted-foreground">{displayName}</span>
-                  <span className="text-foreground font-bold">{d.size || "—"}</span>
+                  <span className="text-foreground font-bold">{formatSizeHuman(d.size) || "—"}</span>
                 </div>
               );
             })}
@@ -171,7 +184,7 @@ const StorageSection = ({ disks, raidController, volumes }: Props) => {
                   </div>
                   <div className="flex items-center justify-between text-[10px] font-mono text-muted-foreground">
                     <span>{v.layoutType ? parseRaidLevel(v.layoutType).text : (v.state ? parseRaidLevel(v.state).text : "")}</span>
-                    <span className="text-foreground">{v.size}</span>
+                    <span className="text-foreground">{formatSizeHuman(v.size)}</span>
                   </div>
                 </div>
               );
