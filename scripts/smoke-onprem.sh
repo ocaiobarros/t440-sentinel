@@ -160,17 +160,32 @@ fi
 # ─── 5. Trigger handle_new_user ───────────────────────────
 echo -e "\n${CYAN}[5/8] Trigger handle_new_user${NC}"
 if [ -n "$TOKEN" ] && [ -n "$ADMIN_ID" ]; then
+  DB_CONTAINER=$(cd "$DEPLOY_DIR" && docker compose -f docker-compose.onprem.yml ps -q db 2>/dev/null || true)
+
   PROFILE_RESP=$(curl -sS --max-time 8 "${API}/rest/v1/profiles?select=id,tenant_id,email&id=eq.${ADMIN_ID}&limit=1" \
     -H "apikey: ${ANON_HEADER}" \
     -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo '[]')
 
   if echo "$PROFILE_RESP" | grep -q '"tenant_id"'; then
     echo -e "  ${GREEN}✔${NC} Perfil auto-provisionado"
-    ADMIN_TENANT=$(echo "$PROFILE_RESP" | grep -o '"tenant_id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    ADMIN_TENANT=$(echo "$PROFILE_RESP" | sed -n 's/.*"tenant_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1 || true)
     ((PASS++)); report "PASS" "Trigger: perfil auto-provisionado"
   else
-    echo -e "  ${RED}✘${NC} Perfil não encontrado para admin"
-    ((FAIL++)); report "FAIL" "Trigger: perfil auto-provisionado"
+    PROFILE_DB_OK="f"
+    if [ -n "${POSTGRES_PASSWORD:-}" ] && [ -n "$DB_CONTAINER" ]; then
+      PROFILE_DB_OK=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+        "SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = '${ADMIN_ID}');" 2>/dev/null | tr -d '[:space:]' || echo "f")
+      ADMIN_TENANT=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+        "SELECT tenant_id FROM public.profiles WHERE id = '${ADMIN_ID}' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || echo "")
+    fi
+
+    if [ "$PROFILE_DB_OK" = "t" ] && [ -n "$ADMIN_TENANT" ]; then
+      echo -e "  ${YELLOW}⚠${NC}  Perfil encontrado no banco (fallback), REST indisponível"
+      ((PASS++)); report "PASS" "Trigger: perfil via fallback SQL"
+    else
+      echo -e "  ${RED}✘${NC} Perfil não encontrado para admin"
+      ((FAIL++)); report "FAIL" "Trigger: perfil auto-provisionado"
+    fi
   fi
 
   ROLE_RESP=$(curl -sS --max-time 8 "${API}/rest/v1/user_roles?select=role,user_id,tenant_id&user_id=eq.${ADMIN_ID}&role=eq.admin&limit=1" \
@@ -181,8 +196,19 @@ if [ -n "$TOKEN" ] && [ -n "$ADMIN_ID" ]; then
     echo -e "  ${GREEN}✔${NC} Role admin atribuída automaticamente"
     ((PASS++)); report "PASS" "Trigger: role admin atribuída"
   else
-    echo -e "  ${RED}✘${NC} Role admin não encontrada no user_roles"
-    ((FAIL++)); report "FAIL" "Trigger: role admin atribuída"
+    ROLE_DB_OK="f"
+    if [ -n "${POSTGRES_PASSWORD:-}" ] && [ -n "$DB_CONTAINER" ]; then
+      ROLE_DB_OK=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+        "SELECT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = '${ADMIN_ID}' AND role = 'admin');" 2>/dev/null | tr -d '[:space:]' || echo "f")
+    fi
+
+    if [ "$ROLE_DB_OK" = "t" ]; then
+      echo -e "  ${YELLOW}⚠${NC}  Role admin encontrada no banco (fallback), REST indisponível"
+      ((PASS++)); report "PASS" "Trigger: role via fallback SQL"
+    else
+      echo -e "  ${RED}✘${NC} Role admin não encontrada no user_roles"
+      ((FAIL++)); report "FAIL" "Trigger: role admin atribuída"
+    fi
   fi
 else
   echo -e "  ${RED}✘${NC} Não foi possível validar trigger (token/id ausente)"

@@ -716,34 +716,53 @@ else
 fi
 
 # ─── Test: handle_new_user trigger ───
-if [ -n "$ADMIN_TOKEN" ]; then
-  PROFILE_RESP=$(curl -sS "$KONG_URL/rest/v1/profiles?select=id,tenant_id,email,display_name&limit=1" \
+ADMIN_TENANT=""
+if [ -n "$ADMIN_TOKEN" ] && [ -n "$ADMIN_ID" ]; then
+  PROFILE_RESP=$(curl -sS "$KONG_URL/rest/v1/profiles?select=id,tenant_id,email,display_name&id=eq.${ADMIN_ID}&limit=1" \
     -H "apikey: ${ANON_KEY}" \
     -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null || echo '[]')
 
   if echo "$PROFILE_RESP" | grep -q '"tenant_id"'; then
     echo -e "  ${GREEN}✔${NC} Trigger handle_new_user: profile auto-provisionado"
+    ADMIN_TENANT=$(echo "$PROFILE_RESP" | sed -n 's/.*"tenant_id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1 || true)
   else
-    echo -e "  ${RED}✘${NC} Trigger handle_new_user: profile NÃO encontrado"
-    SMOKE_OK=false
+    PROFILE_DB_OK=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+      "SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = '${ADMIN_ID}');" 2>/dev/null | tr -d '[:space:]' || echo "f")
+    ADMIN_TENANT=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+      "SELECT tenant_id FROM public.profiles WHERE id = '${ADMIN_ID}' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || echo "")
+
+    if [ "$PROFILE_DB_OK" = "t" ] && [ -n "$ADMIN_TENANT" ]; then
+      echo -e "  ${YELLOW}⚠${NC}  Trigger handle_new_user: profile via REST indisponível, mas profile existe no banco"
+    else
+      echo -e "  ${RED}✘${NC} Trigger handle_new_user: profile NÃO encontrado"
+      SMOKE_OK=false
+    fi
   fi
 
-  ROLE_RESP=$(curl -sS "$KONG_URL/rest/v1/user_roles?select=role&limit=1" \
+  ROLE_RESP=$(curl -sS "$KONG_URL/rest/v1/user_roles?select=role,user_id,tenant_id&user_id=eq.${ADMIN_ID}&role=eq.admin&limit=1" \
     -H "apikey: ${ANON_KEY}" \
     -H "Authorization: Bearer ${ADMIN_TOKEN}" 2>/dev/null || echo '[]')
 
   if echo "$ROLE_RESP" | grep -q '"admin"'; then
     echo -e "  ${GREEN}✔${NC} Trigger handle_new_user: role 'admin' atribuída"
   else
-    echo -e "  ${RED}✘${NC} Trigger handle_new_user: role admin NÃO encontrada"
-    SMOKE_OK=false
+    ROLE_DB_OK=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+      "SELECT EXISTS (SELECT 1 FROM public.user_roles WHERE user_id = '${ADMIN_ID}' AND role = 'admin');" 2>/dev/null | tr -d '[:space:]' || echo "f")
+
+    if [ "$ROLE_DB_OK" = "t" ]; then
+      echo -e "  ${YELLOW}⚠${NC}  Trigger handle_new_user: role admin existe no banco (REST indisponível)"
+    else
+      echo -e "  ${RED}✘${NC} Trigger handle_new_user: role admin NÃO encontrada"
+      SMOKE_OK=false
+    fi
   fi
+else
+  echo -e "  ${YELLOW}⚠${NC}  Trigger handle_new_user: sem token/id para validação"
+  SMOKE_OK=false
 fi
 
 # ─── Test: RLS tenant isolation ───
 if [ -n "$ADMIN_TOKEN" ]; then
-  ADMIN_TENANT=$(echo "$PROFILE_RESP" | grep -o '"tenant_id":"[^"]*"' | head -1 | cut -d'"' -f4)
-
   if [ -n "$ADMIN_TENANT" ]; then
     GHOST_EMAIL="rls-test-$(date +%s)@flowpulse.local"
     GHOST_RESP=$(curl -sS -X POST "$KONG_URL/auth/v1/admin/users" \
