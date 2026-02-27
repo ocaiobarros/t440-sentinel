@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { generateUUID } from "@/lib/uuid";
 import type { ImageHotspot } from "@/types/builder";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -146,7 +147,7 @@ export default function HotspotEditorModal({ imageUrl, hotspots: initial, onSave
     const pos = getPercentFromImg(e.clientX, e.clientY);
     if (!pos) return;
     const newH: ImageHotspot = {
-      id: crypto.randomUUID(), x: pos.x, y: pos.y,
+      id: generateUUID(), x: pos.x, y: pos.y,
       telemetry_key: "", label: `LED ${hotspots.length + 1}`,
       size: 12, shape: "circle", default_color: "#39FF14",
       glowRadius: 1, blinkOnCritical: true, showValue: false,

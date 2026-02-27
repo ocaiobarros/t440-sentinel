@@ -1,4 +1,5 @@
 import { useState, useRef } from "react";
+import { generateUUID } from "@/lib/uuid";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Upload, X, Loader2 } from "lucide-react";
@@ -32,7 +33,7 @@ export default function ImageUploader({ currentUrl, onUploaded, onRemove }: Prop
 
       const userId = session.session.user.id;
       const ext = file.name.split(".").pop() || "png";
-      const path = `${userId}/${crypto.randomUUID()}.${ext}`;
+      const path = `${userId}/${generateUUID()}.${ext}`;
 
       const { error } = await supabase.storage
         .from("dashboard-assets")

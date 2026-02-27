@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
+import { generateUUID } from "@/lib/uuid";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -255,7 +256,7 @@ export default function ViabilityPage() {
 
       const addrStr = logradouro ? `${logradouro}, ${numero} - ${bairro}, ${cidade}/${uf}` : undefined;
       const record: ConsultationRecord = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         lat: pLat,
         lon: pLon,
         mapId: selectedMapId,

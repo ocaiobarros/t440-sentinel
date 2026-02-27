@@ -1,3 +1,5 @@
+import { generateUUID } from "@/lib/uuid";
+
 /** Shared types for the dashboard builder */
 
 export interface WidgetStyle {
@@ -175,7 +177,7 @@ export const COLOR_PRESETS = [
 export function createDefaultWidget(type: string, x = 0, y = 0): WidgetConfig {
   const def = WIDGET_TYPES.find((t) => t.type === type) || WIDGET_TYPES[0];
   return {
-    id: crypto.randomUUID(),
+    id: generateUUID(),
     widget_type: type,
     title: def.label,
     x,

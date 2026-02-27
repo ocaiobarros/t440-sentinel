@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo, useRef, useEffect, startTransition } from "react";
+import { generateUUID } from "@/lib/uuid";
 import { Responsive, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
@@ -202,7 +203,7 @@ export default function DashboardBuilder() {
     pushHistory();
     const cloned: WidgetConfig = {
       ...JSON.parse(JSON.stringify(widget)),
-      id: crypto.randomUUID(),
+      id: generateUUID(),
       x: widget.x + 2,
       y: widget.y + 1,
       title: `${widget.title} (cópia)`,

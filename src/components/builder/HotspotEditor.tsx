@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from "react";
+import { generateUUID } from "@/lib/uuid";
 import type { ImageHotspot } from "@/types/builder";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -40,7 +41,7 @@ export default function HotspotEditor({ imageUrl, hotspots, onChange }: Props) {
       if (!pos) return;
 
       const newHotspot: ImageHotspot = {
-        id: crypto.randomUUID(),
+        id: generateUUID(),
         x: pos.x,
         y: pos.y,
         telemetry_key: "",
