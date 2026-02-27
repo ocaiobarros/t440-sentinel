@@ -316,8 +316,8 @@ export function extractProxmoxData(d: IdracData): VirtData {
       memPercent: Math.min(memPct, 100),
       diskRead: vmGet("Disk read, rate"),
       diskWrite: vmGet("Disk write, rate"),
-      netIn: vmGet("Incoming data, rate"),
-      netOut: vmGet("Outgoing data, rate"),
+      netIn: vmGet("Outgoing data, rate"),
+      netOut: vmGet("Incoming data, rate"),
       uptime: vmGet("Uptime"),
       type: vmType,
     });
@@ -395,8 +395,8 @@ export function extractProxmoxData(d: IdracData): VirtData {
       usedPercent: Math.min(memPct, 100),
     },
     network: {
-      bytesIn: nodeGet("Incoming data, rate"),
-      bytesOut: nodeGet("Outgoing data, rate"),
+      bytesIn: nodeGet("Outgoing data, rate"),
+      bytesOut: nodeGet("Incoming data, rate"),
       interfaces: [],
     },
     datastores: storages,
