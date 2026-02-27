@@ -107,15 +107,39 @@ export function parseDiskState(raw: string): ParsedStatus {
 }
 
 /**
- * Dell iDRAC Network Connection Status
- * 1=Down, 2=Up
+ * Network Connection / Operational Status (IF-MIB::ifOperStatus standard)
+ * 1=Up, 2=Down, 3=Testing, 4=Unknown, 5=Dormant, 6=NotPresent, 7=LowerLayerDown
+ *
+ * NOTE: Some older Dell iDRAC valuemaps (nicConnectionStatus) used 1=Down, 2=Up,
+ * but most Zabbix SNMP templates use the IF-MIB standard where 1=Up.
+ * We prefer the numeric SNMP value over the Zabbix-applied text label
+ * because some valuemaps on the Zabbix side apply incorrect translations.
  */
 const NET_CONN_MAP: Record<number, ParsedStatus> = {
-  1: { text: 'Down', level: 'critical' },
-  2: { text: 'Up',   level: 'ok' },
+  1: { text: 'Up',          level: 'ok' },
+  2: { text: 'Down',        level: 'critical' },
+  3: { text: 'Testing',     level: 'info' },
+  4: { text: 'Unknown',     level: 'info' },
+  5: { text: 'Dormant',     level: 'info' },
+  6: { text: 'Not Present', level: 'info' },
+  7: { text: 'Down',        level: 'critical' },
 };
 export function parseConnectionStatus(raw: string): ParsedStatus {
-  return fromMap(raw, NET_CONN_MAP);
+  const cleaned = clean(raw);
+  if (cleaned === '' || cleaned === '—' || cleaned === '-') return { text: cleaned, level: 'info' };
+
+  // Prefer the numeric SNMP value (extract from parentheses or raw number)
+  // over Zabbix-applied text labels which may use an incorrect valuemap
+  const parenMatch = raw.match(/\((\d+)\)/);
+  const num = parenMatch ? parseInt(parenMatch[1], 10) : parseInt(cleaned, 10);
+  if (!isNaN(num) && NET_CONN_MAP[num]) return NET_CONN_MAP[num];
+
+  // Fallback to keyword matching for purely textual values
+  const lower = cleaned.toLowerCase();
+  const kw = tryKeywords(lower);
+  if (kw) return { text: cleaned, level: kw };
+
+  return { text: cleaned, level: 'info' };
 }
 
 /**
