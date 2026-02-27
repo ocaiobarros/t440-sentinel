@@ -312,10 +312,18 @@ if [ ! -d "node_modules" ]; then
   npm ci --silent
 fi
 
-echo -e "  VITE_SUPABASE_URL=${SITE_URL}"
-VITE_SUPABASE_URL="${SITE_URL}" \
-VITE_SUPABASE_PUBLISHABLE_KEY="${ANON_KEY}" \
+# Create .env.local to override Cloud .env (Vite precedence: .env.local > .env)
+cat > .env.local <<ENVLOCAL
+VITE_SUPABASE_URL=${SITE_URL}
+VITE_SUPABASE_PUBLISHABLE_KEY=${ANON_KEY}
+VITE_SUPABASE_PROJECT_ID=self-hosted
+ENVLOCAL
+echo -e "  VITE_SUPABASE_URL=${SITE_URL} (via .env.local)"
+
 npm run build
+
+# Cleanup temporary .env.local
+rm -f .env.local
 
 rm -rf "$DEPLOY_DIR/dist"
 cp -r dist "$DEPLOY_DIR/dist"
