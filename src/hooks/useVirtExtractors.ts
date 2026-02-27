@@ -493,8 +493,10 @@ export function extractVMwareGuestData(d: IdracData): VirtData {
   if (!vmName && d.inventory?.name) vmName = d.inventory.name;
   if (!vmName && d.inventory?.alias) vmName = d.inventory.alias as string;
   
-  // Use the host_name from the Zabbix host object (passed via hostName in config)
-  if (!vmName || vmName === "VM" || vmName === "This VM") vmName = "";
+  // Use Zabbix host visible name as strong fallback
+  if (!vmName || vmName === "VM" || vmName === "This VM") {
+    vmName = d.zabbixHostName || "";
+  }
 
   const vm: VirtVM = {
     name: vmName,

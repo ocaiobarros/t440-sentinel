@@ -458,6 +458,7 @@ export default function VirtualMachinesMonitor() {
           getAny: (...names: string[]) => { for (const n of names) { const v = itemMap.get(n)?.lastvalue; if (v) return v; } return ""; },
           prefix,
           hostType,
+          zabbixHostName: h.name || undefined,
         });
       } catch { /* skip failed host */ }
     }));
@@ -518,7 +519,7 @@ export default function VirtualMachinesMonitor() {
       const hostName = hosts.find(h => h.id === hostId)?.name || hostId;
       for (const vm of v.vms) {
         if (!vm.hypervisorName) vm.hypervisorName = hostName;
-        if (vm.name === "This VM" || vm.name === "VM") vm.name = hostName;
+        if (!vm.name || vm.name === "This VM" || vm.name === "VM") vm.name = hostName;
         allVMs.push(vm);
       }
     }
