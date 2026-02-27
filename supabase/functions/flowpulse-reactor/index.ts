@@ -12,8 +12,21 @@ const LAST_VALUE_TTL_S = 60;       // replay window
 const MAX_BATCH = 200;
 const CONTRACT_VERSION = 1;
 
-/* ─── Upstash Redis REST helper ───────────────────── */
-class UpstashRedis {
+/* ─── Storage helper (Upstash + fallback local) ────────── */
+interface ReactorStore {
+  setNX(key: string, value: string, ttlSeconds: number): Promise<boolean>;
+  setEx(key: string, value: string, ttlSeconds: number): Promise<void>;
+  setLastValueAndGetTs(
+    lastValueKey: string,
+    lastTsKey: string,
+    value: string,
+    incomingTs: number,
+    ttl: number,
+  ): Promise<number>;
+  mget(keys: string[]): Promise<Array<string | null>>;
+}
+
+class UpstashRedis implements ReactorStore {
   private url: string;
   private token: string;
 
@@ -53,16 +66,13 @@ class UpstashRedis {
     incomingTs: number,
     ttl: number,
   ): Promise<number> {
-    // GET last ts, then SET both atomically via pipeline
     const results = await this.pipeline([
       ["GET", lastTsKey],
       ["SET", lastValueKey, value, "EX", String(ttl)],
       ["SET", lastTsKey, String(incomingTs), "EX", String(ttl)],
     ]);
     const lastTs = Number(results?.[0]?.result) || 0;
-    // Monotonic: ensure ts is always increasing per key
     const normalizedTs = Math.max(incomingTs, lastTs + 1);
-    // If we had to bump, update the stored ts
     if (normalizedTs !== incomingTs) {
       await this.pipeline([["SET", lastTsKey, String(normalizedTs), "EX", String(ttl)]]);
     }
@@ -74,6 +84,67 @@ class UpstashRedis {
     const results = await this.pipeline([["MGET", ...keys]]);
     return (results?.[0]?.result as Array<string | null>) ?? [];
   }
+}
+
+class InMemoryStore implements ReactorStore {
+  private data = new Map<string, { value: string; expiresAt: number }>();
+
+  private read(key: string): string | null {
+    const row = this.data.get(key);
+    if (!row) return null;
+    if (row.expiresAt <= Date.now()) {
+      this.data.delete(key);
+      return null;
+    }
+    return row.value;
+  }
+
+  private write(key: string, value: string, ttlSeconds: number) {
+    this.data.set(key, {
+      value,
+      expiresAt: Date.now() + ttlSeconds * 1000,
+    });
+  }
+
+  async setNX(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    if (this.read(key) !== null) return false;
+    this.write(key, value, ttlSeconds);
+    return true;
+  }
+
+  async setEx(key: string, value: string, ttlSeconds: number): Promise<void> {
+    this.write(key, value, ttlSeconds);
+  }
+
+  async setLastValueAndGetTs(
+    lastValueKey: string,
+    lastTsKey: string,
+    value: string,
+    incomingTs: number,
+    ttl: number,
+  ): Promise<number> {
+    const lastTs = Number(this.read(lastTsKey)) || 0;
+    const normalizedTs = Math.max(incomingTs, lastTs + 1);
+
+    this.write(lastValueKey, value, ttl);
+    this.write(lastTsKey, String(normalizedTs), ttl);
+
+    return normalizedTs;
+  }
+
+  async mget(keys: string[]): Promise<Array<string | null>> {
+    return keys.map((key) => this.read(key));
+  }
+}
+
+function createStore(redisUrl?: string | null, redisToken?: string | null): {
+  store: ReactorStore;
+  backend: "upstash" | "memory";
+} {
+  if (redisUrl && redisToken) {
+    return { store: new UpstashRedis(redisUrl, redisToken), backend: "upstash" };
+  }
+  return { store: new InMemoryStore(), backend: "memory" };
 }
 
 /* ─── types ───────────────────────────────────────── */
@@ -121,11 +192,12 @@ Deno.serve(async (req) => {
   if (!supabaseUrl || !serviceRoleKey) {
     return jsonResponse({ error: "Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY" }, 500);
   }
-  if (!redisUrl || !redisToken) {
-    return jsonResponse({ error: "Missing UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN" }, 500);
+
+  const { store, backend } = createStore(redisUrl, redisToken);
+  if (backend === "memory") {
+    console.warn("flowpulse-reactor: UPSTASH vars missing, using in-memory fallback");
   }
 
-  const redis = new UpstashRedis(redisUrl, redisToken);
   const supabase = createClient(supabaseUrl, serviceRoleKey, {
     auth: { persistSession: false },
   });
@@ -134,7 +206,7 @@ Deno.serve(async (req) => {
 
   // ── REPLAY endpoint: GET /flowpulse-reactor?replay=1&dashboard_id=xxx&keys=k1,k2
   if (req.method === "GET" && url.searchParams.get("replay") === "1") {
-    return handleReplay(redis, url);
+    return handleReplay(store, url);
   }
 
   // ── INGEST endpoint: POST
@@ -183,7 +255,7 @@ Deno.serve(async (req) => {
     await Promise.all(
       validEvents.map(async (evt) => {
         const dedupeKey = `reactor:dd:${evt.dashboard_id}:${evt.key}`;
-        const isNew = await redis.setNX(dedupeKey, String(evt.ts), DEDUPE_TTL_S);
+        const isNew = await store.setNX(dedupeKey, String(evt.ts), DEDUPE_TTL_S);
         if (!isNew) {
           metrics.deduped_total++;
           return;
@@ -192,7 +264,7 @@ Deno.serve(async (req) => {
         // Monotonic ts + store last value for replay
         const lastValueKey = `reactor:lv:${evt.dashboard_id}:${evt.key}`;
         const lastTsKey = `reactor:ts:${evt.dashboard_id}:${evt.key}`;
-        const normalizedTs = await redis.setLastValueAndGetTs(
+        const normalizedTs = await store.setLastValueAndGetTs(
           lastValueKey,
           lastTsKey,
           JSON.stringify({ key: evt.key, type: evt.type, data: evt.data, ts: evt.ts, v: evt.v }),
@@ -279,7 +351,7 @@ Deno.serve(async (req) => {
 });
 
 /* ─── replay handler ──────────────────────────────── */
-async function handleReplay(redis: UpstashRedis, url: URL) {
+async function handleReplay(store: ReactorStore, url: URL) {
   const dashboardId = url.searchParams.get("dashboard_id");
   const keysParam = url.searchParams.get("keys");
 
@@ -299,7 +371,7 @@ async function handleReplay(redis: UpstashRedis, url: URL) {
   }
 
   const redisKeys = keys.map((k) => `reactor:lv:${dashboardId}:${k}`);
-  const values = await redis.mget(redisKeys);
+  const values = await store.mget(redisKeys);
 
   const result: Record<string, unknown> = {};
   for (let i = 0; i < keys.length; i++) {
