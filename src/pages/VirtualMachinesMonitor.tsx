@@ -493,8 +493,12 @@ export default function VirtualMachinesMonitor() {
     // Single host mode — use original data
     if (hosts.length <= 1 && data) {
       const v = extractVirtData(data);
-      if (v && v.vms.length === 1 && (v.vms[0].name === "This VM" || v.vms[0].name === "VM") && config?.hostName) {
-        v.vms[0].name = config.hostName;
+      if (v) {
+        for (const vm of v.vms) {
+          if (!vm.name || vm.name === "This VM" || vm.name === "VM") {
+            vm.name = config?.hostName || "VM";
+          }
+        }
       }
       return v;
     }

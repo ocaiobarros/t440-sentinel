@@ -444,10 +444,25 @@ export function extractVMwareGuestData(d: IdracData): VirtData {
   const clusterName = get("Cluster name") || "";
   const dcName = get("Datacenter name") || "";
 
-  // Derive VM name from Zabbix items or inventory
-  let vmName = get("System name") || get("Host name") || "";
+  // Derive VM name — try multiple Zabbix item patterns
+  let vmName = get("System name") || get("Host name") || get("VMware: VM name") || get("VM name") || "";
+  
+  // Scan items for any key containing "system.hostname" or "system.name" 
+  if (!vmName) {
+    for (const [name, item] of d.items) {
+      const key = (item.key_ || "").toLowerCase();
+      if (key === "system.hostname" || key === "system.name" || key === "agent.hostname") {
+        if (item.lastvalue) { vmName = item.lastvalue; break; }
+      }
+    }
+  }
+  
+  // Try Zabbix visible name from inventory
   if (!vmName && d.inventory?.name) vmName = d.inventory.name;
-  if (!vmName) vmName = "VM"; // Will be overridden by the page using config.hostName
+  if (!vmName && d.inventory?.alias) vmName = d.inventory.alias as string;
+  
+  // Use the host_name from the Zabbix host object (passed via hostName in config)
+  if (!vmName || vmName === "VM" || vmName === "This VM") vmName = "";
 
   const vm: VirtVM = {
     name: vmName,
