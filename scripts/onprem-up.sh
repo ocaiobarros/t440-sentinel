@@ -327,6 +327,8 @@ rm -f .env.local
 
 rm -rf "$DEPLOY_DIR/dist"
 cp -r dist "$DEPLOY_DIR/dist"
+# Nginx Alpine runs as uid 101 (nginx) — ensure read access on bind-mounted volume
+chmod -R o+rX "$DEPLOY_DIR/dist"
 echo -e "  ${GREEN}✔${NC} Frontend compilado em deploy/dist/"
 
 # ─── 4. Criar diretório do edge functions main ────────────
