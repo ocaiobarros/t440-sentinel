@@ -535,21 +535,27 @@ SIGNUP_RESP=$(curl -sS -X POST "$KONG_URL/auth/v1/admin/users" \
 
 ADMIN_ID=""
 if echo "$SIGNUP_RESP" | grep -q '"id"'; then
-  ADMIN_ID=$(echo "$SIGNUP_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  ADMIN_ID=$(echo "$SIGNUP_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
   echo -e "  ${GREEN}✔${NC} Admin criado: ${ADMIN_EMAIL} / ${ADMIN_PASSWORD}"
 elif echo "$SIGNUP_RESP" | grep -qi 'already registered\|duplicate\|exists'; then
   echo -e "  ${GREEN}✔${NC} Admin já existe"
   # Fetch existing admin ID
   ADMIN_ID=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
-    "SELECT id FROM auth.users WHERE email = '${ADMIN_EMAIL}' LIMIT 1;" 2>/dev/null || echo "")
+    "SELECT id FROM auth.users WHERE email = '${ADMIN_EMAIL}' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || echo "")
 else
   echo -e "  ⚠️  Resposta do seed: $(echo "$SIGNUP_RESP" | head -c 200)"
+fi
+
+# Safety net: if JSON parsing failed, fetch by email directly
+if [ -z "$ADMIN_ID" ]; then
+  ADMIN_ID=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
+    "SELECT id FROM auth.users WHERE email = '${ADMIN_EMAIL}' LIMIT 1;" 2>/dev/null | tr -d '[:space:]' || echo "")
 fi
 
 # ─── Fallback: ensure profile, tenant & role exist even if trigger didn't fire ───
 if [ -n "$ADMIN_ID" ]; then
   PROFILE_EXISTS=$(docker exec -e PGPASSWORD="${POSTGRES_PASSWORD}" "$DB_CONTAINER" psql -w -h 127.0.0.1 -U supabase_admin -d postgres -tAc \
-    "SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = '${ADMIN_ID}');" 2>/dev/null || echo "f")
+    "SELECT EXISTS (SELECT 1 FROM public.profiles WHERE id = '${ADMIN_ID}');" 2>/dev/null | tr -d '[:space:]' || echo "f")
 
   if [ "$PROFILE_EXISTS" != "t" ]; then
     echo -e "  ${YELLOW}⚠${NC}  Trigger handle_new_user não disparou — aplicando seed manual..."
@@ -557,19 +563,43 @@ if [ -n "$ADMIN_ID" ]; then
       DO \$\$
       DECLARE
         v_tenant_id UUID;
+        v_slug TEXT;
         v_user_id UUID := '${ADMIN_ID}'::UUID;
         v_email TEXT := '${ADMIN_EMAIL}';
       BEGIN
-        -- Create tenant
-        INSERT INTO public.tenants (name, slug)
-        VALUES ('Administrador''s Org', 'admin-' || substr(v_user_id::text, 1, 8))
-        RETURNING id INTO v_tenant_id;
+        v_slug := 'admin-' || substr(v_user_id::text, 1, 8);
 
-        -- Create profile
+        -- Reuse tenant if role already exists for this user
+        SELECT tenant_id INTO v_tenant_id
+        FROM public.user_roles
+        WHERE user_id = v_user_id
+        ORDER BY created_at ASC
+        LIMIT 1;
+
+        -- Reuse deterministic tenant slug, otherwise create it
+        IF v_tenant_id IS NULL THEN
+          SELECT id INTO v_tenant_id
+          FROM public.tenants
+          WHERE slug = v_slug
+          LIMIT 1;
+        END IF;
+
+        IF v_tenant_id IS NULL THEN
+          INSERT INTO public.tenants (name, slug)
+          VALUES ('Administrador''s Org', v_slug)
+          RETURNING id INTO v_tenant_id;
+        END IF;
+
+        -- Upsert profile
         INSERT INTO public.profiles (id, tenant_id, display_name, email)
-        VALUES (v_user_id, v_tenant_id, 'Administrador', v_email);
+        VALUES (v_user_id, v_tenant_id, 'Administrador', v_email)
+        ON CONFLICT (id) DO UPDATE
+        SET tenant_id = EXCLUDED.tenant_id,
+            display_name = EXCLUDED.display_name,
+            email = EXCLUDED.email;
 
-        -- Create admin role
+        -- Normalize roles for seeded admin
+        DELETE FROM public.user_roles WHERE user_id = v_user_id;
         INSERT INTO public.user_roles (user_id, tenant_id, role)
         VALUES (v_user_id, v_tenant_id, 'admin');
 
@@ -589,6 +619,8 @@ if [ -n "$ADMIN_ID" ]; then
   else
     echo -e "  ${GREEN}✔${NC} Profile do admin já existe (trigger OK)"
   fi
+else
+  echo -e "  ${YELLOW}⚠${NC}  Não foi possível resolver ADMIN_ID para validar seed"
 fi
 
 # ─── 8. Smoke Test ────────────────────────────────────────
@@ -676,7 +708,7 @@ if [ -n "$ADMIN_TOKEN" ]; then
       -H "Content-Type: application/json" \
       -d "{\"email\":\"${GHOST_EMAIL}\",\"password\":\"RlsTest@9999\",\"email_confirm\":true}" 2>/dev/null || echo '{}')
 
-    GHOST_ID=$(echo "$GHOST_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    GHOST_ID=$(echo "$GHOST_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
 
     if [ -n "$GHOST_ID" ]; then
       GHOST_LOGIN=$(curl -sS -X POST "$KONG_URL/auth/v1/token?grant_type=password" \

@@ -110,7 +110,7 @@ if [ -n "$TOKEN" ]; then
   USER_RESP=$(curl -sS --max-time 10 "${API}/auth/v1/user" \
     -H "apikey: ${ANON_HEADER}" \
     -H "Authorization: Bearer ${TOKEN}" 2>/dev/null || echo '{}')
-  ADMIN_ID=$(echo "$USER_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  ADMIN_ID=$(echo "$USER_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
 else
   echo -e "  ${RED}✘${NC} Login admin falhou"
   echo "    Resposta: $(echo "$LOGIN_RESP" | head -c 200)"
@@ -207,7 +207,7 @@ else
     -H "Content-Type: application/json" \
     -d "{\"email\":\"${GHOST_EMAIL}\",\"password\":\"${GHOST_PASSWORD}\",\"email_confirm\":true}" 2>/dev/null || echo '{}')
 
-  GHOST_ID=$(echo "$GHOST_RESP" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+  GHOST_ID=$(echo "$GHOST_RESP" | sed -n 's/.*"id"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -1)
 
   if [ -n "$GHOST_ID" ]; then
     GHOST_LOGIN=$(curl -sS --max-time 10 -X POST "${API}/auth/v1/token?grant_type=password" \
