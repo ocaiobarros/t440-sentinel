@@ -1023,9 +1023,338 @@ DO $$ BEGIN
     FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- ═══════════════════════════════════════════════════════════════
+-- ENABLE ROW LEVEL SECURITY — ALL TABLES
+-- ═══════════════════════════════════════════════════════════════
+ALTER TABLE tenants              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE profiles             ENABLE ROW LEVEL SECURITY;
+ALTER TABLE user_roles           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE dashboards           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE widgets              ENABLE ROW LEVEL SECURITY;
+ALTER TABLE zabbix_connections   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_maps            ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_hosts       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_links       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_link_items  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_link_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_ctos        ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_cables      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_reservas    ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_map_effective_cache ENABLE ROW LEVEL SECURITY;
+ALTER TABLE flow_audit_logs      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_rules          ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_instances      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_events         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE alert_notifications  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE sla_policies         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE escalation_policies  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE escalation_steps     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE notification_channels ENABLE ROW LEVEL SECURITY;
+ALTER TABLE maintenance_windows  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE maintenance_scopes   ENABLE ROW LEVEL SECURITY;
+ALTER TABLE webhook_tokens       ENABLE ROW LEVEL SECURITY;
+ALTER TABLE telemetry_config     ENABLE ROW LEVEL SECURITY;
+ALTER TABLE telemetry_heartbeat  ENABLE ROW LEVEL SECURITY;
+ALTER TABLE audit_logs           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE billing_logs         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE printer_configs      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE rms_connections      ENABLE ROW LEVEL SECURITY;
+
+-- ═══════════════════════════════════════════════════════════════
+-- RLS POLICIES — TENANTS
+-- ═══════════════════════════════════════════════════════════════
+DO $$ BEGIN
+  CREATE POLICY tenants_select ON tenants FOR SELECT USING (id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY tenants_update ON tenants FOR UPDATE USING ((id = jwt_tenant_id() AND has_role(auth.uid(), id, 'admin')) OR is_super_admin(auth.uid()))
+    WITH CHECK ((id = jwt_tenant_id() AND has_role(auth.uid(), id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY tenants_insert_super ON tenants FOR INSERT WITH CHECK (is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY tenants_delete_super ON tenants FOR DELETE USING (is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ PROFILES ═══
+DO $$ BEGIN
+  CREATE POLICY profiles_self_select ON profiles FOR SELECT USING (id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY profiles_select_tenant ON profiles FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY profiles_insert ON profiles FOR INSERT WITH CHECK (id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY profiles_update ON profiles FOR UPDATE USING (id = auth.uid()) WITH CHECK (id = auth.uid());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY profiles_update_super ON profiles FOR UPDATE USING (is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ USER ROLES ═══
+DO $$ BEGIN
+  CREATE POLICY user_roles_select ON user_roles FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY user_roles_insert ON user_roles FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY user_roles_update ON user_roles FOR UPDATE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY user_roles_delete ON user_roles FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ DASHBOARDS ═══
+DO $$ BEGIN
+  CREATE POLICY dashboards_select ON dashboards FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY dashboards_insert ON dashboards FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY dashboards_update ON dashboards FOR UPDATE USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY dashboards_delete ON dashboards FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ WIDGETS ═══
+DO $$ BEGIN
+  CREATE POLICY widgets_select ON widgets FOR SELECT USING (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY widgets_insert ON widgets FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), jwt_tenant_id(), 'admin') OR has_role(auth.uid(), jwt_tenant_id(), 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY widgets_update ON widgets FOR UPDATE USING (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), jwt_tenant_id(), 'admin') OR has_role(auth.uid(), jwt_tenant_id(), 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY widgets_delete ON widgets FOR DELETE USING (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), jwt_tenant_id(), 'admin') OR has_role(auth.uid(), jwt_tenant_id(), 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAPS ═══
+DO $$ BEGIN
+  CREATE POLICY fm_select ON flow_maps FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fm_insert ON flow_maps FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fm_update ON flow_maps FOR UPDATE USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fm_delete ON flow_maps FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP HOSTS ═══
+DO $$ BEGIN
+  CREATE POLICY fmh_select ON flow_map_hosts FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fmh_manage ON flow_map_hosts FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP LINKS ═══
+DO $$ BEGIN
+  CREATE POLICY fml_select ON flow_map_links FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fml_manage ON flow_map_links FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP LINK ITEMS ═══
+DO $$ BEGIN
+  CREATE POLICY fmli_select ON flow_map_link_items FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fmli_manage ON flow_map_link_items FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP LINK EVENTS ═══
+DO $$ BEGIN
+  CREATE POLICY fmle_select ON flow_map_link_events FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP CTOS ═══
+DO $$ BEGIN
+  CREATE POLICY cto_select ON flow_map_ctos FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY cto_manage ON flow_map_ctos FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP CABLES ═══
+DO $$ BEGIN
+  CREATE POLICY cable_select ON flow_map_cables FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY cable_manage ON flow_map_cables FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP RESERVAS ═══
+DO $$ BEGIN
+  CREATE POLICY reservas_select ON flow_map_reservas FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY reservas_insert ON flow_map_reservas FOR INSERT WITH CHECK (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY reservas_update ON flow_map_reservas FOR UPDATE USING (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY reservas_delete ON flow_map_reservas FOR DELETE USING (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW MAP EFFECTIVE CACHE ═══
+DO $$ BEGIN
+  CREATE POLICY cache_select ON flow_map_effective_cache FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ FLOW AUDIT LOGS ═══
+DO $$ BEGIN
+  CREATE POLICY audit_select_admin ON flow_audit_logs FOR SELECT USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ ALERT RULES ═══
+DO $$ BEGIN
+  CREATE POLICY ar_select ON alert_rules FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ar_manage ON alert_rules FOR ALL USING ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')))
+    WITH CHECK ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ ALERT INSTANCES ═══
+DO $$ BEGIN
+  CREATE POLICY ai_select ON alert_instances FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ai_update_ack_resolve ON alert_instances FOR UPDATE USING ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')))
+    WITH CHECK (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ ALERT EVENTS ═══
+DO $$ BEGIN
+  CREATE POLICY ae_select ON alert_events FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ ALERT NOTIFICATIONS ═══
+DO $$ BEGIN
+  CREATE POLICY an_select ON alert_notifications FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ SLA POLICIES ═══
+DO $$ BEGIN
+  CREATE POLICY sla_select ON sla_policies FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ ESCALATION POLICIES ═══
+DO $$ BEGIN
+  CREATE POLICY ep_select ON escalation_policies FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ ESCALATION STEPS ═══
+DO $$ BEGIN
+  CREATE POLICY es_select ON escalation_steps FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ NOTIFICATION CHANNELS ═══
+DO $$ BEGIN
+  CREATE POLICY nc_select ON notification_channels FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ MAINTENANCE WINDOWS ═══
+DO $$ BEGIN
+  CREATE POLICY mw_select ON maintenance_windows FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY mw_manage ON maintenance_windows FOR ALL USING ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')))
+    WITH CHECK ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ MAINTENANCE SCOPES ═══
+DO $$ BEGIN
+  CREATE POLICY ms_select ON maintenance_scopes FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ms_manage ON maintenance_scopes FOR ALL USING ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')))
+    WITH CHECK ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ WEBHOOK TOKENS ═══
+DO $$ BEGIN
+  CREATE POLICY wt_select ON webhook_tokens FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY wt_manage ON webhook_tokens FOR ALL USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ TELEMETRY CONFIG ═══
+DO $$ BEGIN
+  CREATE POLICY tc_select ON telemetry_config FOR SELECT USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY tc_manage ON telemetry_config FOR ALL USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ TELEMETRY HEARTBEAT ═══
+DO $$ BEGIN
+  CREATE POLICY th_select ON telemetry_heartbeat FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ AUDIT LOGS ═══
+DO $$ BEGIN
+  CREATE POLICY audit_logs_select ON audit_logs FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ BILLING LOGS ═══
+DO $$ BEGIN
+  CREATE POLICY bl_select ON billing_logs FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ PRINTER CONFIGS ═══
+DO $$ BEGIN
+  CREATE POLICY pc_select ON printer_configs FOR SELECT USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY pc_manage ON printer_configs FOR ALL USING ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')))
+    WITH CHECK ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ RMS CONNECTIONS ═══
+DO $$ BEGIN
+  CREATE POLICY rms_select ON rms_connections FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY rms_insert ON rms_connections FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY rms_update ON rms_connections FOR UPDATE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY rms_delete ON rms_connections FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ ZABBIX CONNECTIONS (no RLS policies — managed via edge function with service_role) ═══
+
 COMMIT;
 
 -- ═══════════════════════════════════════════════════
--- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v1.2
+-- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v1.3
 -- © 2026 CBLabs
 -- ═══════════════════════════════════════════════════
