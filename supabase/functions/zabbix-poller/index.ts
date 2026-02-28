@@ -53,7 +53,22 @@ async function zabbixCall(url: string, auth: string, method: string, params: Rec
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", method, params, auth, id: 2 }),
   });
-  const data = await res.json();
+
+  const raw = await res.text();
+  if (!raw) {
+    throw new Error(`Zabbix ${method}: empty response (HTTP ${res.status})`);
+  }
+
+  let data: { error?: unknown; result?: unknown };
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    throw new Error(`Zabbix ${method}: invalid JSON response`);
+  }
+
+  if (!res.ok) {
+    throw new Error(`Zabbix ${method}: HTTP ${res.status}`);
+  }
   if (data.error) throw new Error(`Zabbix ${method}: ${JSON.stringify(data.error)}`);
   return data.result;
 }
@@ -64,6 +79,23 @@ function parseTimeRange(range: string): number {
   if (!match) return 3600; // default 1h
   const num = parseInt(match[1]);
   return match[2] === "d" ? num * 86400 : num * 3600;
+}
+
+function normalizeWidgetQuery(cfg: WidgetPollConfig): Record<string, unknown> {
+  const params = cfg.query?.params ?? {};
+
+  // Empty item.get on text widgets can return gigantic payloads or unstable responses.
+  // Clamp to a safe single-row request.
+  if (cfg.widget_type === "text" && cfg.query?.method === "item.get" && Object.keys(params).length === 0) {
+    return {
+      output: ["itemid", "name", "lastvalue", "units", "key_", "value_type"],
+      sortfield: "itemid",
+      sortorder: "DESC",
+      limit: 1,
+    };
+  }
+
+  return params;
 }
 
 /* ─── Types ──────────────────────────────────────── */
@@ -332,7 +364,7 @@ Deno.serve(async (req) => {
     await Promise.all(
       widgets.map(async (w) => {
         try {
-          const result = await zabbixCall(conn.url, zabbixAuth, w.query.method, w.query.params);
+          const result = await zabbixCall(conn.url, zabbixAuth, w.query.method, normalizeWidgetQuery(w));
           const payloads = await adaptResultWithHistory(conn.url, zabbixAuth, result, w);
           for (const p of payloads) {
             p.tenant_id = tenantId;
