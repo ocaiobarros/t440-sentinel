@@ -44,6 +44,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
   const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const inflightRef = useRef(false); // congestion control
   const dashboardRef = useRef<Dashboard | null>(null);
+  const telemetrySizeRef = useRef(0);
 
   // Fetch dashboard + widgets from DB
   const { data: dashboard, isLoading, error } = useQuery({
@@ -111,6 +112,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       }
     }
     setIsEmergencyMode(acOff);
+    telemetrySizeRef.current = telemetryCache.size;
   }, [telemetryCache]);
 
   const handleRealtimeStatus = useCallback((status: string) => {
@@ -217,11 +219,21 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       telemetry_keys: (w.config as any)?.telemetry_keys || (w.config as any)?.extra?.telemetry_keys || [],
     }));
 
+    const replayKeySet = new Set<string>();
+    for (const w of dash.widgets) {
+      const mainKey = w.adapter?.telemetry_key || `zbx:widget:${w.id}`;
+      if (mainKey) replayKeySet.add(mainKey);
+      const extraKeys = ((w.config as any)?.extra?.telemetry_keys || (w.config as any)?.telemetry_keys || []) as string[];
+      for (const key of extraKeys) {
+        if (key) replayKeySet.add(key);
+      }
+    }
+
     inflightRef.current = true;
     setIsPollingActive(true);
     const pollStart = performance.now();
     try {
-      await fetch(
+      const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zabbix-poller?t=${Date.now()}`,
         {
           method: "POST",
@@ -237,6 +249,20 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
           }),
         },
       );
+
+      if (!response.ok) {
+        throw new Error(`Poll failed: ${response.status} ${response.statusText}`);
+      }
+
+      // Fallback resilience: if Realtime is down/disabled or cache still empty,
+      // pull last values from replay so widgets keep updating.
+      if (!realtimeEnabled || telemetrySizeRef.current === 0) {
+        const replayEntries = await replayKeys(Array.from(replayKeySet));
+        if (replayEntries.length > 0) {
+          seedCache(replayEntries);
+        }
+      }
+
       setLastPollLatencyMs(Math.round(performance.now() - pollStart));
     } catch (err) {
       console.error("[FlowPulse] Poll failed:", err);
@@ -245,7 +271,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       inflightRef.current = false;
       setIsPollingActive(false);
     }
-  }, []); // stable — reads from ref
+  }, [realtimeEnabled, replayKeys, seedCache]);
 
   // Start/stop polling — reacts to interval changes AND emergency mode
   const effectiveInterval = isEmergencyMode ? 1 : (pollIntervalOverride ?? 60);
