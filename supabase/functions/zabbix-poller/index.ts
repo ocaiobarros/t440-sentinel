@@ -369,28 +369,60 @@ Deno.serve(async (req) => {
       tenantId = fallbackRole?.tenant_id ?? null;
     }
 
-    if (!tenantId) {
+    const { data: isSuperAdmin } = await serviceClient.rpc("is_super_admin", { p_user_id: userId });
+
+    if (!tenantId && !isSuperAdmin) {
       return json({ error: "Tenant not found" }, 403);
     }
 
-    const { data: dashboard, error: dashboardErr } = await supabase
+    if (!isSuperAdmin && tenantId) {
+      const { data: hasTenantRole } = await serviceClient.rpc("has_any_role", {
+        p_user_id: userId,
+        p_tenant_id: tenantId,
+        p_roles: ["admin", "editor", "viewer", "tech", "sales"],
+      });
+      if (!hasTenantRole) {
+        return json({ error: "User has no role in tenant" }, 403);
+      }
+    }
+
+    let dashboardQuery = serviceClient
       .from("dashboards")
-      .select("id")
-      .eq("id", dashboard_id)
-      .single();
+      .select("id, tenant_id")
+      .eq("id", dashboard_id);
+
+    if (!isSuperAdmin && tenantId) {
+      dashboardQuery = dashboardQuery.eq("tenant_id", tenantId);
+    }
+
+    const { data: dashboard, error: dashboardErr } = await dashboardQuery.maybeSingle();
 
     if (dashboardErr || !dashboard) {
       return json({ error: "Dashboard not found or access denied" }, 403);
     }
 
-    const { data: conn, error: connErr } = await supabase
-      .from("zabbix_connections")
-      .select("id, url, username, password_ciphertext, password_iv, password_tag, is_active")
-      .eq("id", connection_id)
-      .single();
+    if (!tenantId) {
+      tenantId = dashboard.tenant_id;
+    }
 
-    if (connErr || !conn) return json({ error: "Connection not found" }, 404);
+    let connQuery = serviceClient
+      .from("zabbix_connections")
+      .select("id, tenant_id, url, username, password_ciphertext, password_iv, password_tag, is_active")
+      .eq("id", connection_id);
+
+    if (!isSuperAdmin && tenantId) {
+      connQuery = connQuery.eq("tenant_id", tenantId);
+    }
+
+    const { data: conn, error: connErr } = await connQuery.maybeSingle();
+
+    if (connErr || !conn) return json({ error: "Connection not found or access denied" }, 403);
+    if (!isSuperAdmin && conn.tenant_id !== tenantId) return json({ error: "Connection tenant mismatch" }, 403);
     if (!conn.is_active) return json({ error: "Connection disabled" }, 400);
+
+    if (!tenantId) {
+      return json({ error: "Tenant resolution failed" }, 403);
+    }
 
     const password = await decryptPassword(
       conn.password_ciphertext, conn.password_iv, conn.password_tag, encryptionKey,
