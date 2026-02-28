@@ -81,6 +81,21 @@ function parseTimeRange(range: string): number {
   return match[2] === "d" ? num * 86400 : num * 3600;
 }
 
+function extractTenantIdFromClaims(claims: Record<string, unknown>): string | null {
+  const appMetadata = claims.app_metadata as Record<string, unknown> | undefined;
+  const tenantFromAppMetadata = appMetadata?.tenant_id;
+  if (typeof tenantFromAppMetadata === "string" && tenantFromAppMetadata.length > 0) {
+    return tenantFromAppMetadata;
+  }
+
+  const tenantFromRootClaim = claims.tenant_id;
+  if (typeof tenantFromRootClaim === "string" && tenantFromRootClaim.length > 0) {
+    return tenantFromRootClaim;
+  }
+
+  return null;
+}
+
 function normalizeWidgetQuery(cfg: WidgetPollConfig): Record<string, unknown> {
   const params = cfg.query?.params ?? {};
 
@@ -328,6 +343,7 @@ Deno.serve(async (req) => {
   }
 
   const userId = claims.claims.sub as string;
+  const tenantIdFromJwt = extractTenantIdFromClaims(claims.claims as Record<string, unknown>);
 
   try {
     const body: PollRequest = await req.json();
@@ -339,9 +355,32 @@ Deno.serve(async (req) => {
 
     const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
     const { data: tenantData } = await serviceClient.rpc("get_user_tenant_id", { p_user_id: userId });
-    const tenantId = tenantData as string;
+
+    // Fallback chain for on-prem bootstrap edge-cases:
+    // profile tenant -> JWT app_metadata tenant -> user_roles tenant
+    let tenantId = (tenantData as string | null) ?? tenantIdFromJwt;
+    if (!tenantId) {
+      const { data: fallbackRole } = await serviceClient
+        .from("user_roles")
+        .select("tenant_id")
+        .eq("user_id", userId)
+        .limit(1)
+        .maybeSingle();
+      tenantId = fallbackRole?.tenant_id ?? null;
+    }
+
     if (!tenantId) {
       return json({ error: "Tenant not found" }, 403);
+    }
+
+    const { data: dashboard, error: dashboardErr } = await supabase
+      .from("dashboards")
+      .select("id")
+      .eq("id", dashboard_id)
+      .single();
+
+    if (dashboardErr || !dashboard) {
+      return json({ error: "Dashboard not found or access denied" }, 403);
     }
 
     const { data: conn, error: connErr } = await supabase
