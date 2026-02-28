@@ -415,6 +415,68 @@ Deno.serve(async (req) => {
       console.error("[zabbix-webhook] broadcast error:", bcastErr);
     }
 
+    // FORCE_POLL: notify all dashboards linked to the same Zabbix connection
+    // so they re-poll immediately and reflect the status change in seconds.
+    try {
+      const connId = (payload as any).zabbix_connection_id
+        || (alertResult as any)?.zabbix_connection_id;
+      // Find dashboards linked to this connection OR the rule's dashboard
+      const dashboardIds = new Set<string>();
+      if ((alertResult as any)?.dashboard_id) {
+        dashboardIds.add((alertResult as any).dashboard_id);
+      }
+
+      // Also find all dashboards sharing the same zabbix_connection_id
+      if (connId) {
+        const { data: linkedDashboards } = await supabase
+          .from("dashboards")
+          .select("id")
+          .eq("zabbix_connection_id", connId)
+          .limit(20);
+        if (linkedDashboards) {
+          for (const d of linkedDashboards) dashboardIds.add(d.id);
+        }
+      }
+
+      // If we have a matched rule, check its dashboard_id too
+      if (tokenTenantId && dashboardIds.size === 0) {
+        const { data: tenantDashboards } = await supabase
+          .from("dashboards")
+          .select("id")
+          .eq("tenant_id", tokenTenantId)
+          .not("zabbix_connection_id", "is", null)
+          .limit(20);
+        if (tenantDashboards) {
+          for (const d of tenantDashboards) dashboardIds.add(d.id);
+        }
+      }
+
+      for (const dashId of dashboardIds) {
+        const ch = supabase.channel(`dashboard:${dashId}`);
+        await new Promise<void>((resolve) => {
+          ch.subscribe((s) => {
+            if (s === "SUBSCRIBED" || s === "CHANNEL_ERROR" || s === "TIMED_OUT") resolve();
+          });
+        });
+        await ch.send({
+          type: "broadcast",
+          event: "FORCE_POLL",
+          payload: {
+            reason: "zabbix-webhook",
+            event_id: payload.event_id,
+            host_name: payload.host_name,
+            ts: Date.now(),
+          },
+        });
+        await supabase.removeChannel(ch);
+      }
+      if (dashboardIds.size > 0) {
+        console.log(`[zabbix-webhook] FORCE_POLL sent to ${dashboardIds.size} dashboard(s)`);
+      }
+    } catch (fpErr) {
+      console.error("[zabbix-webhook] FORCE_POLL broadcast error:", fpErr);
+    }
+
     // Bump telemetry heartbeat for the tenant
     try {
       const heartbeatTenantId = tokenTenantId || (alertResult as any)?.tenant_id;

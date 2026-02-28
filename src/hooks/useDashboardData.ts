@@ -132,6 +132,11 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     enabled: !!dashboardId && realtimeEnabled,
     onStatusChange: handleRealtimeStatus,
     priorityKeys,
+    onForcePoll: () => {
+      // Skip congestion control for webhook-triggered polls
+      inflightRef.current = false;
+      pollNow();
+    },
   });
 
   // Replay warm start

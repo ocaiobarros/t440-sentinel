@@ -23,6 +23,8 @@ interface UseDashboardRealtimeOptions {
   onStatusChange?: (status: string) => void;
   /** Keys that bypass the flush buffer and trigger immediate onUpdate */
   priorityKeys?: string[];
+  /** Called when a FORCE_POLL broadcast is received (e.g. from zabbix-webhook) */
+  onForcePoll?: () => void;
 }
 
 /**
@@ -39,6 +41,7 @@ export function useDashboardRealtime({
   enabled = true,
   onStatusChange,
   priorityKeys = [],
+  onForcePoll,
 }: UseDashboardRealtimeOptions) {
   const cacheRef = useRef<Map<string, TelemetryCacheEntry>>(new Map());
   const dirtyRef = useRef(false);
@@ -48,6 +51,8 @@ export function useDashboardRealtime({
   priorityKeysRef.current = priorityKeys;
   const onStatusChangeRef = useRef(onStatusChange);
   onStatusChangeRef.current = onStatusChange;
+  const onForcePollRef = useRef(onForcePoll);
+  onForcePollRef.current = onForcePoll;
 
   // Handle incoming broadcast
   const handleBroadcast = useCallback((payload: TelemetryBroadcast) => {
@@ -99,6 +104,10 @@ export function useDashboardRealtime({
         if (msg.payload) {
           handleBroadcast(msg.payload as TelemetryBroadcast);
         }
+      })
+      .on("broadcast", { event: "FORCE_POLL" }, () => {
+        console.log("[FlowPulse] FORCE_POLL received — triggering immediate re-poll");
+        onForcePollRef.current?.();
       })
       .subscribe((status) => {
         onStatusChangeRef.current?.(status);
