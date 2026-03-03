@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { HostStatus, FlowMapHost } from "@/hooks/useFlowMaps";
+import { toast } from "@/hooks/use-toast";
 
 export interface LinkEvent {
   id: string;
@@ -78,6 +79,7 @@ export function useFlowMapStatus({
   /** 🅱️ Stale indicator: true when RPC failed but we have cached data */
   const [engineStale, setEngineStale] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
+  const lastErrorToastRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevStatusRef = useRef<string>("");
 
@@ -210,6 +212,16 @@ export function useFlowMapStatus({
       if (err.name === "AbortError") return;
       console.error("[FlowMapStatus] poll error:", err);
       setError(err.message);
+      if (Date.now() - lastErrorToastRef.current > 120_000) {
+        lastErrorToastRef.current = Date.now();
+        toast({
+          title: "Falha no status do mapa",
+          description: err?.message?.includes("401") || err?.message?.includes("403")
+            ? "Sessão expirada. Faça login novamente para restaurar o monitoramento."
+            : "Não foi possível obter o status dos hosts. A próxima tentativa será automática.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setLoading(false);
     }

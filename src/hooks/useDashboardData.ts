@@ -4,6 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useDashboardRealtime, type TelemetryCacheEntry } from "./useDashboardRealtime";
 import { useDashboardReplay } from "./useDashboardReplay";
 import { setMetaForDashboard, getMetaForDashboard } from "@/lib/metadata-cache";
+import { toast } from "@/hooks/use-toast";
 
 interface DashboardWidget {
   id: string;
@@ -45,6 +46,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
   const inflightRef = useRef(false); // congestion control
   const dashboardRef = useRef<Dashboard | null>(null);
   const telemetrySizeRef = useRef(0);
+  const lastErrorToastRef = useRef(0); // throttle error toasts
 
   // Fetch dashboard + widgets from DB
   const { data: dashboard, isLoading, error } = useQuery({
@@ -269,8 +271,19 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       }
 
       setLastPollLatencyMs(Math.round(performance.now() - pollStart));
-    } catch (err) {
+    } catch (err: any) {
       console.error("[FlowPulse] Poll failed:", err);
+      // Throttle: only show toast once per 2 minutes
+      if (Date.now() - lastErrorToastRef.current > 120_000) {
+        lastErrorToastRef.current = Date.now();
+        toast({
+          title: "Falha na coleta de dados",
+          description: err?.message?.includes("500")
+            ? "O serviço de telemetria retornou erro. Verifique se os secrets de produção estão configurados."
+            : "Não foi possível coletar dados do Zabbix. A próxima tentativa será automática.",
+          variant: "destructive",
+        });
+      }
       setLastPollLatencyMs(Math.round(performance.now() - pollStart));
     } finally {
       inflightRef.current = false;
