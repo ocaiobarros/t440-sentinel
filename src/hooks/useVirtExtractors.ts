@@ -398,11 +398,42 @@ export function extractProxmoxData(d: IdracData): VirtData {
       used: memUsed,
       usedPercent: Math.min(memPct, 100),
     },
-    network: {
-      bytesIn: nodeGet("Outgoing data, rate"),
-      bytesOut: nodeGet("Incoming data, rate"),
-      interfaces: [],
-    },
+    network: (() => {
+      // Discover per-interface network items
+      // Proxmox patterns: "Proxmox: Node [node]: Network [iface]: Incoming/Outgoing data, rate"
+      // Also try: "Proxmox: Network [iface]: ..."
+      const ifaceNames = new Set<string>();
+      for (const [name] of d.items) {
+        const m = name.match(/^Proxmox:.*Network \[(.+?)\]:\s*(?:Incoming|Outgoing) data,?\s*rate$/i);
+        if (m) ifaceNames.add(m[1]);
+      }
+
+      const interfaces: VirtNetworkInterface[] = [];
+      let totalIn = 0, totalOut = 0;
+      for (const iface of ifaceNames) {
+        // Proxmox inverts: "Outgoing data" = RX (download), "Incoming data" = TX (upload)
+        const rxVal = d.get(`Proxmox: Node [${nodeName}]: Network [${iface}]: Outgoing data, rate`)
+          || d.get(`Proxmox: Network [${iface}]: Outgoing data, rate`) || "";
+        const txVal = d.get(`Proxmox: Node [${nodeName}]: Network [${iface}]: Incoming data, rate`)
+          || d.get(`Proxmox: Network [${iface}]: Incoming data, rate`) || "";
+        interfaces.push({ name: iface, bytesIn: rxVal, bytesOut: txVal });
+        totalIn += parseFloat(rxVal) || 0;
+        totalOut += parseFloat(txVal) || 0;
+      }
+
+      // Fallback to aggregated if no per-interface found
+      const aggIn = nodeGet("Outgoing data, rate") || "";
+      const aggOut = nodeGet("Incoming data, rate") || "";
+      if (interfaces.length === 0) {
+        return { bytesIn: aggIn, bytesOut: aggOut, interfaces: [] };
+      }
+
+      return {
+        bytesIn: totalIn > 0 ? String(totalIn) : aggIn,
+        bytesOut: totalOut > 0 ? String(totalOut) : aggOut,
+        interfaces,
+      };
+    })(),
     datastores: storages,
     vms,
     vmCount: vms.length,
