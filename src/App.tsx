@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -14,54 +14,42 @@ import ForgotPassword from "./pages/ForgotPassword";
 import ResetPassword from "./pages/ResetPassword";
 import NotFound from "./pages/NotFound";
 import { Loader2 } from "lucide-react";
+import { lazyRetry } from "@/lib/lazyRetry";
 
-/* ── Lazy-loaded pages for code splitting ── */
-const DashboardView = lazy(() => import("./pages/DashboardView"));
-const DashboardBuilder = lazy(() => import("./pages/DashboardBuilder").catch((err) => {
-  console.error("[LazyLoad] DashboardBuilder failed:", err);
-  return { default: () => (
-    <div className="min-h-screen flex items-center justify-center p-8 bg-background">
-      <div className="rounded-xl p-6 border border-red-500/30 max-w-lg text-center bg-card">
-        <h2 className="text-sm font-bold text-foreground mb-2">Erro ao carregar o Builder</h2>
-        <pre className="text-[10px] font-mono text-red-400 bg-red-500/10 rounded p-3 overflow-auto max-h-[200px] text-left whitespace-pre-wrap">
-          {err?.message || String(err)}
-        </pre>
-        <p className="text-xs text-muted-foreground mt-3">Verifique o console do navegador (F12) para detalhes.</p>
-      </div>
-    </div>
-  ) };
-}));
-const ZabbixConnections = lazy(() => import("./pages/ZabbixConnections"));
-const RMSConnections = lazy(() => import("./pages/RMSConnections"));
-const Index = lazy(() => import("./pages/Index"));
-const FleetIntelligence = lazy(() => import("./pages/FleetIntelligence"));
-const AdminHub = lazy(() => import("./pages/AdminHub"));
-const VirtualizationMonitor = lazy(() => import("./pages/VirtualizationMonitor"));
-const VirtualMachinesMonitor = lazy(() => import("./pages/VirtualMachinesMonitor"));
-const BgpFlowMonitor = lazy(() => import("./pages/BgpFlowMonitor"));
-const FlowMapPage = lazy(() => import("./pages/FlowMapPage"));
-const OperationsHome = lazy(() => import("./pages/OperationsHome"));
-const InventoryPage = lazy(() => import("./pages/InventoryPage"));
-const CapacityPage = lazy(() => import("./pages/CapacityPage"));
-const TimelinePage = lazy(() => import("./pages/TimelinePage"));
-const TenantsPage = lazy(() => import("./pages/TenantsPage"));
-const SLAGovernance = lazy(() => import("./pages/SLAGovernance"));
-const ViabilityPage = lazy(() => import("./pages/ViabilityPage"));
-const SystemUpdates = lazy(() => import("./pages/SystemUpdates"));
-const SystemStatus = lazy(() => import("./pages/SystemStatus"));
-const TelegramSettings = lazy(() => import("./pages/TelegramSettings"));
-const IncidentsPage = lazy(() => import("./pages/IncidentsPage"));
-const ServerMonitorList = lazy(() => import("./pages/monitoring/ServerMonitorList"));
-const VirtualizationList = lazy(() => import("./pages/monitoring/VirtualizationList"));
-const VirtualMachinesList = lazy(() => import("./pages/monitoring/VirtualMachinesList"));
-const BgpFlowList = lazy(() => import("./pages/monitoring/BgpFlowList"));
-const FleetIntelligenceList = lazy(() => import("./pages/monitoring/FleetIntelligenceList"));
-const DashboardsList = lazy(() => import("./pages/monitoring/DashboardsList"));
-const PrinterList = lazy(() => import("./pages/monitoring/PrinterList"));
-const PrinterIntelligence = lazy(() => import("./pages/PrinterIntelligence"));
-const BillingHistory = lazy(() => import("./pages/BillingHistory"));
-const UserSettings = lazy(() => import("./pages/UserSettings"));
-const DocsPage = lazy(() => import("./pages/DocsPage"));
+/* ── Lazy-loaded pages with automatic chunk retry ── */
+const DashboardView = lazyRetry(() => import("./pages/DashboardView"));
+const DashboardBuilder = lazyRetry(() => import("./pages/DashboardBuilder"));
+const ZabbixConnections = lazyRetry(() => import("./pages/ZabbixConnections"));
+const RMSConnections = lazyRetry(() => import("./pages/RMSConnections"));
+const Index = lazyRetry(() => import("./pages/Index"));
+const FleetIntelligence = lazyRetry(() => import("./pages/FleetIntelligence"));
+const AdminHub = lazyRetry(() => import("./pages/AdminHub"));
+const VirtualizationMonitor = lazyRetry(() => import("./pages/VirtualizationMonitor"));
+const VirtualMachinesMonitor = lazyRetry(() => import("./pages/VirtualMachinesMonitor"));
+const BgpFlowMonitor = lazyRetry(() => import("./pages/BgpFlowMonitor"));
+const FlowMapPage = lazyRetry(() => import("./pages/FlowMapPage"));
+const OperationsHome = lazyRetry(() => import("./pages/OperationsHome"));
+const InventoryPage = lazyRetry(() => import("./pages/InventoryPage"));
+const CapacityPage = lazyRetry(() => import("./pages/CapacityPage"));
+const TimelinePage = lazyRetry(() => import("./pages/TimelinePage"));
+const TenantsPage = lazyRetry(() => import("./pages/TenantsPage"));
+const SLAGovernance = lazyRetry(() => import("./pages/SLAGovernance"));
+const ViabilityPage = lazyRetry(() => import("./pages/ViabilityPage"));
+const SystemUpdates = lazyRetry(() => import("./pages/SystemUpdates"));
+const SystemStatus = lazyRetry(() => import("./pages/SystemStatus"));
+const TelegramSettings = lazyRetry(() => import("./pages/TelegramSettings"));
+const IncidentsPage = lazyRetry(() => import("./pages/IncidentsPage"));
+const ServerMonitorList = lazyRetry(() => import("./pages/monitoring/ServerMonitorList"));
+const VirtualizationList = lazyRetry(() => import("./pages/monitoring/VirtualizationList"));
+const VirtualMachinesList = lazyRetry(() => import("./pages/monitoring/VirtualMachinesList"));
+const BgpFlowList = lazyRetry(() => import("./pages/monitoring/BgpFlowList"));
+const FleetIntelligenceList = lazyRetry(() => import("./pages/monitoring/FleetIntelligenceList"));
+const DashboardsList = lazyRetry(() => import("./pages/monitoring/DashboardsList"));
+const PrinterList = lazyRetry(() => import("./pages/monitoring/PrinterList"));
+const PrinterIntelligence = lazyRetry(() => import("./pages/PrinterIntelligence"));
+const BillingHistory = lazyRetry(() => import("./pages/BillingHistory"));
+const UserSettings = lazyRetry(() => import("./pages/UserSettings"));
+const DocsPage = lazyRetry(() => import("./pages/DocsPage"));
 
 const queryClient = new QueryClient();
 
