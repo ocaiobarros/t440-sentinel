@@ -519,6 +519,21 @@ export default function FlowMapCanvas({
       }, { passive: false });
 
       marker.addTo(markers);
+
+      // ── Persistent host name label above marker ──
+      const hostName = h.host_name || h.zabbix_host_id;
+      const dotSize = h.is_critical && (st?.status ?? "UNKNOWN") === "DOWN" ? 20 : 14;
+      const fontSize = Math.max(9, Math.round(dotSize * 0.7));
+      const ts = "text-shadow:0 0 4px rgba(0,0,0,0.95),0 0 8px rgba(0,0,0,0.8),0 1px 3px rgba(0,0,0,0.9);";
+      const hostColor = isIsolated ? "#9e9e9e" : (st?.status ?? "UNKNOWN") === "UP" ? "#00e676" : (st?.status ?? "UNKNOWN") === "DOWN" ? "#ff1744" : "#9e9e9e";
+      const nameHtml = `<div style="font-family:'JetBrains Mono',monospace;font-size:${fontSize}px;font-weight:700;color:${hostColor};white-space:nowrap;text-align:center;${ts}opacity:0.85;letter-spacing:0.5px;">${hostName}</div>`;
+      const nameIcon = L.divIcon({
+        className: "fm-traffic-label",
+        html: nameHtml,
+        iconSize: L.point(0, 0),
+        iconAnchor: L.point(0, dotSize + 6),
+      });
+      L.marker([h.lat, h.lon], { icon: nameIcon, interactive: false }).addTo(labelsLayer);
     });
   }, [hosts, links, statusMap, linkStatuses, linkEvents, linkTraffic, impactedLinkIds, isolatedNodeIds, effectiveStatuses, onHostClick]);
 
