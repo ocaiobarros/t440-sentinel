@@ -37,11 +37,18 @@ export default function ChunkLoadRecovery() {
     };
 
     const onUnhandledRejection = (event: PromiseRejectionEvent) => {
-      attemptRecovery(getErrorMessage(event.reason));
+      const message = getErrorMessage(event.reason);
+      attemptRecovery(message);
     };
 
     const onError = (event: ErrorEvent) => {
-      attemptRecovery(event.message || "");
+      const message = [
+        event.message || "",
+        getErrorMessage(event.error),
+      ]
+        .filter(Boolean)
+        .join(" | ");
+      attemptRecovery(message);
     };
 
     window.addEventListener("unhandledrejection", onUnhandledRejection);
