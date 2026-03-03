@@ -17,11 +17,18 @@ export function useDashboardReplay({ dashboardId }: UseReplayOptions) {
     async (keys: string[]): Promise<TelemetryCacheEntry[]> => {
       if (!dashboardId || keys.length === 0) return [];
 
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.warn("[DashboardReplay] No active session, skipping replay");
+        return [];
+      }
+
       const url = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/flowpulse-reactor?replay=1&dashboard_id=${encodeURIComponent(dashboardId)}&keys=${encodeURIComponent(keys.join(","))}`;
 
       const resp = await fetch(url, {
         headers: {
-          Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
+          Authorization: `Bearer ${session.access_token}`,
+          apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
           "Content-Type": "application/json",
         },
       });

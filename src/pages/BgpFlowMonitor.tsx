@@ -749,10 +749,12 @@ function useBgpRealtime(configId: string): BgpState & { refresh: () => void } {
   const refresh = useCallback(async () => {
     try {
       const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const { data: { session } } = await supabase.auth.getSession();
       const resp = await fetch(
         `${supabaseUrl}/functions/v1/bgp-collector?config_id=${encodeURIComponent(configId)}`,
         {
           headers: {
+            Authorization: session?.access_token ? `Bearer ${session.access_token}` : "",
             apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
             "Content-Type": "application/json",
           },
