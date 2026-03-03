@@ -4,7 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import WidgetRenderer from "@/components/dashboard/WidgetRenderer";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff, Timer, BellOff } from "lucide-react";
+import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff, Timer, BellOff, AlertTriangle } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
@@ -80,7 +80,7 @@ export default function DashboardView() {
     }
   }, [activeDashId]);
 
-  const { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs, oldestZabbixTs } = useDashboardData(activeDashId, pollInterval);
+  const { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs, oldestZabbixTs, consecutiveErrors } = useDashboardData(activeDashId, pollInterval);
 
   // ── Zabbix Data Age: ticking display showing seconds since last Zabbix server timestamp ──
   const [dataAgeSec, setDataAgeSec] = useState<number | null>(null);
@@ -313,6 +313,33 @@ export default function DashboardView() {
             <p className="text-xs text-muted-foreground mt-1">{(error as Error).message}</p>
           </div>
         )}
+
+        {/* Persistent error banner when polling fails continuously */}
+        <AnimatePresence>
+          {consecutiveErrors >= 3 && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              className="mb-4 flex items-center gap-3 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-2.5 text-sm backdrop-blur-sm"
+            >
+              <AlertTriangle className="h-4 w-4 shrink-0 text-destructive" />
+              <span className="text-destructive font-medium">
+                Polling com falha contínua ({consecutiveErrors}x) — verifique a conexão Zabbix ou os secrets de produção.
+              </span>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handlePoll}
+                disabled={isPollingActive}
+                className="ml-auto gap-1.5 text-xs text-destructive hover:text-destructive"
+              >
+                <RefreshCw className={`w-3 h-3 ${isPollingActive ? "animate-spin" : ""}`} />
+                Tentar agora
+              </Button>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Widget Grid — uses same react-grid-layout as Builder for pixel-perfect match */}
         {dashboard && !isLoading && (

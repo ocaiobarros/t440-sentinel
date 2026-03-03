@@ -47,6 +47,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
   const dashboardRef = useRef<Dashboard | null>(null);
   const telemetrySizeRef = useRef(0);
   const lastErrorToastRef = useRef(0); // throttle error toasts
+  const [consecutiveErrors, setConsecutiveErrors] = useState(0);
 
   // Fetch dashboard + widgets from DB
   const { data: dashboard, isLoading, error } = useQuery({
@@ -271,8 +272,10 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       }
 
       setLastPollLatencyMs(Math.round(performance.now() - pollStart));
+      setConsecutiveErrors(0); // reset on success
     } catch (err: any) {
       console.error("[FlowPulse] Poll failed:", err);
+      setConsecutiveErrors((c) => c + 1);
       // Throttle: only show toast once per 2 minutes
       if (Date.now() - lastErrorToastRef.current > 120_000) {
         lastErrorToastRef.current = Date.now();
@@ -328,5 +331,5 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     return newest > 0 ? newest : null;
   }, [telemetryCache]);
 
-  return { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs, oldestZabbixTs };
+  return { dashboard, isLoading, error, telemetryCache, pollNow, isPollingActive, isEmergencyMode, lastPollLatencyMs, oldestZabbixTs, consecutiveErrors };
 }
