@@ -53,3 +53,18 @@ verify_jwt = false
 
 [functions.billing-cron]
 verify_jwt = false
+
+[functions.delete-user]
+verify_jwt = false
+
+[functions.flowmap-status]
+verify_jwt = false
+
+[functions.flowmap-route]
+verify_jwt = false
+
+[functions.system-status]
+verify_jwt = false
+
+[functions.main]
+verify_jwt = false
