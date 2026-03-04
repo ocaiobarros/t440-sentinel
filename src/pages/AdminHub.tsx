@@ -238,10 +238,19 @@ export default function AdminHub() {
   const handleRemoveUser = async () => {
     setRemoving(true);
     try {
-      const { error } = await supabase.from("user_roles")
+      // 1. Remove role
+      await supabase.from("user_roles")
         .delete().eq("user_id", removeDialog.userId).eq("tenant_id", tenant?.id ?? "");
-      if (error) throw error;
-      toast({ title: "Acesso removido", description: `${removeDialog.name} foi removido do time.` });
+      // 2. Remove profile
+      await supabase.from("profiles")
+        .delete().eq("id", removeDialog.userId);
+      // 3. Delete auth user via edge function
+      try {
+        await supabase.functions.invoke("delete-user", {
+          body: { user_id: removeDialog.userId },
+        });
+      } catch (_) { /* best-effort */ }
+      toast({ title: "Usuário excluído", description: `${removeDialog.name} foi removido permanentemente.` });
       setRemoveDialog({ open: false, userId: "", name: "" });
       await fetchData();
     } catch (err: any) {
