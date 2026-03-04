@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
-import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2, Radio, Maximize, Minimize, Volume2, VolumeX, Search } from "lucide-react";
+import { Map, Plus, Trash2, Eye, ArrowLeft, Zap, Settings2, Radio, Maximize, Minimize, Volume2, VolumeX, Search, Download, Upload, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -35,6 +35,8 @@ function MapListView() {
   const { deleteMap, createMap } = useFlowMapMutations();
   const { toast } = useToast();
   const [showWizard, setShowWizard] = useState(false);
+  const [importingMap, setImportingMap] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [tenantId, setTenantId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +56,62 @@ function MapListView() {
     }
   };
 
+  const handleImportMap = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !tenantId) return;
+    setImportingMap(true);
+    try {
+      const text = await file.text();
+      const payload = JSON.parse(text);
+      if (!payload.name || !payload.hosts) throw new Error("JSON inválido — esperado campos 'name' e 'hosts'.");
+      const mapResult = await createMap.mutateAsync({
+        name: payload.name + " (importado)",
+        tenant_id: tenantId,
+        ...(payload.center_lat ? { center_lat: payload.center_lat } : {}),
+        ...(payload.center_lon ? { center_lon: payload.center_lon } : {}),
+        ...(payload.zoom ? { zoom: payload.zoom } : {}),
+        ...(payload.theme ? { theme: payload.theme } : {}),
+      });
+      const newMapId = mapResult.id;
+      const hostIdMap: Record<string, string> = {};
+      for (const h of payload.hosts ?? []) {
+        const { data: inserted } = await supabase.from("flow_map_hosts").insert({
+          map_id: newMapId, tenant_id: tenantId,
+          zabbix_host_id: h.zabbix_host_id ?? "", host_name: h.host_name ?? "",
+          host_group: h.host_group ?? "", icon_type: h.icon_type ?? "router",
+          is_critical: h.is_critical ?? false, lat: h.lat, lon: h.lon,
+        }).select("id").single();
+        if (inserted) hostIdMap[h.id] = inserted.id;
+      }
+      for (const l of payload.links ?? []) {
+        const origin = hostIdMap[l.origin_host_id];
+        const dest = hostIdMap[l.dest_host_id];
+        if (!origin || !dest) continue;
+        await supabase.from("flow_map_links").insert({
+          map_id: newMapId, tenant_id: tenantId,
+          origin_host_id: origin, dest_host_id: dest,
+          link_type: l.link_type ?? "fiber", is_ring: l.is_ring ?? false,
+          capacity_mbps: l.capacity_mbps ?? 1000, geometry: l.geometry ?? { type: "LineString", coordinates: [] },
+        });
+      }
+      for (const c of payload.ctos ?? []) {
+        await supabase.from("flow_map_ctos").insert({
+          map_id: newMapId, tenant_id: tenantId,
+          name: c.name ?? "", lat: c.lat, lon: c.lon,
+          capacity: c.capacity ?? "16", occupied_ports: c.occupied_ports ?? 0,
+          description: c.description ?? "",
+        });
+      }
+      toast({ title: "Mapa importado", description: `"${payload.name}" importado com sucesso.` });
+      navigate(`/app/operations/flowmap/${newMapId}`);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro na importação", description: err.message });
+    } finally {
+      setImportingMap(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
   return (
     <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-green/5 rounded-full blur-[120px] pointer-events-none" />
@@ -70,6 +128,10 @@ function MapListView() {
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => navigate("/app/monitoring/dashboards")}>
               <ArrowLeft className="w-3.5 h-3.5" />{t("dashboards.title")}
+            </Button>
+            <input type="file" accept=".json" ref={fileInputRef} className="hidden" onChange={handleImportMap} />
+            <Button variant="outline" size="sm" className="gap-1.5 text-xs" onClick={() => fileInputRef.current?.click()} disabled={importingMap}>
+              {importingMap ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}Importar
             </Button>
             <Button size="sm" className="gap-1.5 text-xs bg-neon-green/20 text-neon-green border border-neon-green/30 hover:bg-neon-green/30" onClick={() => setShowWizard(true)}>
               <Plus className="w-3.5 h-3.5" />{t("flowmap.newMap")}
@@ -396,6 +458,47 @@ function MapEditorView({ mapId }: { mapId: string }) {
     console.warn(`[FlowMap] 🔴 Queda Massiva detectada no cabo → CTO: ${ctoName}`);
   }, [playBeep]);
 
+  const handleExportMap = useCallback(() => {
+    if (!data) return;
+    const payload = {
+      name: data.map.name,
+      theme: data.map.theme,
+      center_lat: data.map.center_lat,
+      center_lon: data.map.center_lon,
+      zoom: data.map.zoom,
+      refresh_interval: data.map.refresh_interval,
+      hosts: data.hosts.map((h) => ({
+        id: h.id, zabbix_host_id: h.zabbix_host_id, host_name: h.host_name,
+        host_group: h.host_group, icon_type: h.icon_type, is_critical: h.is_critical,
+        lat: h.lat, lon: h.lon,
+      })),
+      links: data.links.map((l) => ({
+        id: l.id, origin_host_id: l.origin_host_id, dest_host_id: l.dest_host_id,
+        link_type: l.link_type, is_ring: l.is_ring, capacity_mbps: l.capacity_mbps,
+        origin_role: l.origin_role, dest_role: l.dest_role, geometry: l.geometry,
+      })),
+      ctos: (data.ctos ?? []).map((c) => ({
+        id: c.id, name: c.name, lat: c.lat, lon: c.lon,
+        capacity: c.capacity, occupied_ports: c.occupied_ports, description: c.description,
+      })),
+      cables: (data.cables ?? []).map((cb) => ({
+        id: cb.id, label: cb.label, cable_type: cb.cable_type, fiber_count: cb.fiber_count,
+        source_node_id: cb.source_node_id, source_node_type: cb.source_node_type,
+        target_node_id: cb.target_node_id, target_node_type: cb.target_node_type,
+        geometry: cb.geometry, distance_km: cb.distance_km,
+      })),
+      exported_at: new Date().toISOString(),
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `flowmap-${data.map.name.replace(/\s+/g, "-").toLowerCase()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast({ title: "Mapa exportado", description: "Arquivo JSON salvo." });
+  }, [data, toast]);
+
   const handleWebhookAlert = useCallback((ponIndex: string, hostName: string, severity: string) => {
     playBeep(`webhook-alert-${ponIndex}`);
     toast({
@@ -515,6 +618,15 @@ function MapEditorView({ mapId }: { mapId: string }) {
               onClick={() => { setShowViability((p) => !p); if (!showViability) { setShowBuilder(false); setShowNoc(false); } }}
             >
               <Search className="w-3 h-3" />{t("flowmap.viability")}
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 text-muted-foreground hover:text-neon-cyan"
+              onClick={handleExportMap}
+              title="Exportar JSON"
+            >
+              <Download className="w-3.5 h-3.5" />
             </Button>
             <Button
               variant="ghost"

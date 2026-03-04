@@ -57,6 +57,7 @@ import {
   TrendingUp,
   Zap,
   Rocket,
+  UsersRound,
 } from "lucide-react";
 import TelemetryWizard from "@/components/admin/TelemetryWizard";
 import TelemetryHealthPanel from "@/components/admin/TelemetryHealthPanel";
@@ -64,6 +65,7 @@ import AuditLogPanel from "@/components/admin/AuditLogPanel";
 import ReservationFunnelPanel from "@/components/admin/ReservationFunnelPanel";
 import DiagnosticPanel from "@/components/admin/DiagnosticPanel";
 import MigrationChecklistPanel from "@/components/admin/MigrationChecklistPanel";
+import TeamsPanel from "@/components/admin/TeamsPanel";
 
 interface Profile {
   id: string;
@@ -532,6 +534,9 @@ export default function AdminHub() {
               <TabsTrigger value="team" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                 <Building2 className="w-4 h-4 mr-2" /> Organização
               </TabsTrigger>
+              <TabsTrigger value="teams" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+                <UsersRound className="w-4 h-4 mr-2" /> Times
+              </TabsTrigger>
               <TabsTrigger value="connections" className="data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
                 <Cable className="w-4 h-4 mr-2" /> Conexões de Dados
               </TabsTrigger>
@@ -834,6 +839,11 @@ export default function AdminHub() {
                   </div>
                 )}
               </section>
+            </TabsContent>
+
+            {/* ─── TEAMS TAB ─── */}
+            <TabsContent value="teams">
+              <TeamsPanel tenantId={selectedTenantId} profiles={tenantProfiles.map((p) => ({ id: p.id, display_name: p.display_name, email: p.email }))} />
             </TabsContent>
 
             {/* ─── CONNECTIONS TAB ─── */}
