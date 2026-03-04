@@ -37,21 +37,28 @@ export function useUserRole() {
     staleTime: 5 * 60 * 1000, // cache 5 min
     queryFn: async () => {
       // Get tenant
-      const { data: profile } = await supabase
+      const { data: profile, error: profileErr } = await supabase
         .from("profiles")
         .select("tenant_id")
         .eq("id", user!.id)
-        .single();
+        .maybeSingle();
 
-      if (!profile) return { role: "viewer" as AppRole, tenantId: null, isSuperAdmin: false };
+      if (profileErr || !profile) {
+        console.warn("[useUserRole] No profile found for user", user!.id, profileErr);
+        return { role: "viewer" as AppRole, tenantId: null, isSuperAdmin: false };
+      }
 
-      // Get role
-      const { data: roleData } = await supabase
+      // Get role — use maybeSingle to avoid 406 when user has no role entry
+      const { data: roleData, error: roleErr } = await supabase
         .from("user_roles")
         .select("role")
         .eq("user_id", user!.id)
         .eq("tenant_id", profile.tenant_id)
-        .single();
+        .maybeSingle();
+
+      if (roleErr) {
+        console.warn("[useUserRole] Error fetching role:", roleErr.message);
+      }
 
       // Check super admin
       const { data: isSuperAdmin } = await supabase.rpc("is_super_admin", { p_user_id: user!.id });
