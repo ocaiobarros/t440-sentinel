@@ -67,7 +67,9 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
         grantee_id: params.grantee_id,
         access_level: params.access_level,
         granted_by: user.id,
-      }, { onConflict: "tenant_id,resource_type,resource_id,grantee_type,grantee_id" });
+      }, { onConflict: "tenant_id,resource_type,resource_id,grantee_type,grantee_id" })
+        .select("id")
+        .single();
       
       if (error) {
         console.error("[ResourceAccess] Grant failed:", error);
