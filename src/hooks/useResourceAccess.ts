@@ -19,6 +19,32 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
   const queryClient = useQueryClient();
   const { tenantId } = useUserRole();
 
+  const resolveResourceTenantId = async (): Promise<string | null> => {
+    if (!resourceId) return null;
+
+    if (resourceType === "dashboard") {
+      const { data, error } = await supabase
+        .from("dashboards")
+        .select("tenant_id")
+        .eq("id", resourceId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.tenant_id ?? tenantId;
+    }
+
+    if (resourceType === "flow_map") {
+      const { data, error } = await supabase
+        .from("flow_maps")
+        .select("tenant_id")
+        .eq("id", resourceId)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.tenant_id ?? tenantId;
+    }
+
+    return tenantId;
+  };
+
   const { data: grants = [], isLoading } = useQuery({
     queryKey: ["resource-access", resourceType, resourceId],
     enabled: !!resourceId && !!tenantId,
@@ -53,14 +79,17 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
 
   const addGrant = useMutation({
     mutationFn: async (params: { grantee_type: "user" | "team"; grantee_id: string; access_level: "viewer" | "editor" }) => {
-      if (!tenantId || !resourceId) throw new Error("Contexto ausente: tenantId ou resourceId não definidos");
+      if (!resourceId) throw new Error("Contexto ausente: resourceId não definido");
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) throw new Error("Usuário não autenticado");
-      
-      console.log("[ResourceAccess] Granting:", { tenantId, resourceType, resourceId, ...params, granted_by: user.id });
-      
+
+      const resolvedTenantId = await resolveResourceTenantId();
+      if (!resolvedTenantId) throw new Error("Tenant do recurso não identificado");
+
+      console.log("[ResourceAccess] Granting:", { tenantId: resolvedTenantId, resourceType, resourceId, ...params, granted_by: user.id });
+
       const { data, error } = await supabase.from("resource_access").upsert({
-        tenant_id: tenantId,
+        tenant_id: resolvedTenantId,
         resource_type: resourceType,
         resource_id: resourceId,
         grantee_type: params.grantee_type,
@@ -70,7 +99,7 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
       }, { onConflict: "tenant_id,resource_type,resource_id,grantee_type,grantee_id" })
         .select("id")
         .single();
-      
+
       if (error) {
         console.error("[ResourceAccess] Grant failed:", error);
         throw new Error(`Falha ao conceder acesso: ${error.message}`);

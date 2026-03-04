@@ -19,35 +19,63 @@ interface AccessControlPanelProps {
 
 function AccessControlContent({ resourceType, resourceId }: { resourceType: string; resourceId: string }) {
   const { grants, isLoading, addGrant, removeGrant, updateLevel } = useResourceAccess(resourceType, resourceId);
-  const { tenantId } = useUserRole();
+  const { tenantId: fallbackTenantId } = useUserRole();
   const { toast } = useToast();
   const [granteeType, setGranteeType] = useState<"user" | "team">("user");
   const [granteeId, setGranteeId] = useState("");
   const [accessLevel, setAccessLevel] = useState<"viewer" | "editor">("viewer");
 
+  const { data: resourceTenantId = fallbackTenantId } = useQuery({
+    queryKey: ["resource-tenant", resourceType, resourceId, fallbackTenantId],
+    enabled: !!resourceId,
+    queryFn: async () => {
+      if (resourceType === "dashboard") {
+        const { data, error } = await supabase
+          .from("dashboards")
+          .select("tenant_id")
+          .eq("id", resourceId)
+          .maybeSingle();
+        if (error) throw error;
+        return data?.tenant_id ?? fallbackTenantId;
+      }
+
+      if (resourceType === "flow_map") {
+        const { data, error } = await supabase
+          .from("flow_maps")
+          .select("tenant_id")
+          .eq("id", resourceId)
+          .maybeSingle();
+        if (error) throw error;
+        return data?.tenant_id ?? fallbackTenantId;
+      }
+
+      return fallbackTenantId;
+    },
+  });
+
   // Load users and teams for selection
   const { data: users = [] } = useQuery({
-    queryKey: ["tenant-profiles", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["tenant-profiles", resourceTenantId],
+    enabled: !!resourceTenantId,
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, display_name, email").eq("tenant_id", tenantId!);
+      const { data } = await supabase.from("profiles").select("id, display_name, email").eq("tenant_id", resourceTenantId!);
       return data ?? [];
     },
   });
 
   const { data: teams = [] } = useQuery({
-    queryKey: ["tenant-teams", tenantId],
-    enabled: !!tenantId,
+    queryKey: ["tenant-teams", resourceTenantId],
+    enabled: !!resourceTenantId,
     queryFn: async () => {
-      const { data } = await supabase.from("teams").select("id, name, color").eq("tenant_id", tenantId!);
+      const { data } = await supabase.from("teams").select("id, name, color").eq("tenant_id", resourceTenantId!);
       return data ?? [];
     },
   });
 
   const handleAdd = async () => {
     if (!granteeId) return;
-    if (!tenantId) {
-      toast({ variant: "destructive", title: "Erro", description: "Tenant não identificado. Faça logout e login novamente." });
+    if (!resourceTenantId) {
+      toast({ variant: "destructive", title: "Erro", description: "Tenant do recurso não identificado." });
       return;
     }
     try {
@@ -105,7 +133,7 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
             </SelectContent>
           </Select>
 
-          <Button size="sm" onClick={handleAdd} disabled={!granteeId || addGrant.isPending}>
+          <Button size="sm" onClick={handleAdd} disabled={!granteeId || addGrant.isPending || !resourceTenantId}>
             Conceder
           </Button>
         </div>
