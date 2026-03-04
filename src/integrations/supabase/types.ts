@@ -1983,6 +1983,14 @@ export type Database = {
           status_calculated: string
         }[]
       }
+      diagnose_resource_access: {
+        Args: {
+          p_resource_id: string
+          p_resource_type: string
+          p_user_id: string
+        }
+        Returns: Json
+      }
       get_map_effective_status: {
         Args: { p_map_id: string }
         Returns: {
