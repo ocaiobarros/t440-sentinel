@@ -53,17 +53,27 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
 
   const addGrant = useMutation({
     mutationFn: async (params: { grantee_type: "user" | "team"; grantee_id: string; access_level: "viewer" | "editor" }) => {
-      if (!tenantId || !resourceId) throw new Error("Missing context");
-      const { error } = await supabase.from("resource_access").upsert({
+      if (!tenantId || !resourceId) throw new Error("Contexto ausente: tenantId ou resourceId não definidos");
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+      
+      console.log("[ResourceAccess] Granting:", { tenantId, resourceType, resourceId, ...params, granted_by: user.id });
+      
+      const { data, error } = await supabase.from("resource_access").upsert({
         tenant_id: tenantId,
         resource_type: resourceType,
         resource_id: resourceId,
         grantee_type: params.grantee_type,
         grantee_id: params.grantee_id,
         access_level: params.access_level,
-        granted_by: (await supabase.auth.getUser()).data.user?.id,
+        granted_by: user.id,
       }, { onConflict: "tenant_id,resource_type,resource_id,grantee_type,grantee_id" });
-      if (error) throw error;
+      
+      if (error) {
+        console.error("[ResourceAccess] Grant failed:", error);
+        throw new Error(`Falha ao conceder acesso: ${error.message}`);
+      }
+      console.log("[ResourceAccess] Grant success:", data);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });

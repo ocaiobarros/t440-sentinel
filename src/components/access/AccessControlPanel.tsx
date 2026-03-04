@@ -46,12 +46,17 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
 
   const handleAdd = async () => {
     if (!granteeId) return;
+    if (!tenantId) {
+      toast({ variant: "destructive", title: "Erro", description: "Tenant não identificado. Faça logout e login novamente." });
+      return;
+    }
     try {
       await addGrant.mutateAsync({ grantee_type: granteeType, grantee_id: granteeId, access_level: accessLevel });
       toast({ title: "Acesso concedido" });
       setGranteeId("");
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Erro", description: e.message });
+      console.error("[AccessControlPanel] handleAdd error:", e);
+      toast({ variant: "destructive", title: "Erro ao conceder acesso", description: e.message });
     }
   };
 
