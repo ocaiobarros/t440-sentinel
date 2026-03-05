@@ -134,11 +134,6 @@ Deno.serve(async (req) => {
       if (roleInsertError) throw roleInsertError;
     };
 
-    const isTenantImmutableError = (error: any) => {
-      const message = String(error?.message || "").toLowerCase();
-      return message.includes("tenant_id is immutable");
-    };
-
     const upsertProfile = async (userId: string) => {
       const profilePayload = {
         id: userId,
@@ -164,18 +159,22 @@ Deno.serve(async (req) => {
         return;
       }
 
-      const { error: updateProfileError } = await adminClient
-        .from("profiles")
-        .update({
-          tenant_id: targetTenant,
-          display_name: displayName,
-          email,
-        })
-        .eq("id", userId);
+      const isTenantMove = existingById.tenant_id !== targetTenant;
 
-      if (!updateProfileError) return;
-      if (!isTenantImmutableError(updateProfileError)) throw updateProfileError;
+      if (!isTenantMove) {
+        const { error: updateProfileError } = await adminClient
+          .from("profiles")
+          .update({
+            display_name: displayName,
+            email,
+          })
+          .eq("id", userId);
 
+        if (updateProfileError) throw updateProfileError;
+        return;
+      }
+
+      // tenant_id é imutável por trigger: recriar o profile no tenant de destino
       const { error: deleteProfileError } = await adminClient
         .from("profiles")
         .delete()
