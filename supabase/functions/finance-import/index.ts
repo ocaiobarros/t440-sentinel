@@ -83,8 +83,10 @@ Deno.serve(async (req) => {
 
         const { headerIndex, monthReference } = headerCandidate;
         const dataLines = lines.slice(headerIndex);
-        console.log(`[DEBUG] Sheet "${sheetName}" headerIdx=${headerIndex} month=${monthReference} header="${dataLines[0]?.slice(0, 200)}" firstData="${dataLines[1]?.slice(0, 200)}"`);
-        const { rows, warnings, debugSamples } = parseCSVLines(dataLines, monthReference, tenantId, user.id, headerIndex);
+        const debugHeader = dataLines[0]?.slice(0, 300) ?? "";
+        const debugFirst3 = dataLines.slice(1, 4).map((l, i) => `L${i+1}: "${l.slice(0, 200)}"`).join(" | ");
+        console.log(`[DEBUG] Sheet "${sheetName}" headerIdx=${headerIndex} month=${monthReference} header="${debugHeader}" ${debugFirst3}`);
+        const { rows, warnings, debugSamples, debugColumnMap } = parseCSVLines(dataLines, monthReference, tenantId, user.id, headerIndex);
         for (const w of warnings) {
           allWarnings.push({ sheet: sheetName, ...w });
         }
@@ -95,10 +97,19 @@ Deno.serve(async (req) => {
       }
 
       if (allRows.length === 0) {
+        // Collect debug info for troubleshooting
+        const debugInfo: any = { sheets: workbook.SheetNames };
+        for (const sheetName of workbook.SheetNames) {
+          const sheet = workbook.Sheets[sheetName];
+          const csvText = XLSX.utils.sheet_to_csv(sheet, { FS: ";", RS: "\n", rawNumbers: true });
+          const sampleLines = csvText.split(/\r?\n/).slice(0, 5).map((l: string) => l.slice(0, 250));
+          debugInfo[sheetName] = sampleLines;
+        }
         return new Response(
           JSON.stringify({
             error: "Nenhuma linha válida encontrada no XLSX",
             warnings: allWarnings.slice(0, 100),
+            debug: debugInfo,
           }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
@@ -311,7 +322,7 @@ function parseCSVLines(
   tenantId: string,
   userId: string,
   lineOffset = 0,
-): { rows: any[]; warnings: Array<{ line: number; message: string }>; debugSamples: Array<{ line: number; raw: string; parsed: number | null }> } {
+): { rows: any[]; warnings: Array<{ line: number; message: string }>; debugSamples: Array<{ line: number; raw: string; parsed: number | null }>; debugColumnMap: Record<string, number> } {
   const delimiter = detectDelimiter(lines[0] ?? "");
   const rawHeaders = splitDelimitedLine(lines[0] ?? "", delimiter).map((h) => h.trim());
   const normalizedHeaders = rawHeaders.map(normalizeHeader);
@@ -333,6 +344,14 @@ function parseCSVLines(
   const previstoReceberIdx = findHeaderIndex(normalizedHeaders, [/soma de receber/, /previsto.*receb/, /a receber/]);
   const realizadoPagarIdx = findHeaderIndex(normalizedHeaders, [/soma de pago/, /realizado.*pag/, /\bpago\b/]);
   const realizadoReceberIdx = findHeaderIndex(normalizedHeaders, [/soma de recebido/, /realizado.*receb/, /\brecebido\b/]);
+
+  const debugColumnMap: Record<string, number> = {
+    delimiter: delimiter.charCodeAt(0), previstoDateIdx, realizadoDateIdx,
+    previstoPagarIdx, previstoReceberIdx, realizadoPagarIdx, realizadoReceberIdx,
+    previstoIdx, realizadoIdx, amountIdx, dateIdx, headerCount: normalizedHeaders.length,
+  };
+  console.log(`[DEBUG] columnMap:`, JSON.stringify(debugColumnMap));
+  console.log(`[DEBUG] normalizedHeaders:`, JSON.stringify(normalizedHeaders.slice(0, 10)));
 
   const hasDualTypeSplitColumns =
     previstoPagarIdx !== -1 || previstoReceberIdx !== -1 || realizadoPagarIdx !== -1 || realizadoReceberIdx !== -1;
@@ -465,7 +484,7 @@ function parseCSVLines(
     }
   }
 
-  return { rows, warnings, debugSamples };
+  return { rows, warnings, debugSamples, debugColumnMap };
 }
 
 function parseAmount(raw: string): number | null {

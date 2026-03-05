@@ -46,7 +46,8 @@ async function extractImportErrorMessage(err: any): Promise<string> {
         const warningsText = warnings.length
           ? ` • ${warnings.map((w: { sheet?: string; line?: number; message?: string }) => `${w.sheet ? `${w.sheet} ` : ""}L${w.line ?? "?"}: ${w.message ?? ""}`).join(" | ")}`
           : "";
-        return `${status ? `[${status}] ` : ""}${baseError}${warningsText}`;
+        const debugInfo = payload?.debug ? ` [DEBUG: ${JSON.stringify(payload.debug).slice(0, 500)}]` : "";
+        return `${status ? `[${status}] ` : ""}${baseError}${warningsText}${debugInfo}`;
       }
     } catch {
       try {
