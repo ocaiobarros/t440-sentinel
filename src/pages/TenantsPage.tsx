@@ -47,6 +47,31 @@ const PLAN_COLORS: Record<PlanLabel, string> = {
   pro: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30",
 };
 
+
+async function getFunctionErrorMessage(err: any, fallback: string) {
+  const context = err?.context;
+
+  if (context?.clone && typeof context.clone === "function") {
+    try {
+      const jsonPayload = await context.clone().json();
+      if (typeof jsonPayload?.error === "string" && jsonPayload.error.trim()) return jsonPayload.error;
+      if (typeof jsonPayload?.message === "string" && jsonPayload.message.trim()) return jsonPayload.message;
+    } catch {
+      // ignore JSON parsing errors
+    }
+
+    try {
+      const textPayload = await context.clone().text();
+      if (typeof textPayload === "string" && textPayload.trim()) return textPayload;
+    } catch {
+      // ignore text parsing errors
+    }
+  }
+
+  if (typeof err?.message === "string" && err.message.trim()) return err.message;
+  return fallback;
+}
+
 /* ═══════════════════════════════════════════════ */
 export default function TenantsPage() {
   const { toast } = useToast();
@@ -121,27 +146,23 @@ export default function TenantsPage() {
 
   const createTenant = useMutation({
     mutationFn: async ({ name, slug }: { name: string; slug: string }) => {
-      const normalizedName = name.trim();
-      const baseSlug = slug.trim();
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: {
+          action: "create",
+          name: name.trim(),
+          slug: slug.trim(),
+        },
+      });
 
-      const tryInsert = async (candidateSlug: string) => {
-        return await supabase
-          .from("tenants")
-          .insert({ name: normalizedName, slug: candidateSlug })
-          .select("id, name, slug, created_at, updated_at")
-          .single();
-      };
-
-      let result = await tryInsert(baseSlug);
-
-      if (result.error && (result.error.message?.includes("tenants_slug_key") || result.error.code === "23505")) {
-        const uniqueSlug = `${baseSlug}-${crypto.randomUUID().slice(0, 6)}`;
-        result = await tryInsert(uniqueSlug);
+      if (error) {
+        const parsed = await getFunctionErrorMessage(error, "Falha ao criar organização.");
+        throw new Error(parsed);
       }
 
-      if (result.error) throw result.error;
-      if (!result.data) throw new Error("Organização criada sem retorno do backend.");
-      return result.data as Tenant;
+      if (data?.error) throw new Error(data.error);
+      if (!data?.tenant) throw new Error("Organização criada sem retorno do backend.");
+
+      return data.tenant as Tenant;
     },
     onSuccess: (createdTenant) => {
       qc.invalidateQueries({ queryKey: ["tenants-admin"] });

@@ -131,17 +131,60 @@ Deno.serve(async (req) => {
       if (roleInsertError) throw roleInsertError;
     };
 
+    const isTenantImmutableError = (error: any) => {
+      const message = String(error?.message || "").toLowerCase();
+      return message.includes("tenant_id is immutable");
+    };
+
     const upsertProfile = async (userId: string) => {
-      const { error: profileUpsertError } = await adminClient
+      const profilePayload = {
+        id: userId,
+        tenant_id: targetTenant,
+        display_name: displayName,
+        email,
+      };
+
+      const { data: existingById, error: existingByIdError } = await adminClient
         .from("profiles")
-        .upsert({
-          id: userId,
+        .select("id, tenant_id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (existingByIdError) throw existingByIdError;
+
+      if (!existingById) {
+        const { error: insertProfileError } = await adminClient
+          .from("profiles")
+          .insert(profilePayload);
+
+        if (insertProfileError) throw insertProfileError;
+        return;
+      }
+
+      const { error: updateProfileError } = await adminClient
+        .from("profiles")
+        .update({
           tenant_id: targetTenant,
           display_name: displayName,
           email,
-        });
+        })
+        .eq("id", userId);
 
-      if (profileUpsertError) throw profileUpsertError;
+      if (!updateProfileError) return;
+      if (!isTenantImmutableError(updateProfileError)) throw updateProfileError;
+
+      const { error: deleteProfileError } = await adminClient
+        .from("profiles")
+        .delete()
+        .eq("id", userId);
+
+      if (deleteProfileError) throw deleteProfileError;
+
+      const { error: recreateProfileError } = await adminClient
+        .from("profiles")
+        .insert(profilePayload);
+
+      if (recreateProfileError) throw recreateProfileError;
     };
 
     const setAuthTenantMetadata = async (userId: string) => {
