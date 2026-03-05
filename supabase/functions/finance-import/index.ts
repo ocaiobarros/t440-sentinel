@@ -100,82 +100,126 @@ Deno.serve(async (req) => {
       created_by: string;
     }> = [];
 
+    const warnings: Array<{ line: number; message: string }> = [];
+    let skippedEmpty = 0;
+
     for (let i = 1; i < lines.length; i++) {
+      const lineNum = i + 1; // human-readable line number
       const cols = lines[i].split(";").map((c) => c.trim());
-      if (cols.length < 2) continue; // skip empty lines
 
-      const txDate = dateIdx !== -1 ? cols[dateIdx] : month_reference;
-      const txType = typeIdx !== -1 ? cols[typeIdx].toUpperCase() : "PAGAR";
-      const desc = descIdx !== -1 ? cols[descIdx] : "";
-      const cat = catIdx !== -1 ? cols[catIdx] : "";
+      // Skip truly empty lines
+      if (cols.length < 2 || cols.every((c) => c === "")) {
+        skippedEmpty++;
+        continue;
+      }
 
-      // Normalize type
-      const normalizedType = txType.includes("RECEBER") || txType.includes("RECEITA") || txType.includes("INCOME")
-        ? "RECEBER"
-        : "PAGAR";
+      try {
+        const txDateRaw = dateIdx !== -1 ? cols[dateIdx] : month_reference;
+        const txDate = normalizeDate(txDateRaw);
 
-      if (hasSplitColumns) {
-        // Split mode: one CSV line → up to 2 DB rows
-        if (previstoIdx !== -1) {
-          const val = parseAmount(cols[previstoIdx]);
-          if (val !== null && val !== 0) {
-            rows.push({
-              tenant_id: tenantId,
-              transaction_date: normalizeDate(txDate),
-              scenario: "PREVISTO",
-              type: normalizedType,
-              amount: val,
-              month_reference,
-              description: desc,
-              category: cat,
-              created_by: user.id,
-            });
+        // Validate date format
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate)) {
+          warnings.push({ line: lineNum, message: `Formato de data inválido: "${txDateRaw}"` });
+          continue;
+        }
+
+        const txType = typeIdx !== -1 ? cols[typeIdx].toUpperCase() : "PAGAR";
+        const desc = descIdx !== -1 ? cols[descIdx] : "";
+        const cat = catIdx !== -1 ? cols[catIdx] : "";
+
+        // Normalize type
+        const normalizedType = txType.includes("RECEBER") || txType.includes("RECEITA") || txType.includes("INCOME")
+          ? "RECEBER"
+          : "PAGAR";
+
+        if (hasSplitColumns) {
+          let lineHasValue = false;
+          if (previstoIdx !== -1) {
+            const rawVal = cols[previstoIdx];
+            const val = parseAmount(rawVal);
+            if (val === null && rawVal && rawVal !== "" && rawVal !== "-") {
+              warnings.push({ line: lineNum, message: `Valor previsto inválido: "${rawVal}"` });
+            } else if (val !== null && val !== 0) {
+              lineHasValue = true;
+              rows.push({
+                tenant_id: tenantId,
+                transaction_date: txDate,
+                scenario: "PREVISTO",
+                type: normalizedType,
+                amount: val,
+                month_reference,
+                description: desc,
+                category: cat,
+                created_by: user.id,
+              });
+            }
           }
-        }
-        if (realizadoIdx !== -1) {
-          const val = parseAmount(cols[realizadoIdx]);
-          if (val !== null && val !== 0) {
-            rows.push({
-              tenant_id: tenantId,
-              transaction_date: normalizeDate(txDate),
-              scenario: "REALIZADO",
-              type: normalizedType,
-              amount: val,
-              month_reference,
-              description: desc,
-              category: cat,
-              created_by: user.id,
-            });
+          if (realizadoIdx !== -1) {
+            const rawVal = cols[realizadoIdx];
+            const val = parseAmount(rawVal);
+            if (val === null && rawVal && rawVal !== "" && rawVal !== "-") {
+              warnings.push({ line: lineNum, message: `Valor realizado inválido: "${rawVal}"` });
+            } else if (val !== null && val !== 0) {
+              lineHasValue = true;
+              rows.push({
+                tenant_id: tenantId,
+                transaction_date: txDate,
+                scenario: "REALIZADO",
+                type: normalizedType,
+                amount: val,
+                month_reference,
+                description: desc,
+                category: cat,
+                created_by: user.id,
+              });
+            }
           }
-        }
-      } else {
-        // Single amount mode
-        const val = amountIdx !== -1 ? parseAmount(cols[amountIdx]) : null;
-        if (val === null || val === 0) continue;
+          if (!lineHasValue) {
+            warnings.push({ line: lineNum, message: "Linha sem valores numéricos válidos (previsto/realizado)" });
+          }
+        } else {
+          const rawVal = amountIdx !== -1 ? cols[amountIdx] : "";
+          const val = parseAmount(rawVal);
+          if (val === null && rawVal && rawVal !== "" && rawVal !== "-") {
+            warnings.push({ line: lineNum, message: `Valor inválido: "${rawVal}"` });
+            continue;
+          }
+          if (val === null || val === 0) {
+            warnings.push({ line: lineNum, message: "Valor zerado ou vazio — linha ignorada" });
+            continue;
+          }
 
-        let scenario = "PREVISTO";
-        if (scenarioIdx !== -1) {
-          const raw = cols[scenarioIdx].toUpperCase();
-          scenario = raw.includes("REAL") ? "REALIZADO" : "PREVISTO";
-        }
+          let scenario = "PREVISTO";
+          if (scenarioIdx !== -1) {
+            const raw = cols[scenarioIdx].toUpperCase();
+            scenario = raw.includes("REAL") ? "REALIZADO" : "PREVISTO";
+          }
 
-        rows.push({
-          tenant_id: tenantId,
-          transaction_date: normalizeDate(txDate),
-          scenario,
-          type: normalizedType,
-          amount: val,
-          month_reference,
-          description: desc,
-          category: cat,
-          created_by: user.id,
-        });
+          rows.push({
+            tenant_id: tenantId,
+            transaction_date: txDate,
+            scenario,
+            type: normalizedType,
+            amount: val,
+            month_reference,
+            description: desc,
+            category: cat,
+            created_by: user.id,
+          });
+        }
+      } catch (lineErr) {
+        warnings.push({ line: lineNum, message: `Erro inesperado: ${(lineErr as Error).message}` });
       }
     }
 
     if (rows.length === 0) {
       return new Response(
-        JSON.stringify({ error: "No valid rows found in CSV", parsed_headers: headers }),
+        JSON.stringify({
+          error: "Nenhuma linha válida encontrada no CSV",
+          parsed_headers: headers,
+          warnings: warnings.slice(0, 50),
+          skipped_empty: skippedEmpty,
+        }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } },
       );
     }
@@ -187,7 +231,11 @@ Deno.serve(async (req) => {
       const { error: insertErr } = await adminClient.from("financial_transactions").insert(chunk);
       if (insertErr) {
         return new Response(
-          JSON.stringify({ error: `Insert failed at batch ${Math.floor(i / 500)}: ${insertErr.message}`, inserted_so_far: inserted }),
+          JSON.stringify({
+            error: `Falha no batch ${Math.floor(i / 500) + 1}: ${insertErr.message}`,
+            inserted_so_far: inserted,
+            warnings: warnings.slice(0, 50),
+          }),
           { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
       }
@@ -200,6 +248,9 @@ Deno.serve(async (req) => {
         rows_inserted: inserted,
         csv_lines_parsed: lines.length - 1,
         split_mode: hasSplitColumns,
+        skipped_empty: skippedEmpty,
+        warnings_count: warnings.length,
+        warnings: warnings.slice(0, 100), // cap at 100 to avoid huge payloads
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
