@@ -89,7 +89,9 @@ export default function FinanceCharts({ monthReference, transactions }: Props) {
     return entries;
   }, [raw]);
 
-  // Pressure line chart: daily Pressão Operacional (PREVISTO) + Pressão Financeira (REALIZADO)
+  // Pressure line chart: cross-scenario comparison
+  // Pressão Operacional = Realizado PAGAR (F) - Previsto PAGAR (B)
+  // Pressão Financeira  = Realizado RECEBER (G) - Previsto RECEBER (C)
   const pressureLineData = useMemo(() => {
     const [y, m] = monthReference.split("-").map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
@@ -113,17 +115,20 @@ export default function FinanceCharts({ monthReference, transactions }: Props) {
     const data: { day: string; pressaoOperacional: number | null; pressaoFinanceira: number | null }[] = [];
     const hasPrev = transactions.some((t: any) => t.scenario === "PREVISTO");
     const hasReal = transactions.some((t: any) => t.scenario === "REALIZADO");
+    const hasBoth = hasPrev && hasReal;
 
     for (let d = 1; d <= daysInMonth; d++) {
       const entry = dailyMap.get(d) || { prevPagar: 0, prevReceber: 0, realPagar: 0, realReceber: 0 };
       data.push({
         day: String(d).padStart(2, "0"),
-        pressaoOperacional: hasPrev ? Math.round((entry.prevPagar - entry.prevReceber) * 100) / 100 : null,
-        pressaoFinanceira: hasReal ? Math.round((entry.realPagar - entry.realReceber) * 100) / 100 : null,
+        // F - B: quanto a mais (ou menos) foi pago vs previsto
+        pressaoOperacional: hasBoth ? Math.round((entry.realPagar - entry.prevPagar) * 100) / 100 : null,
+        // G - C: quanto a mais (ou menos) foi recebido vs previsto
+        pressaoFinanceira: hasBoth ? Math.round((entry.realReceber - entry.prevReceber) * 100) / 100 : null,
       });
     }
 
-    return { data, hasPrev, hasReal };
+    return { data, hasBoth };
   }, [transactions, monthReference]);
 
   const hasRealizado = chartData.some(d => d.realizado !== undefined);
@@ -232,22 +237,22 @@ export default function FinanceCharts({ monthReference, transactions }: Props) {
             Pressão de Caixa Diária
           </h3>
           <p className="text-[9px] font-mono text-muted-foreground/50 mt-1">
-            PAGAR − RECEBER por dia • Positivo = pressão
+            Realizado − Previsto por dia • Positivo = desvio para cima
           </p>
         </div>
 
         <div className="flex items-center gap-4 mb-4 text-[9px] font-mono text-muted-foreground/60">
-          {pressureLineData.hasPrev && (
-            <span className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 inline-block rounded" style={{ backgroundColor: "hsl(210,100%,56%)", borderTop: "1px dashed hsl(210,100%,56%)" }} />
-              Operacional (Previsto)
-            </span>
-          )}
-          {pressureLineData.hasReal && (
-            <span className="flex items-center gap-1.5">
-              <span className="w-4 h-0.5 bg-emerald-400 inline-block rounded" />
-              Financeira (Realizado)
-            </span>
+          {pressureLineData.hasBoth && (
+            <>
+              <span className="flex items-center gap-1.5">
+                <span className="w-4 h-0.5 inline-block rounded" style={{ backgroundColor: "hsl(210,100%,56%)" }} />
+                Operacional (F−B)
+              </span>
+              <span className="flex items-center gap-1.5">
+                <span className="w-4 h-0.5 bg-emerald-400 inline-block rounded" />
+                Financeira (G−C)
+              </span>
+            </>
           )}
         </div>
 
@@ -259,31 +264,29 @@ export default function FinanceCharts({ monthReference, transactions }: Props) {
               <Tooltip content={<MinimalTooltip />} />
               <ReferenceLine y={0} stroke="hsl(215,15%,20%)" strokeWidth={1} label="" />
 
-              {pressureLineData.hasPrev && (
-                <Line
-                  type="monotone"
-                  dataKey="pressaoOperacional"
-                  name="Pressão Operacional"
-                  stroke="hsl(210,100%,56%)"
-                  strokeWidth={2}
-                  strokeDasharray="4 3"
-                  dot={false}
-                  activeDot={{ r: 3, strokeWidth: 1, fill: "hsl(210,100%,56%)" }}
-                  connectNulls
-                />
-              )}
-
-              {pressureLineData.hasReal && (
-                <Line
-                  type="monotone"
-                  dataKey="pressaoFinanceira"
-                  name="Pressão Financeira"
-                  stroke="hsl(142,100%,50%)"
-                  strokeWidth={2}
-                  dot={false}
-                  activeDot={{ r: 4, strokeWidth: 1.5, fill: "hsl(142,100%,50%)" }}
-                  connectNulls
-                />
+              {pressureLineData.hasBoth && (
+                <>
+                  <Line
+                    type="monotone"
+                    dataKey="pressaoOperacional"
+                    name="Operacional (F−B)"
+                    stroke="hsl(210,100%,56%)"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 3, strokeWidth: 1, fill: "hsl(210,100%,56%)" }}
+                    connectNulls
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="pressaoFinanceira"
+                    name="Financeira (G−C)"
+                    stroke="hsl(142,100%,50%)"
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 1.5, fill: "hsl(142,100%,50%)" }}
+                    connectNulls
+                  />
+                </>
               )}
             </LineChart>
           </ResponsiveContainer>
@@ -296,7 +299,7 @@ export default function FinanceCharts({ monthReference, transactions }: Props) {
         )}
 
         <p className="text-[8px] font-mono text-muted-foreground/30 text-center mt-2 tracking-wider">
-          Acima de zero = despesa &gt; receita • Abaixo = receita &gt; despesa
+          Operacional: Pago(F) − Previsto Pagar(B) • Financeira: Recebido(G) − Previsto Receber(C)
         </p>
       </motion.div>
     </div>
