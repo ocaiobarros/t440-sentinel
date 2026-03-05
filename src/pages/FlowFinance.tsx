@@ -4,6 +4,7 @@ import { DollarSign, TrendingUp, TrendingDown, Calendar, ArrowUpRight, ArrowDown
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import FinanceUploadWizard from "@/components/finance/FinanceUploadWizard";
+import FinanceCharts from "@/components/finance/FinanceCharts";
 import {
   Select,
   SelectContent,
@@ -149,11 +150,23 @@ export default function FlowFinance() {
           </div>
         </motion.div>
 
-        {/* ── Upload Wizard ── */}
+        {/* ── Charts ── */}
         <motion.div
           initial={{ opacity: 0, y: 10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.2 }}
+        >
+          <h2 className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-3">
+            Performance
+          </h2>
+          <FinanceCharts monthReference={selectedMonth} />
+        </motion.div>
+
+        {/* ── Upload Wizard ── */}
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.25 }}
         >
           <h2 className="text-xs font-display font-bold text-muted-foreground uppercase tracking-wider mb-3">
             Importar Dados

@@ -2002,7 +2002,27 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      vw_financial_daily_performance: {
+        Row: {
+          daily_net_flow: number | null
+          date: string | null
+          running_balance: number | null
+          scenario: Database["public"]["Enums"]["finance_scenario"] | null
+          tenant_id: string | null
+          total_pagar: number | null
+          total_receber: number | null
+          variance: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "financial_transactions_tenant_id_fkey"
+            columns: ["tenant_id"]
+            isOneToOne: false
+            referencedRelation: "tenants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       alert_transition: {
