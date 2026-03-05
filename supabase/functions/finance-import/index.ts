@@ -70,23 +70,39 @@ Deno.serve(async (req) => {
       );
     }
 
-    const headers = lines[0].split(";").map((h) => h.trim().toLowerCase());
+    const rawHeaders = lines[0].split(";").map((h) => h.trim());
+    const headers = rawHeaders.map((h) => h.toLowerCase());
+    const normalizedHeaders = rawHeaders.map(normalizeHeader);
 
     // Detect column indexes — flexible mapping
-    const dateIdx = headers.findIndex((h) => ["data", "date", "transaction_date", "data_transacao"].includes(h));
-    const typeIdx = headers.findIndex((h) => ["tipo", "type", "natureza"].includes(h));
-    const descIdx = headers.findIndex((h) => ["descricao", "description", "desc", "descrição"].includes(h));
-    const catIdx = headers.findIndex((h) => ["categoria", "category", "cat"].includes(h));
+    const dateIdx = findHeaderIndex(normalizedHeaders, ["data", "date", "transaction date", "data transacao"]);
+    const typeIdx = findHeaderIndex(normalizedHeaders, ["tipo", "type", "natureza"]);
+    const descIdx = findHeaderIndex(normalizedHeaders, ["descricao", "description", "desc", "descricao"]);
+    const catIdx = findHeaderIndex(normalizedHeaders, ["categoria", "category", "cat"]);
 
     // Scenario columns — can be mixed (Previsto + Realizado in same row)
-    const previstoIdx = headers.findIndex((h) => ["previsto", "forecast", "planned", "valor_previsto"].includes(h));
-    const realizadoIdx = headers.findIndex((h) => ["realizado", "actual", "realized", "valor_realizado"].includes(h));
+    const previstoIdx = findHeaderIndex(normalizedHeaders, ["previsto", "forecast", "planned", "valor previsto"]);
+    const realizadoIdx = findHeaderIndex(normalizedHeaders, ["realizado", "actual", "realized", "valor realizado"]);
 
     // Or single amount + scenario column
-    const amountIdx = headers.findIndex((h) => ["valor", "amount", "value"].includes(h));
-    const scenarioIdx = headers.findIndex((h) => ["cenario", "scenario", "cenário"].includes(h));
+    const amountIdx = findHeaderIndex(normalizedHeaders, ["valor", "amount", "value"]);
+    const scenarioIdx = findHeaderIndex(normalizedHeaders, ["cenario", "scenario", "cenario"]);
 
-    const hasSplitColumns = previstoIdx !== -1 || realizadoIdx !== -1;
+    // Wide-sheet layout support (e.g. "Previsto Jan/2026; Soma de PAGAR; Soma de RECEBER; ... ; Realizado Jan/2026; Soma de Pago; Soma de Recebido")
+    const previstoDateIdx = findHeaderIndex(normalizedHeaders, [/^previsto\b/, /data previsto/]);
+    const realizadoDateIdx = findHeaderIndex(normalizedHeaders, [/^realizado\b/, /data realizado/]);
+    const previstoPagarIdx = findHeaderIndex(normalizedHeaders, [/soma de pagar/, /previsto.*pagar/, /a pagar/]);
+    const previstoReceberIdx = findHeaderIndex(normalizedHeaders, [/soma de receber/, /previsto.*receb/, /a receber/]);
+    const realizadoPagarIdx = findHeaderIndex(normalizedHeaders, [/soma de pago/, /realizado.*pag/, /\bpago\b/]);
+    const realizadoReceberIdx = findHeaderIndex(normalizedHeaders, [/soma de recebido/, /realizado.*receb/, /\brecebido\b/]);
+
+    const hasDualTypeSplitColumns =
+      previstoPagarIdx !== -1 ||
+      previstoReceberIdx !== -1 ||
+      realizadoPagarIdx !== -1 ||
+      realizadoReceberIdx !== -1;
+
+    const hasSplitColumns = hasDualTypeSplitColumns || previstoIdx !== -1 || realizadoIdx !== -1;
 
     const rows: Array<{
       tenant_id: string;
@@ -113,19 +129,82 @@ Deno.serve(async (req) => {
         continue;
       }
 
+      // Skip summary lines like "Total Geral"
+      if (cols.some((c, idx) => idx <= 6 && normalizeHeader(c).startsWith("total geral"))) {
+        continue;
+      }
+
       try {
         const txDateRaw = dateIdx !== -1 ? cols[dateIdx] : month_reference;
-        const txDate = normalizeDate(txDateRaw);
+        const defaultTxDate = normalizeDate(txDateRaw);
 
-        // Validate date format
-        if (!/^\d{4}-\d{2}-\d{2}$/.test(txDate)) {
+        // Validate date format when it will be used as fallback
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(defaultTxDate)) {
           warnings.push({ line: lineNum, message: `Formato de data inválido: "${txDateRaw}"` });
           continue;
         }
 
-        const txType = typeIdx !== -1 ? cols[typeIdx].toUpperCase() : "PAGAR";
         const desc = descIdx !== -1 ? cols[descIdx] : "";
         const cat = catIdx !== -1 ? cols[catIdx] : "";
+
+        if (hasDualTypeSplitColumns) {
+          let lineHasValue = false;
+
+          const mappedColumns: Array<{
+            amountIdx: number;
+            dateIdx: number;
+            scenario: "PREVISTO" | "REALIZADO";
+            type: "PAGAR" | "RECEBER";
+            label: string;
+          }> = [
+            { amountIdx: previstoPagarIdx, dateIdx: previstoDateIdx, scenario: "PREVISTO", type: "PAGAR", label: "previsto/pagar" },
+            { amountIdx: previstoReceberIdx, dateIdx: previstoDateIdx, scenario: "PREVISTO", type: "RECEBER", label: "previsto/receber" },
+            { amountIdx: realizadoPagarIdx, dateIdx: realizadoDateIdx, scenario: "REALIZADO", type: "PAGAR", label: "realizado/pagar" },
+            { amountIdx: realizadoReceberIdx, dateIdx: realizadoDateIdx, scenario: "REALIZADO", type: "RECEBER", label: "realizado/receber" },
+          ];
+
+          for (const colMap of mappedColumns) {
+            if (colMap.amountIdx === -1) continue;
+
+            const rawVal = cols[colMap.amountIdx] ?? "";
+            const val = parseAmount(rawVal);
+
+            if (val === null && rawVal && rawVal !== "" && rawVal !== "-") {
+              warnings.push({ line: lineNum, message: `Valor inválido (${colMap.label}): "${rawVal}"` });
+              continue;
+            }
+
+            if (val === null || val === 0) continue;
+
+            const rowDateRaw = colMap.dateIdx !== -1 ? cols[colMap.dateIdx] : defaultTxDate;
+            const rowDate = normalizeDate(rowDateRaw);
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(rowDate)) {
+              warnings.push({ line: lineNum, message: `Data inválida (${colMap.label}): "${rowDateRaw}"` });
+              continue;
+            }
+
+            lineHasValue = true;
+            rows.push({
+              tenant_id: tenantId,
+              transaction_date: rowDate,
+              scenario: colMap.scenario,
+              type: colMap.type,
+              amount: val,
+              month_reference,
+              description: desc,
+              category: cat,
+              created_by: user.id,
+            });
+          }
+
+          if (!lineHasValue) {
+            warnings.push({ line: lineNum, message: "Linha sem valores numéricos válidos" });
+          }
+
+          continue;
+        }
+
+        const txType = typeIdx !== -1 ? cols[typeIdx].toUpperCase() : "PAGAR";
 
         // Normalize type
         const normalizedType = txType.includes("RECEBER") || txType.includes("RECEITA") || txType.includes("INCOME")
@@ -143,7 +222,7 @@ Deno.serve(async (req) => {
               lineHasValue = true;
               rows.push({
                 tenant_id: tenantId,
-                transaction_date: txDate,
+                transaction_date: defaultTxDate,
                 scenario: "PREVISTO",
                 type: normalizedType,
                 amount: val,
@@ -163,7 +242,7 @@ Deno.serve(async (req) => {
               lineHasValue = true;
               rows.push({
                 tenant_id: tenantId,
-                transaction_date: txDate,
+                transaction_date: defaultTxDate,
                 scenario: "REALIZADO",
                 type: normalizedType,
                 amount: val,
@@ -197,7 +276,7 @@ Deno.serve(async (req) => {
 
           rows.push({
             tenant_id: tenantId,
-            transaction_date: txDate,
+            transaction_date: defaultTxDate,
             scenario,
             type: normalizedType,
             amount: val,
@@ -285,4 +364,25 @@ function normalizeDate(raw: string): string {
   const m = raw.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
   if (m) return `${m[3]}-${m[2].padStart(2, "0")}-${m[1].padStart(2, "0")}`;
   return raw;
+}
+
+function normalizeHeader(value: string): string {
+  return value
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[_\-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .toLowerCase();
+}
+
+function findHeaderIndex(headers: string[], patterns: Array<string | RegExp>): number {
+  return headers.findIndex((header) => {
+    return patterns.some((pattern) => {
+      if (typeof pattern === "string") {
+        return header === pattern || header.includes(pattern);
+      }
+      return pattern.test(header);
+    });
+  });
 }
