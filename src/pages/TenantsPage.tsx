@@ -121,8 +121,18 @@ export default function TenantsPage() {
 
   const createTenant = useMutation({
     mutationFn: async ({ name, slug }: { name: string; slug: string }) => {
+      // Try with original slug first, then with random suffix on conflict
       const { error } = await supabase.from("tenants").insert({ name, slug });
-      if (error) throw error;
+      if (error) {
+        if (error.message?.includes("tenants_slug_key") || error.code === "23505") {
+          // Slug conflict — retry with a unique suffix
+          const uniqueSlug = `${slug}-${crypto.randomUUID().slice(0, 6)}`;
+          const { error: retryError } = await supabase.from("tenants").insert({ name, slug: uniqueSlug });
+          if (retryError) throw retryError;
+          return;
+        }
+        throw error;
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tenants-admin"] });
