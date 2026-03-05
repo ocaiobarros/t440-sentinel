@@ -9,43 +9,28 @@ interface InsightProps {
 }
 
 export default function FinanceInsight({ transactions, saldoPrevisto, saldoRealizado, hasRealizado, monthLabel }: InsightProps) {
-  const insights: { icon: typeof Lightbulb; text: string; type: "info" | "positive" | "warning" }[] = [];
+  const insights: { text: string; type: "info" | "positive" | "warning" }[] = [];
 
   if (!hasRealizado) {
     insights.push({
-      icon: AlertTriangle,
-      text: `${monthLabel}: Mês em curso — apenas dados previstos registrados. O realizado será alimentado conforme movimentações ocorram.`,
+      text: `${monthLabel} em curso — projeção baseada no previsto.`,
       type: "warning",
     });
-
-    const previstoReceber = transactions.filter((t: any) => t.scenario === "PREVISTO" && t.type === "RECEBER").reduce((s: number, t: any) => s + Number(t.amount), 0);
-    const previstoPagar = transactions.filter((t: any) => t.scenario === "PREVISTO" && t.type === "PAGAR").reduce((s: number, t: any) => s + Number(t.amount), 0);
-
-    if (previstoReceber > 0 || previstoPagar > 0) {
-      insights.push({
-        icon: Lightbulb,
-        text: `Projeção prevista: Receitas de ${fmtShort(previstoReceber)} contra despesas de ${fmtShort(previstoPagar)}, saldo líquido projetado de ${fmtShort(saldoPrevisto)}.`,
-        type: "info",
-      });
-    }
   } else {
     const variancia = saldoPrevisto !== 0 ? ((saldoRealizado - saldoPrevisto) / Math.abs(saldoPrevisto)) * 100 : 0;
-
     if (variancia >= 0) {
       insights.push({
-        icon: TrendingUp,
-        text: `O realizado superou o previsto em ${variancia.toFixed(1)}%. Saldo acumulado de ${fmtShort(saldoRealizado)} vs ${fmtShort(saldoPrevisto)} previstos.`,
+        text: `Realizado superou o previsto em ${variancia.toFixed(1)}%. Saldo: ${fmtShort(saldoRealizado)}.`,
         type: "positive",
       });
     } else {
       insights.push({
-        icon: AlertTriangle,
-        text: `O realizado ficou ${Math.abs(variancia).toFixed(1)}% abaixo do previsto. Saldo de ${fmtShort(saldoRealizado)} vs ${fmtShort(saldoPrevisto)} planejados.`,
+        text: `Realizado ficou ${Math.abs(variancia).toFixed(1)}% abaixo. Saldo: ${fmtShort(saldoRealizado)} vs ${fmtShort(saldoPrevisto)}.`,
         type: "warning",
       });
     }
 
-    // Find top category contributing to variance
+    // Top category
     const catMap = new Map<string, number>();
     for (const t of transactions.filter((t: any) => t.scenario === "REALIZADO")) {
       const cat = t.category || "Sem categoria";
@@ -56,30 +41,28 @@ export default function FinanceInsight({ transactions, saldoPrevisto, saldoReali
     if (sorted.length > 0) {
       const [topCat, topVal] = sorted[0];
       insights.push({
-        icon: Lightbulb,
-        text: `Principal categoria impactante: "${topCat}" com impacto líquido de ${fmtShort(topVal)}.`,
+        text: `Maior impacto: "${topCat}" — ${fmtShort(topVal)}.`,
         type: "info",
       });
     }
   }
 
-  const typeStyles = {
-    info: { bg: "bg-neon-blue/5 border-neon-blue/15", icon: "text-neon-blue", text: "text-foreground/80" },
-    positive: { bg: "bg-emerald-500/5 border-emerald-500/15", icon: "text-emerald-400", text: "text-foreground/80" },
-    warning: { bg: "bg-amber-500/5 border-amber-500/15", icon: "text-amber-400", text: "text-foreground/80" },
+  const dotColor = {
+    info: "bg-neon-blue/50",
+    positive: "bg-emerald-500/50",
+    warning: "bg-amber-500/50",
   };
 
   return (
-    <div className="space-y-2">
-      {insights.map((insight, i) => {
-        const s = typeStyles[insight.type];
-        return (
-          <div key={i} className={`flex items-start gap-3 rounded-xl border ${s.bg} p-3.5 backdrop-blur-sm`}>
-            <insight.icon className={`w-4 h-4 mt-0.5 shrink-0 ${s.icon}`} />
-            <p className={`text-xs leading-relaxed ${s.text}`}>{insight.text}</p>
-          </div>
-        );
-      })}
+    <div className="space-y-1.5">
+      {insights.map((insight, i) => (
+        <div key={i} className="flex items-center gap-3 py-2 px-1">
+          <div className={`w-1 h-1 rounded-full shrink-0 ${dotColor[insight.type]}`} />
+          <p className="text-[10px] font-mono text-muted-foreground/50 leading-relaxed">
+            {insight.text}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
