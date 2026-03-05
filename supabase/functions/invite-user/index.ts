@@ -188,28 +188,29 @@ Deno.serve(async (req) => {
     };
 
     const setAuthTenantMetadata = async (userId: string) => {
-      await adminClient.auth.admin.updateUserById(userId, {
+      const { error } = await adminClient.auth.admin.updateUserById(userId, {
         app_metadata: { tenant_id: targetTenant },
       });
+      if (error) throw new Error(`updateUserById failed: ${error.message}`);
     };
 
     const findExistingAuthUserIdByEmail = async (targetEmail: string) => {
       const normalized = targetEmail.toLowerCase();
       let page = 1;
 
-      while (page <= 20) {
+      while (page <= 100) {
         const { data: usersData, error: usersError } = await adminClient.auth.admin.listUsers({
           page,
-          perPage: 1000,
+          perPage: 100,
         });
 
-        if (usersError) throw usersError;
+        if (usersError) throw new Error(`listUsers(page=${page}) failed: ${usersError.message}`);
 
         const users = usersData?.users ?? [];
         const found = users.find((u) => (u.email || "").toLowerCase() === normalized);
         if (found?.id) return found.id;
 
-        if (users.length < 1000) break;
+        if (users.length < 100) break;
         page += 1;
       }
 
@@ -243,12 +244,18 @@ Deno.serve(async (req) => {
       if (profileDeleteError) throw profileDeleteError;
     };
 
-    const { data: existingProfile } = await adminClient
+    const { data: profilesByEmail, error: profilesByEmailError } = await adminClient
       .from("profiles")
       .select("id, tenant_id")
       .eq("email", email)
-      .maybeSingle();
+      .order("created_at", { ascending: false })
+      .limit(1);
 
+    if (profilesByEmailError) {
+      throw new Error(`profiles lookup failed: ${profilesByEmailError.message}`);
+    }
+
+    const existingProfile = profilesByEmail?.[0] ?? null;
     const previousTenantId = existingProfile?.tenant_id ?? null;
 
     let userId: string | null = null;
@@ -261,10 +268,6 @@ Deno.serve(async (req) => {
       } else {
         await cleanupOrphanProfile(existingProfile.id);
       }
-    }
-
-    if (!userId) {
-      userId = await findExistingAuthUserIdByEmail(email);
     }
 
     const existingAuthUser = Boolean(userId);
@@ -282,19 +285,26 @@ Deno.serve(async (req) => {
         app_metadata: { tenant_id: targetTenant },
       });
 
-      if (createError || !newUser.user) {
-        const message = createError?.message || "Failed to create user";
-        return new Response(JSON.stringify({ error: message }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
+      if (newUser?.user?.id) {
+        userId = newUser.user.id;
+      } else if (createError) {
+        const msg = (createError.message || "").toLowerCase();
+        const duplicateEmail =
+          msg.includes("already") ||
+          msg.includes("registered") ||
+          msg.includes("exists") ||
+          (createError as any)?.status === 422;
 
-      userId = newUser.user.id;
+        if (duplicateEmail) {
+          userId = await findExistingAuthUserIdByEmail(email);
+        } else {
+          throw new Error(`createUser failed: ${createError.message}`);
+        }
+      }
     }
 
     if (!userId) {
-      return new Response(JSON.stringify({ error: "Unable to resolve user id" }), {
+      return new Response(JSON.stringify({ error: `Unable to resolve user id for ${email}` }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
