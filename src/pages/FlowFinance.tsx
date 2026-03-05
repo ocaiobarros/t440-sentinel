@@ -6,6 +6,7 @@ import { useQuery } from "@tanstack/react-query";
 import FinanceUploadWizard from "@/components/finance/FinanceUploadWizard";
 import FinanceCharts from "@/components/finance/FinanceCharts";
 import FinanceHeatmap from "@/components/finance/FinanceHeatmap";
+import CashPressureChart from "@/components/finance/CashPressureChart";
 import ExecutiveKPICards from "@/components/finance/ExecutiveKPICards";
 import FinanceInsight from "@/components/finance/FinanceInsight";
 import {
@@ -148,6 +149,12 @@ export default function FlowFinance() {
         <FinanceCharts
           monthReference={selectedMonth}
           transactions={transactions}
+        />
+
+        {/* ── Cash Pressure ── */}
+        <CashPressureChart
+          transactions={transactions}
+          monthReference={selectedMonth}
         />
 
         {/* ── Heatmap ── */}
