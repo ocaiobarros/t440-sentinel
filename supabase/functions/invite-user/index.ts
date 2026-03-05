@@ -162,15 +162,7 @@ Deno.serve(async (req) => {
       const isTenantMove = existingById.tenant_id !== targetTenant;
 
       if (!isTenantMove) {
-        const { error: updateProfileError } = await adminClient
-          .from("profiles")
-          .update({
-            display_name: displayName,
-            email,
-          })
-          .eq("id", userId);
-
-        if (updateProfileError) throw updateProfileError;
+        // Evita UPDATE em profiles para não acionar trigger de imutabilidade de tenant
         return;
       }
 
