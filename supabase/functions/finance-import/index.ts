@@ -76,11 +76,14 @@ Deno.serve(async (req) => {
           continue;
         }
 
-        const { rows, warnings } = parseCSVLines(lines, detectedMonth, tenantId, user.id);
+        const { rows, warnings, debugSamples } = parseCSVLines(lines, detectedMonth, tenantId, user.id);
         for (const w of warnings) {
           allWarnings.push({ sheet: sheetName, ...w });
         }
         allRows.push(...rows);
+        if (debugSamples.length > 0) {
+          console.log(`[DEBUG] Sheet "${sheetName}" - first 5 parsed amounts:`, JSON.stringify(debugSamples));
+        }
       }
 
       if (allRows.length === 0) {
@@ -149,7 +152,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { rows, warnings } = parseCSVLines(lines, month_reference, tenantId, user.id);
+    const { rows, warnings, debugSamples } = parseCSVLines(lines, month_reference, tenantId, user.id);
+    if (debugSamples.length > 0) {
+      console.log(`[DEBUG] CSV - first 5 parsed amounts:`, JSON.stringify(debugSamples));
+    }
 
     if (rows.length === 0) {
       return new Response(
@@ -243,7 +249,7 @@ function parseCSVLines(
   monthReference: string,
   tenantId: string,
   userId: string,
-): { rows: any[]; warnings: Array<{ line: number; message: string }> } {
+): { rows: any[]; warnings: Array<{ line: number; message: string }>; debugSamples: Array<{ line: number; raw: string; parsed: number | null }> } {
   const rawHeaders = lines[0].split(";").map((h) => h.trim());
   const normalizedHeaders = rawHeaders.map(normalizeHeader);
 
@@ -271,6 +277,7 @@ function parseCSVLines(
 
   const rows: any[] = [];
   const warnings: Array<{ line: number; message: string }> = [];
+  const debugSamples: Array<{ line: number; raw: string; parsed: number | null }> = [];
 
   for (let i = 1; i < lines.length; i++) {
     const lineNum = i + 1;
@@ -304,6 +311,9 @@ function parseCSVLines(
           if (colMap.amountIdx === -1) continue;
           const rawVal = cols[colMap.amountIdx] ?? "";
           const val = parseAmount(rawVal);
+          if (debugSamples.length < 5 && rawVal && rawVal !== "" && rawVal !== "-") {
+            debugSamples.push({ line: lineNum, raw: rawVal, parsed: val });
+          }
           if (val === null && rawVal && rawVal !== "" && rawVal !== "-") {
             warnings.push({ line: lineNum, message: `Valor inválido (${colMap.label}): "${rawVal}"` });
             continue;
@@ -392,7 +402,7 @@ function parseCSVLines(
     }
   }
 
-  return { rows, warnings };
+  return { rows, warnings, debugSamples };
 }
 
 function parseAmount(raw: string): number | null {
