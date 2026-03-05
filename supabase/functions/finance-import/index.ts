@@ -64,7 +64,7 @@ Deno.serve(async (req) => {
 
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
-        const csvText = XLSX.utils.sheet_to_csv(sheet, { FS: ";", RS: "\n" });
+        const csvText = XLSX.utils.sheet_to_csv(sheet, { FS: ";", RS: "\n", rawNumbers: true });
         const rawLines = csvText
           .split(/\r?\n/)
           .map((line) => line.replace(/\uFEFF/g, ""));
@@ -83,6 +83,7 @@ Deno.serve(async (req) => {
 
         const { headerIndex, monthReference } = headerCandidate;
         const dataLines = lines.slice(headerIndex);
+        console.log(`[DEBUG] Sheet "${sheetName}" headerIdx=${headerIndex} month=${monthReference} header="${dataLines[0]?.slice(0, 200)}" firstData="${dataLines[1]?.slice(0, 200)}"`);
         const { rows, warnings, debugSamples } = parseCSVLines(dataLines, monthReference, tenantId, user.id, headerIndex);
         for (const w of warnings) {
           allWarnings.push({ sheet: sheetName, ...w });
