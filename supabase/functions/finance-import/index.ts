@@ -70,21 +70,21 @@ Deno.serve(async (req) => {
         if (jsonRows.length < 2) continue;
 
         // Find header row containing month reference
-        const headerResult = findHeaderRow(jsonRows);
+        const headerResult = findHeaderRow(jsonRows, sheetName);
         if (!headerResult) {
           allWarnings.push({
             sheet: sheetName,
             line: 1,
-            message: `Não foi possível detectar cabeçalho/mês (primeiras células: "${JSON.stringify(jsonRows[0]?.slice(0, 4)).slice(0, 140)}")`,
+            message: `Não foi possível detectar cabeçalho/mês (primeiras células: "${JSON.stringify(jsonRows[0]?.slice(0, 6)).slice(0, 180)}")`,
           });
           continue;
         }
 
-        const { headerRowIdx, monthReference, columnMap } = headerResult;
-        console.log(`[finance-import] Sheet "${sheetName}" headerRow=${headerRowIdx} month=${monthReference} cols=${JSON.stringify(columnMap)}`);
+        const { headerRowIdx, dataStartRowIdx, monthReference, columnMap } = headerResult;
+        console.log(`[finance-import] Sheet "${sheetName}" headerRow=${headerRowIdx} dataStart=${dataStartRowIdx} month=${monthReference} cols=${JSON.stringify(columnMap)}`);
 
         // Parse data rows
-        const dataRows = jsonRows.slice(headerRowIdx + 1);
+        const dataRows = jsonRows.slice(dataStartRowIdx);
         let sheetInserted = 0;
 
         for (let i = 0; i < dataRows.length; i++) {
@@ -95,7 +95,7 @@ Deno.serve(async (req) => {
           const firstCell = String(row[0] ?? "").toLowerCase().trim();
           if (firstCell.includes("total geral") || firstCell.includes("total")) continue;
 
-          const lineNum = headerRowIdx + i + 2; // 1-indexed for user display
+          const lineNum = dataStartRowIdx + i + 1; // 1-indexed for user display
 
           // Extract dates
           const prevDate = extractDate(row[columnMap.prevDateCol], monthReference);
@@ -178,7 +178,7 @@ Deno.serve(async (req) => {
 
         // Log first 3 data rows for debug
         const sampleRows = dataRows.slice(0, 3).map((r: any[], idx: number) => ({
-          row: headerRowIdx + idx + 2,
+          row: dataStartRowIdx + idx + 1,
           cells: r?.slice(0, 8),
         }));
         console.log(`[finance-import] Sheet "${sheetName}" samples:`, JSON.stringify(sampleRows));
@@ -327,15 +327,31 @@ interface ColumnMap {
   realReceberCol: number;
 }
 
-function findHeaderRow(rows: any[][]): { headerRowIdx: number; monthReference: string; columnMap: ColumnMap } | null {
-  const scanLimit = Math.min(rows.length, 12);
+function parseMonthReferenceFromText(value: any): string | null {
+  if (value === null || value === undefined || value === "") return null;
+
+  const normalized = String(value)
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .trim();
+
+  const match = normalized.match(/\b(jan(?:eiro)?|fev(?:ereiro)?|feb|mar(?:co)?|abr(?:il)?|apr|mai(?:o)?|may|jun(?:ho)?|jul(?:ho)?|ago(?:sto)?|aug|set(?:embro)?|sep|out(?:ubro)?|oct|nov(?:embro)?|dez(?:embro)?|dec)\b[\s\/-]*(\d{4})/i);
+  if (!match) return null;
+
+  const mm = MONTH_MAP[match[1]];
+  if (!mm) return null;
+  return `${match[2]}-${mm}-01`;
+}
+
+function findHeaderRow(rows: any[][], sheetName?: string): { headerRowIdx: number; dataStartRowIdx: number; monthReference: string; columnMap: ColumnMap } | null {
+  const scanLimit = Math.min(rows.length, 20);
 
   for (let rowIdx = 0; rowIdx < scanLimit; rowIdx++) {
     const row = rows[rowIdx];
     if (!row) continue;
 
-    // Look for a cell containing "Previsto" + month/year
-    let monthRef: string | null = null;
+    let monthRefInline: string | null = null;
     let prevDateCol = -1;
     let realDateCol = -1;
     let prevPagarCol = -1;
@@ -347,45 +363,47 @@ function findHeaderRow(rows: any[][]): { headerRowIdx: number; monthReference: s
       const cell = String(row[colIdx] ?? "").trim();
       const norm = cell.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
 
-      // Detect "Previsto Jan/2026" or "Realizado Fev/2026"
-      const monthMatch = norm.match(/(?:previsto|realizado)\s+(\w+)\s*[\/\-]\s*(\d{4})/);
-      if (monthMatch) {
-        const mm = MONTH_MAP[monthMatch[1]];
-        if (mm) {
-          monthRef = `${monthMatch[2]}-${mm}-01`;
-          if (norm.startsWith("previsto")) prevDateCol = colIdx;
-          else realDateCol = colIdx;
-        }
-      }
+      const maybeMonth = parseMonthReferenceFromText(norm);
+      if (maybeMonth && !monthRefInline) monthRefInline = maybeMonth;
 
-      // Detect amount columns by header name
-      if (/soma de pagar/i.test(norm) || /\ba pagar\b/i.test(norm)) {
-        // Determine if this belongs to previsto or realizado based on position
-        if (realDateCol === -1 || colIdx < realDateCol) {
-          prevPagarCol = colIdx;
-        } else {
-          // This shouldn't happen with this layout, but handle it
-          prevPagarCol = colIdx;
-        }
-      }
-      if (/soma de receber/i.test(norm) || /\ba receber\b/i.test(norm)) {
-        prevReceberCol = colIdx;
-      }
-      if (/soma de pago/i.test(norm) || /\bpago\b/i.test(norm)) {
-        realPagarCol = colIdx;
-      }
-      if (/soma de recebido/i.test(norm) || /\brecebido\b/i.test(norm)) {
-        realReceberCol = colIdx;
-      }
+      if (norm === "previsto" || norm.startsWith("previsto ")) prevDateCol = colIdx;
+      if (norm === "realizado" || norm.startsWith("realizado ")) realDateCol = colIdx;
+
+      if (/soma de pagar/i.test(norm) || /\ba pagar\b/i.test(norm)) prevPagarCol = colIdx;
+      if (/soma de receber/i.test(norm) || /\ba receber\b/i.test(norm)) prevReceberCol = colIdx;
+      if (/soma de pago/i.test(norm) || /\bpago\b/i.test(norm)) realPagarCol = colIdx;
+      if (/soma de recebido/i.test(norm) || /\brecebido\b/i.test(norm)) realReceberCol = colIdx;
     }
 
-    if (monthRef && (prevPagarCol !== -1 || realPagarCol !== -1)) {
-      return {
-        headerRowIdx: rowIdx,
-        monthReference: monthRef,
-        columnMap: { prevDateCol, prevPagarCol, prevReceberCol, realDateCol, realPagarCol, realReceberCol },
-      };
+    const hasAnyAmountCol = [prevPagarCol, prevReceberCol, realPagarCol, realReceberCol].some((idx) => idx !== -1);
+    const hasAnyDateAnchor = prevDateCol !== -1 || realDateCol !== -1;
+    if (!hasAnyAmountCol || !hasAnyDateAnchor) continue;
+
+    let monthReference = monthRefInline;
+    let dataStartRowIdx = rowIdx + 1;
+
+    // Common spreadsheet layout: row 1 = headers, row 2 = month labels (Jan/2026)
+    if (!monthReference) {
+      const nextRow = rows[rowIdx + 1] ?? [];
+      const monthFromPrev = prevDateCol !== -1 ? parseMonthReferenceFromText(nextRow[prevDateCol]) : null;
+      const monthFromReal = realDateCol !== -1 ? parseMonthReferenceFromText(nextRow[realDateCol]) : null;
+      const monthFromSheet = parseMonthReferenceFromText(sheetName ?? "");
+
+      monthReference = monthFromPrev || monthFromReal || monthFromSheet;
+      if (monthFromPrev || monthFromReal) dataStartRowIdx = rowIdx + 2;
     }
+
+    if (!monthReference) continue;
+
+    if (prevDateCol === -1 && realDateCol !== -1) prevDateCol = realDateCol;
+    if (realDateCol === -1 && prevDateCol !== -1) realDateCol = prevDateCol;
+
+    return {
+      headerRowIdx: rowIdx,
+      dataStartRowIdx,
+      monthReference,
+      columnMap: { prevDateCol, prevPagarCol, prevReceberCol, realDateCol, realPagarCol, realReceberCol },
+    };
   }
 
   return null;
