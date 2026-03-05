@@ -157,18 +157,18 @@ function MapListView() {
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {maps.map((m, i) => (
               <motion.div key={m.id} initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.05 }} className="glass-card rounded-xl p-5 border border-border/50 hover:border-neon-green/20 transition-all group">
-                <div className="flex items-start justify-between mb-3">
-                  <div>
-                    <h3 className="text-sm font-display font-bold text-foreground group-hover:text-neon-green transition-colors">{m.name}</h3>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">Zoom: {m.zoom} • Refresh: {m.refresh_interval}s</p>
+                <div className="flex items-start justify-between mb-3 gap-2">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-display font-bold text-foreground group-hover:text-neon-green transition-colors truncate" title={m.name}>{m.name}</h3>
+                    <p className="text-[10px] text-muted-foreground mt-0.5 truncate">Zoom: {m.zoom} • Refresh: {m.refresh_interval}s</p>
                   </div>
-                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display uppercase">{m.theme}</span>
+                  <span className="text-[8px] px-1.5 py-0.5 rounded-full bg-neon-cyan/10 text-neon-cyan border border-neon-cyan/20 font-display uppercase shrink-0">{m.theme}</span>
                 </div>
                 <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground mb-4">
                   <span>{new Date(m.updated_at).toLocaleDateString("pt-BR")}</span>
                 </div>
-                <div className="flex items-center gap-1.5">
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/app/operations/flowmap/${m.id}`)} className="flex-1 gap-1 text-[10px] h-7">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/app/operations/flowmap/${m.id}`)} className="flex-1 min-w-[92px] gap-1 text-[10px] h-7">
                     <Eye className="w-3 h-3" />{t("flowmap.open")}
                   </Button>
                   <AccessControlPanel resourceType="flow_map" resourceId={m.id} compact />

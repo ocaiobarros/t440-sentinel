@@ -244,25 +244,25 @@ export default function ModuleDashboardList({ category, title, description, icon
                       className="glass-card rounded-xl p-5 border border-border/50 hover:border-neon-green/20 transition-all group"
                     >
                       <div className="flex items-start justify-between mb-3">
-                        <div>
-                          <h3 className="text-sm font-display font-bold text-foreground group-hover:text-neon-green transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <h3 className="text-sm font-display font-bold text-foreground group-hover:text-neon-green transition-colors truncate" title={dash.name}>
                             {dash.name}
                           </h3>
                           {dash.description && (
-                            <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2">{dash.description}</p>
+                            <p className="text-[10px] text-muted-foreground mt-0.5 line-clamp-2 break-words">{dash.description}</p>
                           )}
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground mb-4">
+                      <div className="flex items-center gap-1.5 text-[9px] text-muted-foreground mb-4 min-w-0">
                         <span className={`w-1.5 h-1.5 rounded-full ${dash.zabbix_connection_id ? "bg-neon-green pulse-green" : "bg-muted-foreground/30"}`} />
-                        <span>{dash.zabbix_connection_id ? "Conectado" : "Sem conexão"}</span>
+                        <span className="truncate">{dash.zabbix_connection_id ? "Conectado" : "Sem conexão"}</span>
                         <span className="mx-1">•</span>
-                        <span>{new Date(dash.updated_at).toLocaleDateString("pt-BR")}</span>
+                        <span className="shrink-0">{new Date(dash.updated_at).toLocaleDateString("pt-BR")}</span>
                       </div>
 
-                      <div className="flex items-center gap-1.5">
-                        <Button variant="outline" size="sm" onClick={() => navigate(viewUrl)} className="flex-1 gap-1 text-[10px] h-7">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Button variant="outline" size="sm" onClick={() => navigate(viewUrl)} className="flex-1 min-w-[96px] gap-1 text-[10px] h-7">
                           <Eye className="w-3 h-3" /> Visualizar
                         </Button>
                         <Button variant="outline" size="sm" onClick={openNewTab} className="gap-1 text-[10px] h-7" title="Abrir em nova aba">
@@ -275,7 +275,7 @@ export default function ModuleDashboardList({ category, title, description, icon
                           <AccessControlPanel resourceType="dashboard" resourceId={dash.id} compact />
                         </RoleGate>
                         <RoleGate allowed={["admin", "editor"]}>
-                          <Button variant="outline" size="sm" onClick={() => navigate(viewBasePath ? `${viewBasePath}/${dash.id}` : `/builder/${dash.id}`)} className="flex-1 gap-1 text-[10px] h-7">
+                          <Button variant="outline" size="sm" onClick={() => navigate(viewBasePath ? `${viewBasePath}/${dash.id}` : `/builder/${dash.id}`)} className="flex-1 min-w-[90px] gap-1 text-[10px] h-7">
                             <Pencil className="w-3 h-3" /> Editar
                           </Button>
                         </RoleGate>
