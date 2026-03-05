@@ -1,6 +1,5 @@
 import { useMemo } from "react";
 import { motion } from "framer-motion";
-import { CalendarDays } from "lucide-react";
 
 interface Props {
   transactions: any[];
@@ -8,14 +7,11 @@ interface Props {
 }
 
 export default function FinanceHeatmap({ transactions, monthReference }: Props) {
-  const { cells, monthLabel, maxAbs } = useMemo(() => {
+  const { cells, maxAbs } = useMemo(() => {
     const [y, m] = monthReference.split("-").map(Number);
     const daysInMonth = new Date(y, m, 0).getDate();
-    const firstDayOfWeek = new Date(y, m - 1, 1).getDay(); // 0=Sun
+    const firstDayOfWeek = new Date(y, m - 1, 1).getDay();
 
-    const label = new Date(y, m - 1).toLocaleDateString("pt-BR", { month: "long", year: "numeric" });
-
-    // Aggregate daily net flow
     const dailyMap = new Map<number, number>();
     for (const t of transactions) {
       const d = new Date(t.transaction_date).getDate();
@@ -24,38 +20,39 @@ export default function FinanceHeatmap({ transactions, monthReference }: Props) 
     }
 
     const max = Math.max(...[...dailyMap.values()].map(Math.abs), 1);
-
     const grid: { day: number; value: number; empty?: boolean }[] = [];
 
-    // Empty cells for alignment
     for (let i = 0; i < firstDayOfWeek; i++) {
       grid.push({ day: 0, value: 0, empty: true });
     }
-
     for (let d = 1; d <= daysInMonth; d++) {
       grid.push({ day: d, value: dailyMap.get(d) || 0 });
     }
 
-    return { cells: grid, monthLabel: label.charAt(0).toUpperCase() + label.slice(1), maxAbs: max };
+    return { cells: grid, maxAbs: max };
   }, [transactions, monthReference]);
 
   if (transactions.length === 0) return null;
 
-  const getColor = (value: number) => {
+  // Quiet by default. Only anomalies glow.
+  const getStyle = (value: number) => {
     const intensity = Math.min(Math.abs(value) / maxAbs, 1);
+    if (value === 0) {
+      return { bg: "hsl(215, 15%, 8%)", opacity: 0.4 };
+    }
     if (value > 0) {
-      // Green shades
-      const lightness = 50 - intensity * 25; // 50% to 25%
-      const saturation = 40 + intensity * 60; // 40% to 100%
-      return `hsl(142, ${saturation}%, ${lightness}%)`;
+      // Positive: very subtle green that intensifies only for big surpluses
+      const alpha = 0.08 + intensity * 0.5;
+      return { bg: `hsla(142, 70%, 45%, ${alpha})`, opacity: 1 };
     }
-    if (value < 0) {
-      // Red/amber shades
-      const lightness = 55 - intensity * 25;
-      const saturation = 50 + intensity * 40;
-      return `hsl(0, ${saturation}%, ${lightness}%)`;
+    // Negative: quiet until significant, then glows red
+    if (intensity < 0.3) {
+      // Minor deficit - barely visible
+      return { bg: `hsla(0, 50%, 40%, ${0.1 + intensity * 0.2})`, opacity: 0.7 };
     }
-    return "hsl(215, 15%, 12%)";
+    // Significant deficit - alerts
+    const alpha = 0.3 + intensity * 0.5;
+    return { bg: `hsla(0, 70%, 45%, ${alpha})`, opacity: 1 };
   };
 
   const weekdays = ["D", "S", "T", "Q", "Q", "S", "S"];
@@ -64,86 +61,73 @@ export default function FinanceHeatmap({ transactions, monthReference }: Props) 
     <motion.div
       initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.35, duration: 0.5 }}
-      className="rounded-2xl bg-card/40 backdrop-blur-xl border border-border/10 p-6 shadow-xl"
+      transition={{ delay: 0.3, duration: 0.6 }}
+      className="rounded-2xl bg-card/20 backdrop-blur-sm p-6"
     >
-      <div className="flex items-center gap-2.5 mb-5">
-        <div className="p-1.5 rounded-lg bg-neon-cyan/10">
-          <CalendarDays className="w-4 h-4 text-neon-cyan" />
-        </div>
-        <div>
-          <h3 className="text-[11px] font-mono font-bold text-foreground/90 uppercase tracking-[0.15em]">
-            Heatmap Financeiro
-          </h3>
-          <p className="text-[9px] text-muted-foreground/60 font-mono mt-0.5">
-            {monthLabel} — Saúde diária do fluxo de caixa
-          </p>
+      <div className="flex items-center justify-between mb-5">
+        <h3 className="text-[9px] font-mono tracking-[0.3em] text-muted-foreground/40 uppercase">
+          Mapa Térmico
+        </h3>
+        <div className="flex items-center gap-3 text-[7px] font-mono text-muted-foreground/25">
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "hsla(0,70%,45%,0.6)" }} />
+            déficit
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "hsl(215,15%,8%)" }} />
+            neutro
+          </span>
+          <span className="flex items-center gap-1">
+            <span className="w-2 h-2 rounded-sm" style={{ backgroundColor: "hsla(142,70%,45%,0.5)" }} />
+            superávit
+          </span>
         </div>
       </div>
 
       {/* Weekday headers */}
-      <div className="grid grid-cols-7 gap-1.5 mb-1.5">
+      <div className="grid grid-cols-7 gap-1 mb-1">
         {weekdays.map((d, i) => (
-          <div key={i} className="text-center text-[8px] font-mono text-muted-foreground/40 uppercase">
+          <div key={i} className="text-center text-[7px] font-mono text-muted-foreground/20 uppercase">
             {d}
           </div>
         ))}
       </div>
 
-      {/* Calendar grid */}
-      <div className="grid grid-cols-7 gap-1.5">
-        {cells.map((cell, i) => (
-          <div
-            key={i}
-            className="relative group"
-          >
-            <div
-              className={`aspect-square rounded-lg flex items-center justify-center text-[10px] font-mono transition-all duration-200 ${
-                cell.empty
-                  ? ""
-                  : "cursor-default hover:ring-1 hover:ring-foreground/20 hover:scale-110"
-              }`}
-              style={{
-                backgroundColor: cell.empty ? "transparent" : getColor(cell.value),
-                opacity: cell.empty ? 0 : cell.value === 0 ? 0.4 : 1,
-              }}
-            >
-              {!cell.empty && (
-                <span className="text-foreground/80 font-semibold text-[9px]">
-                  {cell.day}
-                </span>
+      {/* Calendar grid — compact */}
+      <div className="grid grid-cols-7 gap-1">
+        {cells.map((cell, i) => {
+          const style = cell.empty ? null : getStyle(cell.value);
+          return (
+            <div key={i} className="relative group">
+              <div
+                className={`aspect-[4/3] rounded-md flex items-center justify-center transition-all duration-300 ${
+                  !cell.empty ? "hover:scale-110 hover:z-10" : ""
+                }`}
+                style={{
+                  backgroundColor: cell.empty ? "transparent" : style!.bg,
+                  opacity: cell.empty ? 0 : style!.opacity,
+                }}
+              >
+                {!cell.empty && (
+                  <span className="text-[8px] font-mono text-foreground/50">
+                    {cell.day}
+                  </span>
+                )}
+              </div>
+
+              {/* Tooltip */}
+              {!cell.empty && cell.value !== 0 && (
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover:block z-50 pointer-events-none">
+                  <div className="rounded-md bg-background/95 backdrop-blur-xl border border-border/30 px-2 py-1 text-[8px] font-mono shadow-xl whitespace-nowrap">
+                    <span className={cell.value >= 0 ? "text-emerald-400" : "text-red-400"}>
+                      {cell.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                    </span>
+                  </div>
+                </div>
               )}
             </div>
-
-            {/* Tooltip on hover */}
-            {!cell.empty && cell.value !== 0 && (
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block z-50">
-                <div className="rounded-lg bg-card/95 backdrop-blur-xl border border-border/50 px-3 py-1.5 text-[9px] font-mono shadow-xl whitespace-nowrap">
-                  <span className="text-muted-foreground">Dia {cell.day}: </span>
-                  <span className={cell.value >= 0 ? "text-emerald-400" : "text-red-400"}>
-                    {cell.value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Legend */}
-      <div className="flex items-center justify-center gap-4 mt-4 pt-3 border-t border-border/10">
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "hsl(0, 80%, 42%)" }} />
-          <span className="text-[8px] font-mono text-muted-foreground/60">Déficit</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "hsl(215, 15%, 12%)" }} />
-          <span className="text-[8px] font-mono text-muted-foreground/60">Neutro</span>
-        </div>
-        <div className="flex items-center gap-1.5">
-          <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: "hsl(142, 80%, 35%)" }} />
-          <span className="text-[8px] font-mono text-muted-foreground/60">Superávit</span>
-        </div>
+          );
+        })}
       </div>
     </motion.div>
   );

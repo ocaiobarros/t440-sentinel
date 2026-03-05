@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { DollarSign, Calendar, ChevronDown, ChevronUp, TableIcon } from "lucide-react";
+import { DollarSign, Calendar, Settings2, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
 import FinanceUploadWizard from "@/components/finance/FinanceUploadWizard";
@@ -31,11 +31,11 @@ function getMonthOptions() {
 export default function FlowFinance() {
   const monthOptions = useMemo(() => getMonthOptions(), []);
   const [selectedMonth, setSelectedMonth] = useState(monthOptions[0].value);
-  const [showTable, setShowTable] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
 
   const selectedLabel = monthOptions.find(m => m.value === selectedMonth)?.label ?? "";
 
-  const { data: transactions = [], refetch, isLoading } = useQuery({
+  const { data: transactions = [], refetch } = useQuery({
     queryKey: ["finance-transactions", selectedMonth],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -53,7 +53,6 @@ export default function FlowFinance() {
       transactions
         .filter((t: any) => t.scenario === scenario && t.type === type)
         .reduce((sum: number, t: any) => sum + Number(t.amount), 0);
-
     return {
       previstoReceber: calc("PREVISTO", "RECEBER"),
       previstoPagar: calc("PREVISTO", "PAGAR"),
@@ -67,72 +66,69 @@ export default function FlowFinance() {
   const hasRealizado = summary.realizadoReceber > 0 || summary.realizadoPagar > 0;
 
   const varianciaPercent = saldoPrevisto !== 0
-    ? ((saldoRealizado - saldoPrevisto) / Math.abs(saldoPrevisto)) * 100
-    : 0;
-
-  // Runway: months of cash remaining based on avg monthly burn
+    ? ((saldoRealizado - saldoPrevisto) / Math.abs(saldoPrevisto)) * 100 : 0;
   const avgBurn = summary.realizadoPagar > 0 ? summary.realizadoPagar : summary.previstoPagar;
   const runwayCaixa = avgBurn > 0 ? saldoRealizado / avgBurn : 0;
-
-  // Assertividade: how close realizado is to previsto (100% = perfect match)
   const totalPrevisto = summary.previstoReceber + summary.previstoPagar;
   const totalRealizado = summary.realizadoReceber + summary.realizadoPagar;
   const assertividade = totalPrevisto > 0
-    ? Math.max(0, 100 - Math.abs(((totalRealizado - totalPrevisto) / totalPrevisto) * 100))
-    : 0;
+    ? Math.max(0, 100 - Math.abs(((totalRealizado - totalPrevisto) / totalPrevisto) * 100)) : 0;
 
   return (
     <div className="min-h-screen bg-background relative">
-      {/* Ambient glow */}
-      <div className="fixed top-0 left-1/4 w-[900px] h-[450px] bg-emerald-500/[0.03] rounded-full blur-[180px] pointer-events-none" />
-      <div className="fixed bottom-0 right-1/4 w-[700px] h-[350px] bg-neon-blue/[0.03] rounded-full blur-[150px] pointer-events-none" />
+      {/* Extremely subtle ambient */}
+      <div className="fixed top-0 left-1/3 w-[1000px] h-[500px] bg-emerald-500/[0.015] rounded-full blur-[200px] pointer-events-none" />
 
-      <div className="max-w-7xl mx-auto relative z-10 p-5 md:p-8 lg:p-10 space-y-8">
-        {/* ── Header ── */}
+      <div className="max-w-7xl mx-auto relative z-10 px-6 md:px-10 lg:px-14 py-8 md:py-12 space-y-10">
+
+        {/* ── Header: Ultra minimal ── */}
         <motion.header
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="flex items-center justify-between flex-wrap gap-4"
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.8 }}
+          className="flex items-center justify-between"
         >
-          <div className="flex items-center gap-4">
-            <div className="p-3 rounded-2xl bg-emerald-500/10 border border-emerald-500/15">
-              <DollarSign className="w-6 h-6 text-emerald-400" />
-            </div>
+          <div className="flex items-center gap-3">
+            <DollarSign className="w-5 h-5 text-emerald-400/60" />
             <div>
-              <h1 className="text-xl font-display font-bold text-foreground tracking-tight">
-                <span className="text-emerald-400">FLOW</span>FINANCE
+              <h1 className="text-sm font-display font-bold text-foreground/80 tracking-wider">
+                <span className="text-emerald-400/80">FLOW</span>FINANCE
               </h1>
-              <p className="text-[10px] text-muted-foreground/50 font-mono tracking-[0.2em] mt-0.5">
-                EXECUTIVE COMMAND CENTER
-              </p>
             </div>
           </div>
 
-          <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-            <SelectTrigger className="w-60 bg-card/60 border-border/20 backdrop-blur-sm rounded-xl h-11">
-              <Calendar className="w-3.5 h-3.5 mr-2 text-muted-foreground/50" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {monthOptions.map((m) => (
-                <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-3">
+            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+              <SelectTrigger className="w-52 bg-transparent border-border/10 rounded-lg h-9 text-xs font-mono text-muted-foreground/60">
+                <Calendar className="w-3 h-3 mr-2 text-muted-foreground/30" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {monthOptions.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <button
+              onClick={() => setShowSettings(!showSettings)}
+              className="p-2 rounded-lg text-muted-foreground/30 hover:text-muted-foreground/60 hover:bg-card/30 transition-all"
+            >
+              <Settings2 className="w-4 h-4" />
+            </button>
+          </div>
         </motion.header>
 
-        {/* ── Month Status Banner ── */}
+        {/* ── Status line for incomplete months ── */}
         {!hasRealizado && transactions.length > 0 && (
           <motion.div
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className="rounded-xl border border-amber-500/15 bg-amber-500/[0.04] backdrop-blur-sm px-5 py-3.5 flex items-center gap-3"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex items-center gap-2"
           >
-            <div className="w-2 h-2 rounded-full bg-amber-400 animate-pulse shrink-0" />
-            <p className="text-xs font-mono text-amber-300/80">
-              <span className="font-bold text-amber-300">{selectedLabel}:</span>{" "}
-              Em curso — Aguardando dados Realizados. Exibindo projeções com base no Previsto.
+            <div className="w-1 h-1 rounded-full bg-amber-400/60 animate-pulse" />
+            <p className="text-[9px] font-mono text-amber-400/40 tracking-wider">
+              {selectedLabel} — em curso • projeção ativa
             </p>
           </motion.div>
         )}
@@ -149,13 +145,10 @@ export default function FlowFinance() {
         />
 
         {/* ── Charts ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.25, duration: 0.6 }}
-        >
-          <FinanceCharts monthReference={selectedMonth} />
-        </motion.div>
+        <FinanceCharts
+          monthReference={selectedMonth}
+          transactions={transactions}
+        />
 
         {/* ── Heatmap ── */}
         <FinanceHeatmap
@@ -163,16 +156,12 @@ export default function FlowFinance() {
           monthReference={selectedMonth}
         />
 
-        {/* ── Insights ── */}
+        {/* ── Insights — minimal, inline ── */}
         <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.5 }}
         >
-          <h2 className="text-[10px] font-mono font-bold text-muted-foreground/60 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-            Insights Automáticos
-          </h2>
           <FinanceInsight
             transactions={transactions}
             saldoPrevisto={saldoPrevisto}
@@ -182,113 +171,42 @@ export default function FlowFinance() {
           />
         </motion.div>
 
-        {/* ── Upload ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.45 }}
-        >
-          <h2 className="text-[10px] font-mono font-bold text-muted-foreground/60 uppercase tracking-[0.2em] mb-4">
-            Importar Dados
-          </h2>
-          <FinanceUploadWizard
-            monthReference={selectedMonth}
-            onImportComplete={() => refetch()}
-          />
-        </motion.div>
+        {/* ── Settings Panel (slide-in) ── */}
+        <AnimatePresence>
+          {showSettings && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.3 }}
+              className="fixed inset-x-0 bottom-0 z-50 bg-card/95 backdrop-blur-xl border-t border-border/10 p-6 md:p-8 max-h-[60vh] overflow-y-auto"
+            >
+              <div className="max-w-3xl mx-auto space-y-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-[10px] font-mono tracking-[0.3em] text-muted-foreground/40 uppercase">
+                    Importar & Gerenciar
+                  </h2>
+                  <button
+                    onClick={() => setShowSettings(false)}
+                    className="p-1.5 rounded-md text-muted-foreground/40 hover:text-foreground/60 hover:bg-muted/20 transition-all"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
 
-        {/* ── Collapsible Transaction Table ── */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5 }}
-        >
-          <button
-            onClick={() => setShowTable(!showTable)}
-            className="flex items-center gap-2 text-[10px] font-mono font-bold text-muted-foreground/50 uppercase tracking-[0.2em] mb-3 hover:text-foreground/70 transition-colors group"
-          >
-            <TableIcon className="w-3.5 h-3.5" />
-            Transações do Período ({transactions.length})
-            {showTable
-              ? <ChevronUp className="w-3 h-3" />
-              : <ChevronDown className="w-3 h-3" />
-            }
-          </button>
+                <FinanceUploadWizard
+                  monthReference={selectedMonth}
+                  onImportComplete={() => { refetch(); }}
+                />
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
-          <AnimatePresence>
-            {showTable && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                transition={{ duration: 0.3 }}
-                className="overflow-hidden"
-              >
-                {isLoading ? (
-                  <div className="rounded-2xl bg-card/40 border border-border/10 p-8 text-center">
-                    <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin mx-auto" />
-                  </div>
-                ) : transactions.length === 0 ? (
-                  <div className="rounded-2xl bg-card/40 border border-border/10 p-10 text-center">
-                    <DollarSign className="w-10 h-10 text-muted-foreground/10 mx-auto mb-2" />
-                    <p className="text-sm text-muted-foreground/50">Nenhuma transação neste período</p>
-                  </div>
-                ) : (
-                  <div className="rounded-2xl bg-card/40 backdrop-blur-xl border border-border/10 overflow-x-auto shadow-xl">
-                    <table className="w-full text-[11px] font-mono">
-                      <thead>
-                        <tr className="text-muted-foreground/50 uppercase border-b border-border/10 text-[9px] tracking-wider">
-                          <th className="text-left p-3.5">Data</th>
-                          <th className="text-left p-3.5">Cenário</th>
-                          <th className="text-left p-3.5">Tipo</th>
-                          <th className="text-left p-3.5">Descrição</th>
-                          <th className="text-left p-3.5">Categoria</th>
-                          <th className="text-right p-3.5">Valor</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {transactions.map((t: any) => (
-                          <tr key={t.id} className="border-t border-border/5 hover:bg-muted/10 transition-colors">
-                            <td className="p-3.5 text-foreground/70">
-                              {new Date(t.transaction_date).toLocaleDateString("pt-BR")}
-                            </td>
-                            <td className="p-3.5">
-                              <span className={`px-2 py-0.5 rounded-md text-[9px] font-bold ${
-                                t.scenario === "PREVISTO"
-                                  ? "bg-neon-blue/10 text-neon-blue border border-neon-blue/15"
-                                  : "bg-emerald-500/10 text-emerald-400 border border-emerald-500/15"
-                              }`}>
-                                {t.scenario}
-                              </span>
-                            </td>
-                            <td className="p-3.5">
-                              <span className={`${t.type === "RECEBER" ? "text-emerald-400" : "text-amber-400"}`}>
-                                {t.type}
-                              </span>
-                            </td>
-                            <td className="p-3.5 text-foreground/50 max-w-[200px] truncate">
-                              {t.description || "—"}
-                            </td>
-                            <td className="p-3.5 text-muted-foreground/50">
-                              {t.category || "—"}
-                            </td>
-                            <td className="p-3.5 text-right font-bold text-foreground/80">
-                              {Number(t.amount).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </motion.div>
-
-        <div className="text-center py-8">
-          <p className="text-[9px] font-mono text-muted-foreground/20 tracking-[0.3em] uppercase">
-            FlowPulse • Executive Command Center
+        {/* Footer */}
+        <div className="pt-10">
+          <p className="text-[8px] font-mono text-muted-foreground/10 tracking-[0.4em] uppercase text-center">
+            FlowPulse Intelligence
           </p>
         </div>
       </div>
