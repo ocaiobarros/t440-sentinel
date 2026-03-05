@@ -175,27 +175,55 @@ Deno.serve(async (req) => {
       });
     }
 
-    const userPassword = (typeof passwordRaw === "string" && passwordRaw.trim().length >= 6)
-      ? passwordRaw.trim()
-      : `${crypto.randomUUID().slice(0, 12)}Aa1!`;
+    const findExistingAuthUserIdByEmail = async (targetEmail: string) => {
+      const normalized = targetEmail.toLowerCase();
+      const { data: usersData, error: usersError } = await adminClient.auth.admin.listUsers({
+        page: 1,
+        perPage: 1000,
+      });
 
-    const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
-      email,
-      password: userPassword,
-      email_confirm: true,
-      user_metadata: { display_name: displayName },
-      app_metadata: { tenant_id: targetTenant },
-    });
+      if (usersError) throw usersError;
 
-    if (createError || !newUser.user) {
-      const message = createError?.message || "Failed to create user";
-      return new Response(JSON.stringify({ error: message }), {
+      const found = usersData?.users?.find(
+        (u) => (u.email || "").toLowerCase() === normalized,
+      );
+
+      return found?.id ?? null;
+    };
+
+    let userId = await findExistingAuthUserIdByEmail(email);
+    const existingAuthUser = Boolean(userId);
+
+    if (!userId) {
+      const userPassword = (typeof passwordRaw === "string" && passwordRaw.trim().length >= 6)
+        ? passwordRaw.trim()
+        : `${crypto.randomUUID().slice(0, 12)}Aa1!`;
+
+      const { data: newUser, error: createError } = await adminClient.auth.admin.createUser({
+        email,
+        password: userPassword,
+        email_confirm: true,
+        user_metadata: { display_name: displayName },
+        app_metadata: { tenant_id: targetTenant },
+      });
+
+      if (createError || !newUser.user) {
+        const message = createError?.message || "Failed to create user";
+        return new Response(JSON.stringify({ error: message }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      userId = newUser.user.id;
+    }
+
+    if (!userId) {
+      return new Response(JSON.stringify({ error: "Unable to resolve user id" }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    const userId = newUser.user.id;
 
     const { data: autoTenantId } = await adminClient.rpc("get_user_tenant_id", { p_user_id: userId });
 
@@ -213,7 +241,7 @@ Deno.serve(async (req) => {
       await cleanupTenantIfEmpty(autoTenantId);
     }
 
-    return new Response(JSON.stringify({ success: true, user_id: userId, existing: false }), {
+    return new Response(JSON.stringify({ success: true, user_id: userId, existing: existingAuthUser }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
