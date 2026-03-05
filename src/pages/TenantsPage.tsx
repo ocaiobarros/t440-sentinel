@@ -164,13 +164,28 @@ export default function TenantsPage() {
 
       return data.tenant as Tenant;
     },
-    onSuccess: (createdTenant) => {
-      qc.invalidateQueries({ queryKey: ["tenants-admin"] });
+    onSuccess: async (createdTenant) => {
+      qc.setQueryData<Tenant[]>(["tenants-admin"], (prev = []) => {
+        const withoutCreated = prev.filter((t) => t.id !== createdTenant.id);
+        return [createdTenant, ...withoutCreated];
+      });
+
       setSelectedTenantId(createdTenant.id);
       toast({ title: "Organização criada", description: `Slug: ${createdTenant.slug}` });
       setCreateDialog(false);
       setNewName("");
       setNewSlug("");
+
+      await qc.invalidateQueries({ queryKey: ["tenants-admin"] });
+
+      const refreshed = qc.getQueryData<Tenant[]>(["tenants-admin"]) ?? [];
+      if (!refreshed.some((t) => t.id === createdTenant.id)) {
+        toast({
+          variant: "destructive",
+          title: "Organização criada, mas não visível na lista",
+          description: "A criação foi concluída, mas sua sessão não recebeu acesso de leitura para esse tenant ainda.",
+        });
+      }
     },
     onError: (e: Error) => toast({ title: "Erro", description: e.message, variant: "destructive" }),
   });
