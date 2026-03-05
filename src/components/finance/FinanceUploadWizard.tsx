@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef } from "react";
-import { Upload, FileText, CheckCircle2, AlertTriangle, Loader2, X } from "lucide-react";
+import { Upload, FileText, CheckCircle2, AlertTriangle, Loader2, X, FileSpreadsheet } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
@@ -15,6 +15,7 @@ type UploadState = "idle" | "processing" | "success" | "partial" | "error";
 interface Warning {
   line: number;
   message: string;
+  sheet?: string;
 }
 
 interface ImportResult {
@@ -23,10 +24,12 @@ interface ImportResult {
   warnings_count: number;
   warnings: Warning[];
   error?: string;
+  months_detected?: string[];
+  sheets_processed?: number;
 }
 
 interface FinanceUploadWizardProps {
-  monthReference: string; // YYYY-MM-DD
+  monthReference: string;
   onImportComplete?: () => void;
 }
 
@@ -45,13 +48,17 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
   }, []);
 
   const processFile = useCallback(async (file: File) => {
-    if (!file.name.toLowerCase().endsWith(".csv")) {
-      toast.error("Apenas ficheiros .csv são aceites");
+    const ext = file.name.toLowerCase().split(".").pop();
+    const isXlsx = ext === "xlsx" || ext === "xls";
+    const isCsv = ext === "csv";
+
+    if (!isXlsx && !isCsv) {
+      toast.error("Apenas ficheiros .csv ou .xlsx são aceites");
       return;
     }
 
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("Ficheiro demasiado grande (máx. 5 MB)");
+    if (file.size > 10 * 1024 * 1024) {
+      toast.error("Ficheiro demasiado grande (máx. 10 MB)");
       return;
     }
 
@@ -59,11 +66,24 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
     setState("processing");
 
     try {
-      const csvContent = await file.text();
+      let body: Record<string, any>;
 
-      const { data, error } = await supabase.functions.invoke("finance-import", {
-        body: { csv_content: csvContent, month_reference: monthReference },
-      });
+      if (isXlsx) {
+        // Read as base64
+        const buffer = await file.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+        let binary = "";
+        for (let i = 0; i < bytes.length; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+        body = { file_content_base64: base64, file_type: "xlsx" };
+      } else {
+        const csvContent = await file.text();
+        body = { csv_content: csvContent, month_reference: monthReference };
+      }
+
+      const { data, error } = await supabase.functions.invoke("finance-import", { body });
 
       if (error) throw error;
 
@@ -75,10 +95,12 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
         toast.error(res.error || "Erro ao processar ficheiro");
       } else if (res.warnings_count > 0) {
         setState("partial");
-        toast.warning(`${res.rows_inserted} linhas importadas com ${res.warnings_count} avisos`);
+        const monthsMsg = res.months_detected ? ` (${res.months_detected.length} meses)` : "";
+        toast.warning(`${res.rows_inserted} linhas importadas${monthsMsg} com ${res.warnings_count} avisos`);
       } else {
         setState("success");
-        toast.success(`${res.rows_inserted} linhas importadas com sucesso!`);
+        const monthsMsg = res.months_detected ? ` em ${res.months_detected.length} meses` : "";
+        toast.success(`${res.rows_inserted} linhas importadas${monthsMsg} com sucesso!`);
       }
 
       onImportComplete?.();
@@ -103,7 +125,6 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
 
   return (
     <div className="space-y-4">
-      {/* ── Dropzone ── */}
       <AnimatePresence mode="wait">
         {state === "idle" && (
           <motion.div
@@ -123,24 +144,23 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
               }
             `}
           >
-            <Upload className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
+            <FileSpreadsheet className="w-10 h-10 mx-auto mb-3 text-muted-foreground/50" />
             <p className="text-sm font-medium text-foreground">
-              Arraste o ficheiro CSV aqui
+              Arraste o ficheiro aqui
             </p>
-            <p className="text-[10px] text-muted-foreground mt-1 font-mono">
-              ou clique para selecionar • apenas .csv • máx. 5 MB
+            <p className="text-[11px] text-muted-foreground/70 mt-1 font-mono">
+              .xlsx (múltiplas abas = múltiplos meses) ou .csv • máx. 10 MB
             </p>
             <input
               ref={inputRef}
               type="file"
-              accept=".csv"
+              accept=".csv,.xlsx,.xls"
               onChange={handleFileChange}
               className="hidden"
             />
           </motion.div>
         )}
 
-        {/* ── Processing ── */}
         {state === "processing" && (
           <motion.div
             key="processing"
@@ -151,13 +171,12 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
           >
             <Loader2 className="w-10 h-10 mx-auto mb-3 text-primary animate-spin" />
             <p className="text-sm font-medium text-foreground">Processando {fileName}...</p>
-            <p className="text-[10px] text-muted-foreground mt-1 font-mono">
-              Normalizando registos e validando dados
+            <p className="text-[11px] text-muted-foreground/70 mt-1 font-mono">
+              Detectando meses e normalizando dados
             </p>
           </motion.div>
         )}
 
-        {/* ── Success ── */}
         {state === "success" && result && (
           <motion.div
             key="success"
@@ -174,6 +193,11 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
                 <p className="text-xs text-muted-foreground mt-1 font-mono">
                   {result.rows_inserted} registos inseridos • {fileName}
                 </p>
+                {result.months_detected && result.months_detected.length > 0 && (
+                  <p className="text-xs text-primary/80 mt-1 font-mono">
+                    Meses: {result.months_detected.join(", ")}
+                  </p>
+                )}
               </div>
               <button onClick={reset} className="text-muted-foreground hover:text-foreground transition-colors">
                 <X className="w-4 h-4" />
@@ -182,7 +206,6 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
           </motion.div>
         )}
 
-        {/* ── Partial (success + warnings) ── */}
         {state === "partial" && result && (
           <motion.div
             key="partial"
@@ -199,6 +222,11 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
                 <p className="text-xs text-muted-foreground mt-1 font-mono">
                   {result.warnings_count} linha(s) com problemas
                 </p>
+                {result.months_detected && (
+                  <p className="text-xs text-neon-amber/80 mt-1 font-mono">
+                    Meses: {result.months_detected.join(", ")}
+                  </p>
+                )}
               </div>
               <button onClick={reset} className="text-muted-foreground hover:text-foreground transition-colors">
                 <X className="w-4 h-4" />
@@ -215,7 +243,7 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
                     {result.warnings.map((w, i) => (
                       <div key={i} className="flex gap-2 text-[10px] font-mono bg-background/50 rounded-md p-2">
                         <span className="text-neon-amber font-bold shrink-0">
-                          Linha {w.line}:
+                          {w.sheet ? `${w.sheet} ` : ""}Linha {w.line}:
                         </span>
                         <span className="text-muted-foreground">{w.message}</span>
                       </div>
@@ -227,7 +255,6 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
           </motion.div>
         )}
 
-        {/* ── Error ── */}
         {state === "error" && result && (
           <motion.div
             key="error"
@@ -251,7 +278,6 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
         )}
       </AnimatePresence>
 
-      {/* ── Upload another ── */}
       {(state === "success" || state === "partial" || state === "error") && (
         <motion.button
           initial={{ opacity: 0 }}
