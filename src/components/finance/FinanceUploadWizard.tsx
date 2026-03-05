@@ -33,6 +33,34 @@ interface FinanceUploadWizardProps {
   onImportComplete?: () => void;
 }
 
+async function extractImportErrorMessage(err: any): Promise<string> {
+  const contextResponse: Response | undefined = err?.context;
+  const status = contextResponse?.status;
+
+  if (contextResponse) {
+    try {
+      const payload = await contextResponse.clone().json();
+      const baseError = payload?.error || payload?.message;
+      if (baseError) {
+        const warnings = Array.isArray(payload?.warnings) ? payload.warnings.slice(0, 3) : [];
+        const warningsText = warnings.length
+          ? ` • ${warnings.map((w: { sheet?: string; line?: number; message?: string }) => `${w.sheet ? `${w.sheet} ` : ""}L${w.line ?? "?"}: ${w.message ?? ""}`).join(" | ")}`
+          : "";
+        return `${status ? `[${status}] ` : ""}${baseError}${warningsText}`;
+      }
+    } catch {
+      try {
+        const text = await contextResponse.clone().text();
+        if (text?.trim()) return `${status ? `[${status}] ` : ""}${text}`;
+      } catch {
+        // ignore
+      }
+    }
+  }
+
+  return `${status ? `[${status}] ` : ""}${err?.message || "Falha na importação"}`;
+}
+
 export default function FinanceUploadWizard({ monthReference, onImportComplete }: FinanceUploadWizardProps) {
   const [state, setState] = useState<UploadState>("idle");
   const [result, setResult] = useState<ImportResult | null>(null);
@@ -105,9 +133,10 @@ export default function FinanceUploadWizard({ monthReference, onImportComplete }
 
       onImportComplete?.();
     } catch (err: any) {
+      const errorMessage = await extractImportErrorMessage(err);
       setState("error");
-      setResult({ success: false, rows_inserted: 0, warnings_count: 0, warnings: [], error: err.message });
-      toast.error("Falha na importação");
+      setResult({ success: false, rows_inserted: 0, warnings_count: 0, warnings: [], error: errorMessage });
+      toast.error(errorMessage);
     }
   }, [monthReference, onImportComplete]);
 

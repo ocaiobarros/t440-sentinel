@@ -54,7 +54,7 @@ Deno.serve(async (req) => {
     };
 
     // ── XLSX multi-sheet mode ──
-    if (file_content_base64 && file_type === "xlsx") {
+    if (file_content_base64 && (file_type === "xlsx" || file_type === "xls")) {
       const binary = Uint8Array.from(atob(file_content_base64), (c) => c.charCodeAt(0));
       const workbook = XLSX.read(binary, { type: "array", cellDates: true });
 
@@ -65,18 +65,25 @@ Deno.serve(async (req) => {
       for (const sheetName of workbook.SheetNames) {
         const sheet = workbook.Sheets[sheetName];
         const csvText = XLSX.utils.sheet_to_csv(sheet, { FS: ";", RS: "\n" });
-        const lines = csvText.trim().split("\n");
+        const rawLines = csvText
+          .split(/\r?\n/)
+          .map((line) => line.replace(/\uFEFF/g, ""));
+        const lines = rawLines.filter((line) => line.trim() !== "");
         if (lines.length < 2) continue;
 
-        // Detect month from header row (e.g. "Previsto Jan/2026" or "Previsto Fev/2026")
-        const headerLine = lines[0];
-        const detectedMonth = detectMonthFromHeader(headerLine);
-        if (!detectedMonth) {
-          allWarnings.push({ sheet: sheetName, line: 1, message: `Não foi possível detectar o mês no cabeçalho: "${headerLine.slice(0, 80)}"` });
+        const headerCandidate = findHeaderCandidate(lines);
+        if (!headerCandidate) {
+          allWarnings.push({
+            sheet: sheetName,
+            line: 1,
+            message: `Não foi possível detectar cabeçalho/mês (primeiras linhas: "${lines.slice(0, 3).join(" | ").slice(0, 140)}")`,
+          });
           continue;
         }
 
-        const { rows, warnings, debugSamples } = parseCSVLines(lines, detectedMonth, tenantId, user.id);
+        const { headerIndex, monthReference } = headerCandidate;
+        const dataLines = lines.slice(headerIndex);
+        const { rows, warnings, debugSamples } = parseCSVLines(dataLines, monthReference, tenantId, user.id, headerIndex);
         for (const w of warnings) {
           allWarnings.push({ sheet: sheetName, ...w });
         }
@@ -144,7 +151,10 @@ Deno.serve(async (req) => {
       );
     }
 
-    const lines = csv_content.trim().split("\n");
+    const lines = csv_content
+      .split(/\r?\n/)
+      .map((line) => line.replace(/\uFEFF/g, ""))
+      .filter((line) => line.trim() !== "");
     if (lines.length < 2) {
       return new Response(
         JSON.stringify({ error: "CSV must have header + at least 1 data row" }),
@@ -152,7 +162,7 @@ Deno.serve(async (req) => {
       );
     }
 
-    const { rows, warnings, debugSamples } = parseCSVLines(lines, month_reference, tenantId, user.id);
+    const { rows, warnings, debugSamples } = parseCSVLines(lines, month_reference, tenantId, user.id, 0);
     if (debugSamples.length > 0) {
       console.log(`[DEBUG] CSV - first 5 parsed amounts:`, JSON.stringify(debugSamples));
     }
@@ -243,14 +253,66 @@ function detectMonthFromHeader(headerLine: string): string | null {
   return null;
 }
 
+function findHeaderCandidate(lines: string[]): { headerIndex: number; monthReference: string } | null {
+  const scanLimit = Math.min(lines.length, 12);
+  for (let i = 0; i < scanLimit; i++) {
+    const month = detectMonthFromHeader(lines[i]);
+    if (month) {
+      return { headerIndex: i, monthReference: month };
+    }
+  }
+
+  return null;
+}
+
+function detectDelimiter(headerLine: string): string {
+  const semicolons = (headerLine.match(/;/g) ?? []).length;
+  const commas = (headerLine.match(/,/g) ?? []).length;
+  if (semicolons >= commas) return ";";
+  return ",";
+}
+
+function splitDelimitedLine(line: string, delimiter: string): string[] {
+  const cols: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+
+    if (!inQuotes && ch === delimiter) {
+      cols.push(current);
+      current = "";
+      continue;
+    }
+
+    current += ch;
+  }
+
+  cols.push(current);
+  return cols;
+}
+
 // ── CSV parsing logic (shared between CSV and XLSX modes) ──
 function parseCSVLines(
   lines: string[],
   monthReference: string,
   tenantId: string,
   userId: string,
+  lineOffset = 0,
 ): { rows: any[]; warnings: Array<{ line: number; message: string }>; debugSamples: Array<{ line: number; raw: string; parsed: number | null }> } {
-  const rawHeaders = lines[0].split(";").map((h) => h.trim());
+  const delimiter = detectDelimiter(lines[0] ?? "");
+  const rawHeaders = splitDelimitedLine(lines[0] ?? "", delimiter).map((h) => h.trim());
   const normalizedHeaders = rawHeaders.map(normalizeHeader);
 
   const dateIdx = findHeaderIndex(normalizedHeaders, ["data", "date", "transaction date", "data transacao"]);
@@ -280,8 +342,8 @@ function parseCSVLines(
   const debugSamples: Array<{ line: number; raw: string; parsed: number | null }> = [];
 
   for (let i = 1; i < lines.length; i++) {
-    const lineNum = i + 1;
-    const cols = lines[i].split(";").map((c) => c.trim());
+    const lineNum = lineOffset + i + 1;
+    const cols = splitDelimitedLine(lines[i], delimiter).map((c) => c.trim());
 
     if (cols.length < 2 || cols.every((c) => c === "")) continue;
     if (cols.some((c, idx) => idx <= 6 && normalizeHeader(c).startsWith("total geral"))) continue;
