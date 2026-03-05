@@ -6,7 +6,7 @@ import {
   FileText, Clock, Settings, Users, Building2, Zap, ChevronRight,
   Server, Box, MonitorCheck, Fuel, Globe, LayoutDashboard,
   RefreshCw, Send, UserCog, BookOpen, HelpCircle, Home, ExternalLink, Eye,
-  Printer,
+  Printer, DollarSign,
 } from "lucide-react";
 import { NavLink } from "@/components/NavLink";
 import {
@@ -55,6 +55,10 @@ function useSidebarItems() {
     { title: t("sidebar.capacity"), url: "/app/engineering/capacity", icon: BarChart3 },
   ];
 
+  const financeItems = [
+    { title: "FlowFinance", url: "/app/finance", icon: DollarSign },
+  ];
+
   const governanceItems = [
     { title: t("sidebar.sla"), url: "/app/governance/sla", icon: FileText },
     { title: t("sidebar.timeMachine"), url: "/app/governance/timeline", icon: Clock },
@@ -74,7 +78,7 @@ function useSidebarItems() {
     { title: t("sidebar.updates"), url: "/app/system/updates", icon: RefreshCw },
   ];
 
-  return { operationsItems, engineeringItems, monitoringItems, governanceItems, settingsItems, systemItems };
+  return { operationsItems, engineeringItems, monitoringItems, financeItems, governanceItems, settingsItems, systemItems };
 }
 
 interface NavGroupProps {
@@ -133,7 +137,7 @@ export function AppSidebar() {
   const { state } = useSidebar();
   const { t } = useTranslation();
   const collapsed = state === "collapsed";
-  const { operationsItems, monitoringItems, engineeringItems, governanceItems, settingsItems, systemItems } = useSidebarItems();
+  const { operationsItems, monitoringItems, engineeringItems, financeItems, governanceItems, settingsItems, systemItems } = useSidebarItems();
   const [supportOpen, setSupportOpen] = useState(false);
 
   return (
@@ -153,6 +157,7 @@ export function AppSidebar() {
         <NavGroup label={t("sidebar.operations")} items={operationsItems} collapsed={collapsed} />
         <NavGroup label={t("sidebar.monitoring")} items={monitoringItems} collapsed={collapsed} />
         <NavGroup label={t("sidebar.engineering")} items={engineeringItems} collapsed={collapsed} />
+        <NavGroup label="Financeiro" items={financeItems} collapsed={collapsed} />
         <NavGroup label={t("sidebar.governance")} items={governanceItems} collapsed={collapsed} />
 
         {/* Support button */}

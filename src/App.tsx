@@ -48,6 +48,7 @@ const DashboardsList = lazyRetry(() => import("./pages/monitoring/DashboardsList
 const PrinterList = lazyRetry(() => import("./pages/monitoring/PrinterList"));
 const PrinterIntelligence = lazyRetry(() => import("./pages/PrinterIntelligence"));
 const BillingHistory = lazyRetry(() => import("./pages/BillingHistory"));
+const FlowFinance = lazyRetry(() => import("./pages/FlowFinance"));
 const UserSettings = lazyRetry(() => import("./pages/UserSettings"));
 const DocsPage = lazyRetry(() => import("./pages/DocsPage"));
 
@@ -119,6 +120,9 @@ const App = () => (
                           <Route path="monitoring/printers/new" element={<PrinterIntelligence />} />
                           <Route path="monitoring/printers/:dashboardId" element={<PrinterIntelligence />} />
                           <Route path="monitoring/printers/billing" element={<BillingHistory />} />
+
+                          {/* Finance */}
+                          <Route path="finance" element={<FlowFinance />} />
 
                           {/* Governance */}
                           <Route path="governance/sla" element={<SLAGovernance />} />
