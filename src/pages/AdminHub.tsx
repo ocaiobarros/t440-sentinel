@@ -183,9 +183,15 @@ export default function AdminHub() {
     if (!user) return;
     setLoading(true);
     try {
-      const { data: myRole } = await supabase
-        .from("user_roles").select("role").eq("user_id", user.id).maybeSingle();
-      if (!myRole || myRole.role !== "admin") {
+      const { data: myRoles, error: myRolesError } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", user.id);
+
+      if (myRolesError) throw myRolesError;
+
+      const hasAdminRole = (myRoles ?? []).some((row) => row.role === "admin");
+      if (!hasAdminRole) {
         setIsAdmin(false);
         setLoading(false);
         return;
@@ -193,8 +199,8 @@ export default function AdminHub() {
       setIsAdmin(true);
 
       // Check super admin
-      const isSA = user.email === "caio.barros@madeplant.com.br";
-      setIsSuperAdmin(isSA);
+      const { data: isSA } = await supabase.rpc("is_super_admin", { p_user_id: user.id });
+      setIsSuperAdmin(Boolean(isSA));
 
       const [tenantsRes, profilesRes, rolesRes] = await Promise.all([
         supabase.from("tenants").select("*").order("created_at", { ascending: true }),
@@ -486,35 +492,33 @@ export default function AdminHub() {
     if (!newOrgForm.name.trim()) return;
     setCreatingOrg(true);
     try {
-      const baseSlug = (newOrgForm.slug.trim() || newOrgForm.name.trim())
-        .toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: {
+          action: "create",
+          name: newOrgForm.name.trim(),
+          slug: newOrgForm.slug.trim() || newOrgForm.name.trim(),
+        },
+      });
 
-      const tryInsert = async (slug: string) => {
-        return await supabase
-          .from("tenants")
-          .insert({ name: newOrgForm.name.trim(), slug })
-          .select("id, name, slug")
-          .single();
-      };
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
 
-      let result = await tryInsert(baseSlug);
-
-      if (result.error && (result.error.code === "23505" || result.error.message?.includes("tenants_slug_key"))) {
-        result = await tryInsert(`${baseSlug}-${crypto.randomUUID().slice(0, 6)}`);
+      const createdTenant = data?.tenant;
+      if (!createdTenant?.id) {
+        throw new Error("Organização criada sem retorno do backend.");
       }
-
-      if (result.error) throw result.error;
-      if (!result.data) throw new Error("Organização criada sem retorno do backend.");
 
       toast({
         title: "Organização criada",
-        description: `"${result.data.name}" foi criada com slug ${result.data.slug}.`,
+        description: `"${createdTenant.name}" foi criada com slug ${createdTenant.slug}.`,
       });
+      setSelectedTenantId(createdTenant.id);
       setCreateOrgOpen(false);
       setNewOrgForm({ name: "", slug: "" });
       await fetchData();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao criar organização." });
+      const description = await getFunctionErrorMessage(err, "Falha ao criar organização.");
+      toast({ variant: "destructive", title: "Erro", description });
     } finally {
       setCreatingOrg(false);
     }
