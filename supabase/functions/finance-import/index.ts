@@ -398,11 +398,30 @@ function parseCSVLines(
 function parseAmount(raw: string): number | null {
   if (!raw) return null;
   let cleaned = raw.replace(/\s/g, "").replace("R$", "").replace("€", "").replace("$", "");
-  if (cleaned.includes(",") && cleaned.indexOf(",") > cleaned.lastIndexOf(".")) {
-    cleaned = cleaned.replace(/\./g, "").replace(",", ".");
-  } else if (cleaned.includes(",") && !cleaned.includes(".")) {
+  
+  // Detect format:
+  // BR: 1.234.567,89 → comma after last dot → strip dots, comma→dot
+  // US: 1,234,567.89 → dot after last comma → strip commas
+  // Simple comma decimal: 1234,56 → no dot → comma→dot
+  // Simple dot decimal: 1234.56 → no comma → keep as-is
+  
+  const lastComma = cleaned.lastIndexOf(",");
+  const lastDot = cleaned.lastIndexOf(".");
+  
+  if (lastComma > -1 && lastDot > -1) {
+    if (lastComma > lastDot) {
+      // BR format: 1.234,56 → strip dots, comma→dot
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    } else {
+      // US format: 1,234.56 → strip commas
+      cleaned = cleaned.replace(/,/g, "");
+    }
+  } else if (lastComma > -1 && lastDot === -1) {
+    // Only comma: 1234,56 → comma→dot
     cleaned = cleaned.replace(",", ".");
   }
+  // Only dot or no separator: keep as-is
+  
   const n = parseFloat(cleaned);
   return isNaN(n) ? null : Math.round(n * 100) / 100;
 }
