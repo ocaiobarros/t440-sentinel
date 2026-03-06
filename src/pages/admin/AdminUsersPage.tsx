@@ -222,6 +222,10 @@ export default function AdminUsersPage() {
       toast({ title: data?.existing ? "Usuário vinculado" : "Usuário adicionado", description: `${email} vinculado a "${tName}".` });
       setInviteOpen(false);
       setInviteForm({ email: "", display_name: "", role: "viewer", password: "", target_tenant_id: "" });
+      setSelectedTenantId(targetTenant);
+      setSearch("");
+      setRoleFilter("all");
+      setOrgFilter("all");
       await fetchData();
     } catch (err: any) {
       const desc = await getFunctionErrorMessage(err, "Falha ao convidar.");
