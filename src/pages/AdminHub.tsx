@@ -703,8 +703,15 @@ export default function AdminHub() {
                     </Select>
                     <div className="relative w-64">
                       <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                      <Input placeholder="Buscar por nome ou email..." value={search}
-                        onChange={(e) => setSearch(e.target.value)} className="pl-9 bg-muted/50 border-border text-sm" />
+                      <Input
+                        id="admin-user-search"
+                        name="user_search"
+                        aria-label="Buscar usuários"
+                        placeholder="Buscar por nome ou email..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="pl-9 bg-muted/50 border-border text-sm"
+                      />
                     </div>
                   </div>
                 </div>
@@ -879,14 +886,26 @@ export default function AdminHub() {
                   <div className="space-y-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg">
                       <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Nome</Label>
-                        <Input value={teamName} onChange={(e) => setTeamName(e.target.value)}
-                          placeholder="Nome da organização" className="bg-muted/50 border-border" />
+                        <Label htmlFor="org-name" className="text-xs text-muted-foreground">Nome</Label>
+                        <Input
+                          id="org-name"
+                          name="org_name"
+                          value={teamName}
+                          onChange={(e) => setTeamName(e.target.value)}
+                          placeholder="Nome da organização"
+                          className="bg-muted/50 border-border"
+                        />
                       </div>
                       <div className="space-y-2">
-                        <Label className="text-xs text-muted-foreground">Slug</Label>
-                        <Input value={teamSlug} onChange={(e) => setTeamSlug(e.target.value)}
-                          placeholder="minha-org" className="bg-muted/50 border-border font-mono text-xs" />
+                        <Label htmlFor="org-slug" className="text-xs text-muted-foreground">Slug</Label>
+                        <Input
+                          id="org-slug"
+                          name="org_slug"
+                          value={teamSlug}
+                          onChange={(e) => setTeamSlug(e.target.value)}
+                          placeholder="minha-org"
+                          className="bg-muted/50 border-border font-mono text-xs"
+                        />
                       </div>
                     </div>
                     <div className="flex items-center gap-3">
@@ -1173,23 +1192,41 @@ export default function AdminHub() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Nome</Label>
-              <Input value={rmsForm.name} onChange={(e) => setRmsForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Ex: RMS Produção" className="bg-muted/50 border-border" />
+              <Label htmlFor="rms-name" className="text-xs text-muted-foreground">Nome</Label>
+              <Input
+                id="rms-name"
+                name="rms_name"
+                value={rmsForm.name}
+                onChange={(e) => setRmsForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Ex: RMS Produção"
+                className="bg-muted/50 border-border"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">URL da API</Label>
-              <Input value={rmsForm.url} onChange={(e) => setRmsForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="https://..." className="bg-muted/50 border-border font-mono text-xs" />
+              <Label htmlFor="rms-url" className="text-xs text-muted-foreground">URL da API</Label>
+              <Input
+                id="rms-url"
+                name="rms_url"
+                value={rmsForm.url}
+                onChange={(e) => setRmsForm((f) => ({ ...f, url: e.target.value }))}
+                placeholder="https://..."
+                className="bg-muted/50 border-border font-mono text-xs"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">
+              <Label htmlFor="rms-token" className="text-xs text-muted-foreground">
                 API Token {rmsEditing && <span className="text-muted-foreground/60">(deixe vazio para manter)</span>}
               </Label>
               <div className="relative">
-                <Input type={showRmsToken ? "text" : "password"}
-                  value={rmsForm.api_token} onChange={(e) => setRmsForm((f) => ({ ...f, api_token: e.target.value }))}
-                  placeholder="••••••••" className="bg-muted/50 border-border pr-10" />
+                <Input
+                  id="rms-token"
+                  name="rms_token"
+                  type={showRmsToken ? "text" : "password"}
+                  value={rmsForm.api_token}
+                  onChange={(e) => setRmsForm((f) => ({ ...f, api_token: e.target.value }))}
+                  placeholder="••••••••"
+                  className="bg-muted/50 border-border pr-10"
+                />
                 <Button variant="ghost" size="icon" type="button"
                   className="absolute right-0 top-0 h-full px-3"
                   onClick={() => setShowRmsToken(!showRmsToken)}>
@@ -1225,28 +1262,52 @@ export default function AdminHub() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Nome</Label>
-              <Input value={zabbixForm.name} onChange={(e) => setZabbixForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Ex: Zabbix DC1" className="bg-muted/50 border-border" />
+              <Label htmlFor="zabbix-name" className="text-xs text-muted-foreground">Nome</Label>
+              <Input
+                id="zabbix-name"
+                name="zabbix_name"
+                value={zabbixForm.name}
+                onChange={(e) => setZabbixForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Ex: Zabbix DC1"
+                className="bg-muted/50 border-border"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">URL do Zabbix</Label>
-              <Input value={zabbixForm.url} onChange={(e) => setZabbixForm((f) => ({ ...f, url: e.target.value }))}
-                placeholder="https://zabbix.example.com" className="bg-muted/50 border-border font-mono text-xs" />
+              <Label htmlFor="zabbix-url" className="text-xs text-muted-foreground">URL do Zabbix</Label>
+              <Input
+                id="zabbix-url"
+                name="zabbix_url"
+                value={zabbixForm.url}
+                onChange={(e) => setZabbixForm((f) => ({ ...f, url: e.target.value }))}
+                placeholder="https://zabbix.example.com"
+                className="bg-muted/50 border-border font-mono text-xs"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Usuário</Label>
-              <Input value={zabbixForm.username} onChange={(e) => setZabbixForm((f) => ({ ...f, username: e.target.value }))}
-                placeholder="Admin" className="bg-muted/50 border-border" />
+              <Label htmlFor="zabbix-username" className="text-xs text-muted-foreground">Usuário</Label>
+              <Input
+                id="zabbix-username"
+                name="zabbix_username"
+                value={zabbixForm.username}
+                onChange={(e) => setZabbixForm((f) => ({ ...f, username: e.target.value }))}
+                placeholder="Admin"
+                className="bg-muted/50 border-border"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">
+              <Label htmlFor="zabbix-password" className="text-xs text-muted-foreground">
                 Senha {zabbixEditing && <span className="text-muted-foreground/60">(deixe vazio para manter)</span>}
               </Label>
               <div className="relative">
-                <Input type={showZabbixPass ? "text" : "password"}
-                  value={zabbixForm.password} onChange={(e) => setZabbixForm((f) => ({ ...f, password: e.target.value }))}
-                  placeholder="••••••••" className="bg-muted/50 border-border pr-10" />
+                <Input
+                  id="zabbix-password"
+                  name="zabbix_password"
+                  type={showZabbixPass ? "text" : "password"}
+                  value={zabbixForm.password}
+                  onChange={(e) => setZabbixForm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder="••••••••"
+                  className="bg-muted/50 border-border pr-10"
+                />
                 <Button variant="ghost" size="icon" type="button"
                   className="absolute right-0 top-0 h-full px-3"
                   onClick={() => setShowZabbixPass(!showZabbixPass)}>
@@ -1286,24 +1347,35 @@ export default function AdminHub() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">E-mail *</Label>
-              <Input type="text" value={inviteForm.email}
+              <Label htmlFor="invite-email" className="text-xs text-muted-foreground">E-mail *</Label>
+              <Input
+                id="invite-email"
+                name="invite_email"
+                type="text"
+                value={inviteForm.email}
                 onChange={(e) => setInviteForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="admin ou usuario@empresa.com" className="bg-muted/50 border-border" />
+                placeholder="admin ou usuario@empresa.com"
+                className="bg-muted/50 border-border"
+              />
               <p className="text-[10px] text-muted-foreground">
                 Usernames sem <span className="font-mono text-primary">@</span> serão completados automaticamente com <span className="font-mono text-primary">@flowpulse.local</span>
               </p>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Nome de exibição</Label>
-              <Input value={inviteForm.display_name}
+              <Label htmlFor="invite-display-name" className="text-xs text-muted-foreground">Nome de exibição</Label>
+              <Input
+                id="invite-display-name"
+                name="invite_display_name"
+                value={inviteForm.display_name}
                 onChange={(e) => setInviteForm((f) => ({ ...f, display_name: e.target.value }))}
-                placeholder="João Silva" className="bg-muted/50 border-border" />
+                placeholder="João Silva"
+                className="bg-muted/50 border-border"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Role *</Label>
+              <Label htmlFor="invite-role" className="text-xs text-muted-foreground">Role *</Label>
               <Select value={inviteForm.role} onValueChange={(v) => setInviteForm((f) => ({ ...f, role: v }))}>
-                <SelectTrigger className="bg-muted/50 border-border">
+                <SelectTrigger id="invite-role" className="bg-muted/50 border-border">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1316,11 +1388,17 @@ export default function AdminHub() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Senha provisória</Label>
-              <Input type="password" value={inviteForm.password}
+              <Label htmlFor="invite-password" className="text-xs text-muted-foreground">Senha provisória</Label>
+              <Input
+                id="invite-password"
+                name="invite_password"
+                type="password"
+                value={inviteForm.password}
                 onChange={(e) => setInviteForm((f) => ({ ...f, password: e.target.value }))}
-                placeholder="Mín. 6 caracteres (opcional)" className="bg-muted/50 border-border"
-                minLength={6} />
+                placeholder="Mín. 6 caracteres (opcional)"
+                className="bg-muted/50 border-border"
+                minLength={6}
+              />
               <p className="text-[10px] text-muted-foreground">Se vazio, uma senha aleatória será gerada.</p>
             </div>
           </div>
@@ -1345,16 +1423,26 @@ export default function AdminHub() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Nome da Organização *</Label>
-              <Input value={newOrgForm.name}
+              <Label htmlFor="new-org-name" className="text-xs text-muted-foreground">Nome da Organização *</Label>
+              <Input
+                id="new-org-name"
+                name="new_org_name"
+                value={newOrgForm.name}
                 onChange={(e) => setNewOrgForm((f) => ({ ...f, name: e.target.value }))}
-                placeholder="Madeplant Logística" className="bg-muted/50 border-border" />
+                placeholder="Madeplant Logística"
+                className="bg-muted/50 border-border"
+              />
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Slug (opcional)</Label>
-              <Input value={newOrgForm.slug}
+              <Label htmlFor="new-org-slug" className="text-xs text-muted-foreground">Slug (opcional)</Label>
+              <Input
+                id="new-org-slug"
+                name="new_org_slug"
+                value={newOrgForm.slug}
                 onChange={(e) => setNewOrgForm((f) => ({ ...f, slug: e.target.value }))}
-                placeholder="madeplant-logistica" className="bg-muted/50 border-border font-mono text-xs" />
+                placeholder="madeplant-logistica"
+                className="bg-muted/50 border-border font-mono text-xs"
+              />
               <p className="text-[10px] text-muted-foreground">Gerado automaticamente se vazio.</p>
             </div>
           </div>
@@ -1379,9 +1467,9 @@ export default function AdminHub() {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Organização destino</Label>
+              <Label htmlFor="link-target-tenant" className="text-xs text-muted-foreground">Organização destino</Label>
               <Select value={linkTargetTenant} onValueChange={setLinkTargetTenant}>
-                <SelectTrigger className="bg-muted/50 border-border">
+                <SelectTrigger id="link-target-tenant" className="bg-muted/50 border-border">
                   <SelectValue placeholder="Selecione a organização..." />
                 </SelectTrigger>
                 <SelectContent>
@@ -1392,9 +1480,9 @@ export default function AdminHub() {
               </Select>
             </div>
             <div className="space-y-2">
-              <Label className="text-xs text-muted-foreground">Role na nova organização</Label>
+              <Label htmlFor="link-role" className="text-xs text-muted-foreground">Role na nova organização</Label>
               <Select value={linkRole} onValueChange={setLinkRole}>
-                <SelectTrigger className="bg-muted/50 border-border">
+                <SelectTrigger id="link-role" className="bg-muted/50 border-border">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
