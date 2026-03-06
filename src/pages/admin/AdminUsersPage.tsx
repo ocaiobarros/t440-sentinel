@@ -40,9 +40,13 @@ export default function AdminUsersPage() {
   const [inviteForm, setInviteForm] = useState({ email: "", display_name: "", role: "viewer", password: "" });
   const [inviting, setInviting] = useState(false);
 
-  // Remove
+  // Remove from org
   const [removeDialog, setRemoveDialog] = useState<{ open: boolean; userId: string; name: string; tenantId: string }>({ open: false, userId: "", name: "", tenantId: "" });
   const [removing, setRemoving] = useState(false);
+
+  // Delete user permanently
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: string; name: string }>({ open: false, userId: "", name: "" });
+  const [deleting, setDeleting] = useState(false);
 
   // Link
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; userId: string; name: string; email: string }>({ open: false, userId: "", name: "", email: "" });
