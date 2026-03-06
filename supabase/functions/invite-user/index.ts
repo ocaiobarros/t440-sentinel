@@ -121,36 +121,39 @@ Deno.serve(async (req) => {
     };
 
     const ensureRoleForTenant = async (userId: string) => {
-      if (mode === "link") {
-        // "link" mode: just add role for target tenant, keep existing roles
-        // Delete existing role for this specific tenant (if any) to upsert
-        await adminClient
-          .from("user_roles")
-          .delete()
-          .eq("user_id", userId)
-          .eq("tenant_id", targetTenant);
+      const { data: existingTenantRole, error: existingTenantRoleError } = await adminClient
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("tenant_id", targetTenant)
+        .maybeSingle();
 
+      if (existingTenantRoleError) throw existingTenantRoleError;
+
+      if (existingTenantRole?.id) {
+        const { error: roleUpdateError } = await adminClient
+          .from("user_roles")
+          .update({ role })
+          .eq("id", existingTenantRole.id);
+
+        if (roleUpdateError) throw roleUpdateError;
+      } else {
         const { error: roleInsertError } = await adminClient
           .from("user_roles")
           .insert({ user_id: userId, tenant_id: targetTenant, role });
 
         if (roleInsertError) throw roleInsertError;
-        return;
       }
 
-      // "move" mode (default): remove all roles and set only the target
-      const { error: clearRolesError } = await adminClient
+      if (mode === "link") return;
+
+      const { error: pruneRolesError } = await adminClient
         .from("user_roles")
         .delete()
-        .eq("user_id", userId);
+        .eq("user_id", userId)
+        .neq("tenant_id", targetTenant);
 
-      if (clearRolesError) throw clearRolesError;
-
-      const { error: roleInsertError } = await adminClient
-        .from("user_roles")
-        .insert({ user_id: userId, tenant_id: targetTenant, role });
-
-      if (roleInsertError) throw roleInsertError;
+      if (pruneRolesError) throw pruneRolesError;
     };
 
     const upsertProfile = async (userId: string) => {
@@ -163,7 +166,7 @@ Deno.serve(async (req) => {
 
       const { data: existingById, error: existingByIdError } = await adminClient
         .from("profiles")
-        .select("id, tenant_id")
+        .select("id")
         .eq("id", userId)
         .maybeSingle();
 
@@ -178,26 +181,16 @@ Deno.serve(async (req) => {
         return;
       }
 
-      const isTenantMove = existingById.tenant_id !== targetTenant;
-
-      if (!isTenantMove) {
-        // Evita UPDATE em profiles para não acionar trigger de imutabilidade de tenant
-        return;
-      }
-
-      // tenant_id é imutável por trigger: recriar o profile no tenant de destino
-      const { error: deleteProfileError } = await adminClient
+      const { error: updateProfileError } = await adminClient
         .from("profiles")
-        .delete()
+        .update({
+          tenant_id: targetTenant,
+          display_name: displayName,
+          email,
+        })
         .eq("id", userId);
 
-      if (deleteProfileError) throw deleteProfileError;
-
-      const { error: recreateProfileError } = await adminClient
-        .from("profiles")
-        .insert(profilePayload);
-
-      if (recreateProfileError) throw recreateProfileError;
+      if (updateProfileError) throw updateProfileError;
     };
 
     const setAuthTenantMetadata = async (userId: string) => {
@@ -330,25 +323,13 @@ Deno.serve(async (req) => {
       // Link mode: only add role, don't touch profile or JWT metadata
       await ensureRoleForTenant(userId);
     } else {
-      // Move mode: full migration
       const { data: autoTenantId } = await adminClient.rpc("get_user_tenant_id", { p_user_id: userId });
 
       await upsertProfile(userId);
-      await ensureRoleForTenant(userId);
       await setAuthTenantMetadata(userId);
+      await ensureRoleForTenant(userId);
 
-      const movedFromAutoTenant = Boolean(autoTenantId && autoTenantId !== targetTenant);
-
-      if (movedFromAutoTenant) {
-        await adminClient
-          .from("user_roles")
-          .delete()
-          .eq("user_id", userId)
-          .eq("tenant_id", autoTenantId);
-
-        await cleanupTenantIfEmpty(autoTenantId);
-      }
-
+      await cleanupTenantIfEmpty(autoTenantId);
       await cleanupTenantIfEmpty(previousTenantId);
     }
 
