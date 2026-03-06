@@ -186,8 +186,14 @@ export default function TenantsPage() {
 
   const deleteTenant = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tenants").delete().eq("id", id);
-      if (error) throw error;
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "delete", tenant_id: id },
+      });
+      if (error) {
+        const parsed = await getFunctionErrorMessage(error, "Falha ao excluir organização.");
+        throw new Error(parsed);
+      }
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tenants-admin"] });

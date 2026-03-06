@@ -84,6 +84,35 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ── DELETE ── */
+    if (action === "delete") {
+      const tenantId = String(body?.tenant_id || "").trim();
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: "tenant_id is required", stage }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      stage = "delete_tenant";
+      const { error: delErr } = await adminClient
+        .from("tenants")
+        .delete()
+        .eq("id", tenantId);
+
+      if (delErr) {
+        return new Response(JSON.stringify({ error: delErr.message, stage }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true, deleted: tenantId }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     /* ── CREATE ── */
     if (action !== "create") {
       return new Response(JSON.stringify({ error: "Unsupported action", stage }), {
