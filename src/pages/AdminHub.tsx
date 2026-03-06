@@ -1097,7 +1097,7 @@ export default function AdminHub() {
 
             {/* ─── TEAMS TAB ─── */}
             <TabsContent value="teams">
-              <TeamsPanel tenantId={selectedTenantId} profiles={tenantProfiles.map((p) => ({ id: p.id, display_name: p.display_name, email: p.email }))} />
+              <TeamsPanel tenantId={selectedTenantId} profiles={selectedTenantProfiles.map((p) => ({ id: p.id, display_name: p.display_name, email: p.email }))} />
             </TabsContent>
 
             {/* ─── CONNECTIONS TAB ─── */}
