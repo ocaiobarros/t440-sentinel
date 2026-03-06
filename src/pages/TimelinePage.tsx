@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,6 +45,7 @@ interface TimelineEvent {
 export default function TimelinePage() {
   const { t } = useTranslation();
   const { toast } = useToast();
+  const { activeTenantId } = useTenantFilter();
 
   const [selectedMapId, setSelectedMapId] = useState<string>("");
   const [dateStr, setDateStr] = useState(yesterdayStr());
@@ -58,9 +60,11 @@ export default function TimelinePage() {
 
   /* ─── Queries ─── */
   const { data: maps = [] } = useQuery({
-    queryKey: ["tm-maps"],
+    queryKey: ["tm-maps", activeTenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("flow_maps").select("id, name, tenant_id, center_lat, center_lon, zoom, theme, refresh_interval, created_at, updated_at");
+      let q = supabase.from("flow_maps").select("id, name, tenant_id, center_lat, center_lon, zoom, theme, refresh_interval, created_at, updated_at");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data } = await q;
       return (data ?? []) as FlowMap[];
     },
   });

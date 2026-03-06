@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { BarChart3, ChevronLeft, ChevronRight, Settings2, X, TrendingUp } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import FinanceUploadWizard from "@/components/finance/FinanceUploadWizard";
 import PressureAnalysisChart from "@/components/finance/PressureAnalysisChart";
 import {
@@ -76,6 +77,7 @@ export default function FlowFinance() {
   const [showSettings, setShowSettings] = useState(false);
   const [chartType, setChartType] = useState<ChartType>("bar");
   const [metric, setMetric] = useState<Metric>("pagamentos");
+  const { activeTenantId } = useTenantFilter();
 
   const selectedMonth = allMonths[selectedIdx].value;
   const selectedLabel = allMonths[selectedIdx].label;
@@ -87,13 +89,15 @@ export default function FlowFinance() {
   const goNext = useCallback(() => setSelectedIdx(i => Math.max(i - 1, 0)), []);
 
   const { data: transactions = [], refetch } = useQuery({
-    queryKey: ["finance-transactions", selectedMonth],
+    queryKey: ["finance-transactions", selectedMonth, activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("financial_transactions")
         .select("*")
         .eq("month_reference", selectedMonth)
         .order("transaction_date", { ascending: true });
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },

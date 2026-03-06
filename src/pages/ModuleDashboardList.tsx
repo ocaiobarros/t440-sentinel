@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/context-menu";
 import { useToast } from "@/hooks/use-toast";
 import RoleGate from "@/components/auth/RoleGate";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 
 interface ModuleDashboardListProps {
   category: string;
@@ -31,15 +32,18 @@ export default function ModuleDashboardList({ category, title, description, icon
   const navigate = useNavigate();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const { activeTenantId } = useTenantFilter();
 
   const { data: dashboards = [], isLoading } = useQuery({
-    queryKey: ["dashboards", category],
+    queryKey: ["dashboards", category, activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("dashboards")
         .select("id, name, description, is_default, updated_at, zabbix_connection_id, category")
         .eq("category", category)
         .order("updated_at", { ascending: false });
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },

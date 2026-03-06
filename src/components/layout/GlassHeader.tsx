@@ -5,13 +5,14 @@ import { useTranslation } from "react-i18next";
 import {
   User, LogOut, Palette, Monitor, Lock, HelpCircle,
   BookOpen, MessageCircle, Users, Info, Search, Command, X,
-  Sun, Moon,
+  Sun, Moon, Building2, ChevronDown,
 } from "lucide-react";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import SupportModal from "@/components/layout/SupportModal";
 import { useAuth } from "@/hooks/useAuth";
 import { useTheme } from "@/hooks/useTheme";
 import { useProfile } from "@/hooks/useProfile";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import NotificationBell from "./NotificationBell";
 import {
   DropdownMenu,
@@ -31,6 +32,7 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { profile } = useProfile();
+  const { isSuperAdmin, tenants, activeTenantId, setActiveTenantId, activeTenantName } = useTenantFilter();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -68,6 +70,40 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
         bg-background/60 backdrop-blur-md px-3 shrink-0 z-30 relative">
         <div className="flex items-center gap-2">
           <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:text-foreground" />
+
+          {/* ── Tenant selector (Super Admin only) ── */}
+          {isSuperAdmin && tenants.length > 1 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-md
+                  bg-primary/10 border border-primary/20 text-xs font-mono text-primary
+                  hover:bg-primary/20 transition-colors max-w-[200px]">
+                  <Building2 className="h-3.5 w-3.5 shrink-0" />
+                  <span className="truncate">{activeTenantName || "Todas"}</span>
+                  <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-64 bg-card border-border/50 backdrop-blur-xl z-50 max-h-[400px] overflow-y-auto">
+                <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-display">
+                  Contexto de Organização
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-border/30" />
+                {tenants.map((t) => (
+                  <DropdownMenuItem
+                    key={t.id}
+                    onClick={() => setActiveTenantId(t.id)}
+                    className={`gap-2 text-xs cursor-pointer ${activeTenantId === t.id ? "bg-primary/10 text-primary font-medium" : ""}`}
+                  >
+                    <Building2 className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate">{t.name}</span>
+                    {activeTenantId === t.id && (
+                      <span className="ml-auto text-[10px] text-primary">●</span>
+                    )}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
         </div>
 
         <button

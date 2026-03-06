@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,10 +35,13 @@ function formatDuration(seconds: number) {
 
 /* ─── Hooks ─── */
 function useSLAPolicies() {
+  const { activeTenantId } = useTenantFilter();
   return useQuery({
-    queryKey: ["sla-policies"],
+    queryKey: ["sla-policies", activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("sla_policies").select("*").order("name");
+      let q = supabase.from("sla_policies").select("*").order("name");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
@@ -45,6 +49,7 @@ function useSLAPolicies() {
 }
 
 function useSLAAlerts(period: Period) {
+  const { activeTenantId } = useTenantFilter();
   const range = useMemo(() => {
     const now = new Date();
     if (period === "current") return { start: startOfMonth(now), end: endOfMonth(now) };
@@ -53,15 +58,17 @@ function useSLAAlerts(period: Period) {
   }, [period]);
 
   return useQuery({
-    queryKey: ["sla-alerts", period],
+    queryKey: ["sla-alerts", period, activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("alert_instances")
         .select("*")
         .gte("opened_at", range.start.toISOString())
         .lte("opened_at", range.end.toISOString())
         .order("opened_at", { ascending: false })
         .limit(1000);
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as AlertInstance[];
     },

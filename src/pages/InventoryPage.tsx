@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -112,6 +113,7 @@ export default function InventoryPage() {
   const [selectedMapId, setSelectedMapId] = useState("all");
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [kmlMode, setKmlMode] = useState<"import" | "export" | null>(null);
+  const { activeTenantId } = useTenantFilter();
 
   const setTab = (t: string) => {
     setSearchParams(prev => { prev.set("tab", t); return prev; }, { replace: true });
@@ -122,41 +124,51 @@ export default function InventoryPage() {
 
   /* ── queries ── */
   const { data: maps } = useQuery({
-    queryKey: ["inv-maps"],
+    queryKey: ["inv-maps", activeTenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("flow_maps").select("id, name, tenant_id");
+      let q = supabase.from("flow_maps").select("id, name, tenant_id");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data } = await q;
       return data ?? [];
     },
   });
 
   const { data: hosts = [], isLoading: hostsLoading } = useQuery({
-    queryKey: ["inv-hosts"],
+    queryKey: ["inv-hosts", activeTenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("flow_map_hosts").select("*");
+      let q = supabase.from("flow_map_hosts").select("*");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data } = await q;
       return (data ?? []) as Host[];
     },
   });
 
   const { data: ctos = [], isLoading: ctosLoading } = useQuery({
-    queryKey: ["inv-ctos"],
+    queryKey: ["inv-ctos", activeTenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("flow_map_ctos").select("id, name, capacity, occupied_ports, status_calculated, lat, lon, map_id");
+      let q = supabase.from("flow_map_ctos").select("id, name, capacity, occupied_ports, status_calculated, lat, lon, map_id");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data } = await q;
       return (data ?? []) as CTO[];
     },
   });
 
   const { data: cables = [], isLoading: cablesLoading } = useQuery({
-    queryKey: ["inv-cables"],
+    queryKey: ["inv-cables", activeTenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("flow_map_cables").select("id, label, cable_type, fiber_count, distance_km, source_node_id, target_node_id, source_node_type, target_node_type, map_id");
+      let q = supabase.from("flow_map_cables").select("id, label, cable_type, fiber_count, distance_km, source_node_id, target_node_id, source_node_type, target_node_type, map_id");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data } = await q;
       return (data ?? []) as CableRow[];
     },
   });
 
   const { data: links = [] } = useQuery({
-    queryKey: ["inv-links"],
+    queryKey: ["inv-links", activeTenantId],
     queryFn: async () => {
-      const { data } = await supabase.from("flow_map_links").select("id, origin_host_id, dest_host_id, current_status, capacity_mbps, link_type, map_id");
+      let q = supabase.from("flow_map_links").select("id, origin_host_id, dest_host_id, current_status, capacity_mbps, link_type, map_id");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data } = await q;
       return data ?? [];
     },
   });

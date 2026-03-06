@@ -1,6 +1,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 
 export interface FlowMap {
   id: string;
@@ -122,13 +123,16 @@ export interface HostStatus {
 
 /* ── List maps ── */
 export function useFlowMapList() {
+  const { activeTenantId } = useTenantFilter();
   return useQuery({
-    queryKey: ["flow-maps"],
+    queryKey: ["flow-maps", activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("flow_maps")
         .select("*")
         .order("updated_at", { ascending: false });
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as FlowMap[];
     },

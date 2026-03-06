@@ -8,6 +8,7 @@ import {
   ChevronRight, BarChart3, Globe2, BookOpen, Send
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { Area, AreaChart, ResponsiveContainer, XAxis, YAxis, Tooltip as RechartsTooltip } from "recharts";
 import BgpHealthWidget from "@/components/home/BgpHealthWidget";
 import { perfLog } from "@/lib/perf-logger";
@@ -55,6 +56,7 @@ function generateUptimeData() {
 export default function OperationsHome() {
   const navigate = useNavigate();
   const { t } = useTranslation();
+  const { activeTenantId } = useTenantFilter();
   const [stats, setStats] = useState({ incidents: 0, sla: 99.8, capacity: 0, viability: 0 });
   const [activities, setActivities] = useState<{ text: string; time: string; type: string }[]>([]);
   const uptimeData = useMemo(generateUptimeData, []);
@@ -62,14 +64,20 @@ export default function OperationsHome() {
   // Load real counts from DB — all in parallel
   useEffect(() => {
     (async () => {
-      const [incRes, ctoRes, logsRes] = await Promise.all([
-        supabase.from("alert_instances").select("id", { count: "exact", head: true }).eq("status", "open"),
-        supabase.from("flow_map_ctos").select("id, occupied_ports, capacity", { count: "exact" }),
-        supabase.from("flow_audit_logs")
+      let incQ = supabase.from("alert_instances").select("id", { count: "exact", head: true }).eq("status", "open");
+      let ctoQ = supabase.from("flow_map_ctos").select("id, occupied_ports, capacity", { count: "exact" });
+      let logsQ = supabase.from("flow_audit_logs")
           .select("action, table_name, created_at, user_email")
           .order("created_at", { ascending: false })
-          .limit(8),
-      ]);
+          .limit(8);
+
+      if (activeTenantId) {
+        incQ = incQ.eq("tenant_id", activeTenantId);
+        ctoQ = ctoQ.eq("tenant_id", activeTenantId);
+        logsQ = logsQ.eq("tenant_id", activeTenantId);
+      }
+
+      const [incRes, ctoRes, logsRes] = await Promise.all([incQ, ctoQ, logsQ]);
       
       const openIncidents = incRes.count ?? 0;
       const ctos = ctoRes.data ?? [];
@@ -88,7 +96,7 @@ export default function OperationsHome() {
         })));
       }
     })();
-  }, []);
+  }, [activeTenantId]);
 
   const kpiCards = [
     {

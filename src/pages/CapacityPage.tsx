@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -59,37 +60,44 @@ export default function CapacityPage() {
   const [selectedMapId, setSelectedMapId] = useState("all");
   const [threshold, setThreshold] = useState(80);
   const [search, setSearch] = useState("");
+  const { activeTenantId } = useTenantFilter();
 
   /* ── queries ── */
   const { data: maps } = useQuery({
-    queryKey: ["capacity-maps"],
+    queryKey: ["capacity-maps", activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("flow_maps").select("id, name").order("name");
+      let q = supabase.from("flow_maps").select("id, name").order("name");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as MapRow[];
     },
   });
 
   const { data: ctos, isLoading } = useQuery({
-    queryKey: ["capacity-ctos"],
+    queryKey: ["capacity-ctos", activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("flow_map_ctos")
         .select("id, name, capacity, occupied_ports, status_calculated, map_id, lat, lon, created_at")
         .order("name");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []) as CtoRow[];
     },
   });
 
   const { data: viabilityHistory } = useQuery({
-    queryKey: ["capacity-viability-history"],
+    queryKey: ["capacity-viability-history", activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("flow_map_reservas")
         .select("id, lat, lon, map_id, created_at")
         .gte("created_at", new Date(Date.now() - 30 * 86400000).toISOString())
         .order("created_at", { ascending: false });
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },
