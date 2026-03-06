@@ -28,21 +28,32 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      - name: Repair remote-only migrations
+      - name: Push database migrations (with auto-repair)
         run: |
-          # Get remote migrations not in local directory
-          REMOTE_VERSIONS=$(npx supabase@latest migration list 2>/dev/null | grep -oP '^\d{14}' || true)
-          for v in $REMOTE_VERSIONS; do
-            if [ ! -f "supabase/migrations/${v}_"*.sql ] && [ ! -f "supabase/migrations/${v}.sql" ]; then
-              echo "⚠️  Repairing remote-only migration: $v"
-              npx supabase@latest migration repair "$v" --status reverted || true
-            fi
-          done
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          set +e
+          OUTPUT=$(npx supabase@latest db push 2>&1)
+          STATUS=$?
+          set -e
 
-      - name: Push database migrations
-        run: npx supabase@latest db push
+          echo "$OUTPUT"
+
+          if [ $STATUS -eq 0 ]; then
+            exit 0
+          fi
+
+          if echo "$OUTPUT" | grep -q "Remote migration versions not found in local migrations directory"; then
+            MISSING_VERSION=$(echo "$OUTPUT" | sed -n 's/.*reverted \([0-9]\{14\}\).*/\1/p' | head -n1)
+
+            if [ -n "$MISSING_VERSION" ]; then
+              echo "⚠️ Repairing remote-only migration: $MISSING_VERSION"
+              npx supabase@latest migration repair "$MISSING_VERSION" --status reverted
+              echo "🔁 Retrying db push..."
+              npx supabase@latest db push
+              exit 0
+            fi
+          fi
+
+          exit $STATUS
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
