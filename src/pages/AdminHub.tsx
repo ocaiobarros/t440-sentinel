@@ -127,6 +127,7 @@ export default function AdminHub() {
   const [roles, setRoles] = useState<UserRole[]>([]);
   const [tenants, setTenants] = useState<TenantInfo[]>([]);
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [usersTenantFilter, setUsersTenantFilter] = useState<string>("all");
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState<string>("all");
