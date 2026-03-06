@@ -291,10 +291,10 @@ export default function AdminHub() {
   const handleRoleChange = async (userId: string, newRole: string) => {
     setChangingRole(userId);
     try {
-      const existing = roles.find((r) => r.user_id === userId);
+      const existing = roles.find((r) => r.user_id === userId && r.tenant_id === selectedTenantId);
       if (existing) {
         const { error } = await supabase.from("user_roles")
-          .update({ role: newRole as "admin" | "editor" | "viewer" }).eq("id", existing.id);
+          .update({ role: newRole as UserRole["role"] }).eq("id", existing.id);
         if (error) throw error;
       }
       toast({ title: "Role atualizada", description: `Usuário agora é ${newRole}.` });
