@@ -92,6 +92,7 @@ Deno.serve(async (req) => {
     const role = roleRaw as ValidRole;
     const email = String(emailRaw).trim().toLowerCase();
     const displayName = String(displayNameRaw || email.split("@")[0]).trim();
+    const mode = body?.mode === "link" ? "link" : "move"; // "link" = add to org without removing from current
 
     const targetTenant = (isSuperAdmin && targetTenantIdRaw) ? String(targetTenantIdRaw) : String(callerTenant);
 
@@ -120,6 +121,24 @@ Deno.serve(async (req) => {
     };
 
     const ensureRoleForTenant = async (userId: string) => {
+      if (mode === "link") {
+        // "link" mode: just add role for target tenant, keep existing roles
+        // Delete existing role for this specific tenant (if any) to upsert
+        await adminClient
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("tenant_id", targetTenant);
+
+        const { error: roleInsertError } = await adminClient
+          .from("user_roles")
+          .insert({ user_id: userId, tenant_id: targetTenant, role });
+
+        if (roleInsertError) throw roleInsertError;
+        return;
+      }
+
+      // "move" mode (default): remove all roles and set only the target
       const { error: clearRolesError } = await adminClient
         .from("user_roles")
         .delete()
@@ -306,31 +325,40 @@ Deno.serve(async (req) => {
     }
 
     stage = "sync_profile_role_metadata";
-    const { data: autoTenantId } = await adminClient.rpc("get_user_tenant_id", { p_user_id: userId });
 
-    await upsertProfile(userId);
-    await ensureRoleForTenant(userId);
-    await setAuthTenantMetadata(userId);
+    if (mode === "link") {
+      // Link mode: only add role, don't touch profile or JWT metadata
+      await ensureRoleForTenant(userId);
+    } else {
+      // Move mode: full migration
+      const { data: autoTenantId } = await adminClient.rpc("get_user_tenant_id", { p_user_id: userId });
 
-    const movedFromAutoTenant = Boolean(autoTenantId && autoTenantId !== targetTenant);
+      await upsertProfile(userId);
+      await ensureRoleForTenant(userId);
+      await setAuthTenantMetadata(userId);
 
-    if (movedFromAutoTenant) {
-      await adminClient
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId)
-        .eq("tenant_id", autoTenantId);
+      const movedFromAutoTenant = Boolean(autoTenantId && autoTenantId !== targetTenant);
 
-      await cleanupTenantIfEmpty(autoTenantId);
+      if (movedFromAutoTenant) {
+        await adminClient
+          .from("user_roles")
+          .delete()
+          .eq("user_id", userId)
+          .eq("tenant_id", autoTenantId);
+
+        await cleanupTenantIfEmpty(autoTenantId);
+      }
+
+      await cleanupTenantIfEmpty(previousTenantId);
     }
-
-    await cleanupTenantIfEmpty(previousTenantId);
 
     return new Response(JSON.stringify({
       success: true,
       user_id: userId,
       existing: existingAuthUser,
-      moved: (previousTenantId !== null && previousTenantId !== targetTenant) || movedFromAutoTenant,
+      mode,
+      linked: mode === "link",
+      moved: mode !== "link" && ((previousTenantId !== null && previousTenantId !== targetTenant)),
     }), {
       status: 200,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

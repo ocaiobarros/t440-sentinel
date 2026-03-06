@@ -156,12 +156,13 @@ export default function AdminHub() {
   });
   const [removing, setRemoving] = useState(false);
 
-  // Move user to another tenant
-  const [moveDialog, setMoveDialog] = useState<{ open: boolean; userId: string; name: string }>({
-    open: false, userId: "", name: "",
+  // Link user to another tenant (add, not move)
+  const [linkDialog, setLinkDialog] = useState<{ open: boolean; userId: string; name: string; email: string }>({
+    open: false, userId: "", name: "", email: "",
   });
-  const [moveTargetTenant, setMoveTargetTenant] = useState<string>("");
-  const [moving, setMoving] = useState(false);
+  const [linkTargetTenant, setLinkTargetTenant] = useState<string>("");
+  const [linkRole, setLinkRole] = useState<string>("viewer");
+  const [linking, setLinking] = useState(false);
 
   // Delete tenant
   const [deletingTenantId, setDeletingTenantId] = useState<string | null>(null);
@@ -318,42 +319,43 @@ export default function AdminHub() {
     }
   };
 
-  const handleMoveUser = async () => {
-    if (!moveTargetTenant || !moveDialog.userId) return;
-    setMoving(true);
+  const handleLinkUser = async () => {
+    if (!linkTargetTenant || !linkDialog.userId) return;
+    setLinking(true);
     try {
-      const profileToMove = profiles.find((p) => p.id === moveDialog.userId);
-      const email = profileToMove?.email?.trim().toLowerCase();
+      const email = linkDialog.email?.trim().toLowerCase();
       if (!email) {
-        throw new Error("Não foi possível mover: usuário sem e-mail válido.");
+        throw new Error("Não foi possível vincular: usuário sem e-mail válido.");
       }
 
-      const oldRole = roles.find((r) => r.user_id === moveDialog.userId && r.tenant_id === selectedTenantId);
-      const roleValue = oldRole?.role ?? "viewer";
+      const profileToLink = profiles.find((p) => p.id === linkDialog.userId);
 
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: {
           email,
-          display_name: profileToMove?.display_name ?? "",
-          role: roleValue,
-          target_tenant_id: moveTargetTenant,
+          display_name: profileToLink?.display_name ?? "",
+          role: linkRole,
+          target_tenant_id: linkTargetTenant,
+          mode: "link",
         },
       });
 
       if (error) {
-        const parsed = await getFunctionErrorMessage(error, "Falha ao mover usuário.");
+        const parsed = await getFunctionErrorMessage(error, "Falha ao vincular usuário.");
         throw new Error(parsed);
       }
       if (data?.error) throw new Error(data.error);
 
-      toast({ title: "Usuário movido", description: `${moveDialog.name} foi transferido para outra organização.` });
-      setMoveDialog({ open: false, userId: "", name: "" });
-      setMoveTargetTenant("");
+      const targetName = tenants.find((t) => t.id === linkTargetTenant)?.name ?? "organização";
+      toast({ title: "Usuário vinculado", description: `${linkDialog.name} agora também pertence a "${targetName}".` });
+      setLinkDialog({ open: false, userId: "", name: "", email: "" });
+      setLinkTargetTenant("");
+      setLinkRole("viewer");
       await fetchData();
     } catch (err: any) {
-      toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao mover usuário." });
+      toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao vincular usuário." });
     } finally {
-      setMoving(false);
+      setLinking(false);
     }
   };
 
@@ -743,14 +745,14 @@ export default function AdminHub() {
                               {!isSelf && (
                                 <div className="flex items-center justify-center gap-1">
                                   {isSuperAdmin && tenants.length > 1 && (
-                                    <Button variant="ghost" size="icon" title="Trocar Time"
-                                      onClick={() => { setMoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" }); setMoveTargetTenant(""); }}>
+                                    <Button variant="ghost" size="icon" title="Vincular a Organização"
+                                      onClick={() => { setLinkDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", email: p.email ?? "" }); setLinkTargetTenant(""); setLinkRole("viewer"); }}>
                                       <Building2 className="w-4 h-4" />
                                     </Button>
                                   )}
                                   <Button variant="ghost" size="icon"
                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    title="Remover do time"
+                                    title="Remover da organização"
                                     onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
@@ -1347,21 +1349,21 @@ export default function AdminHub() {
         </DialogContent>
       </Dialog>
 
-      {/* ─── MOVE USER DIALOG ─── */}
-      <Dialog open={moveDialog.open} onOpenChange={(o) => !moving && setMoveDialog((s) => ({ ...s, open: o }))}>
+      {/* ─── LINK USER TO ORG DIALOG ─── */}
+      <Dialog open={linkDialog.open} onOpenChange={(o) => !linking && setLinkDialog((s) => ({ ...s, open: o }))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Trocar Time</DialogTitle>
+            <DialogTitle>Vincular a Organização</DialogTitle>
             <DialogDescription>
-              Mover <strong>{moveDialog.name}</strong> para outra organização.
+              Adicionar <strong>{linkDialog.name}</strong> a outra organização sem removê-lo da atual.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
               <Label className="text-xs text-muted-foreground">Organização destino</Label>
-              <Select value={moveTargetTenant} onValueChange={setMoveTargetTenant}>
+              <Select value={linkTargetTenant} onValueChange={setLinkTargetTenant}>
                 <SelectTrigger className="bg-muted/50 border-border">
-                  <SelectValue placeholder="Selecione o time..." />
+                  <SelectValue placeholder="Selecione a organização..." />
                 </SelectTrigger>
                 <SelectContent>
                   {tenants.filter((t) => t.id !== selectedTenantId).map((t) => (
@@ -1370,12 +1372,27 @@ export default function AdminHub() {
                 </SelectContent>
               </Select>
             </div>
+            <div className="space-y-2">
+              <Label className="text-xs text-muted-foreground">Role na nova organização</Label>
+              <Select value={linkRole} onValueChange={setLinkRole}>
+                <SelectTrigger className="bg-muted/50 border-border">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="editor">Editor</SelectItem>
+                  <SelectItem value="tech">Técnico</SelectItem>
+                  <SelectItem value="sales">Vendedor</SelectItem>
+                  <SelectItem value="viewer">Viewer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
-            <Button variant="ghost" onClick={() => setMoveDialog({ open: false, userId: "", name: "" })} disabled={moving}>Cancelar</Button>
-            <Button onClick={handleMoveUser} disabled={moving || !moveTargetTenant}>
-              {moving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Building2 className="w-4 h-4 mr-1" />}
-              Mover
+            <Button variant="ghost" onClick={() => setLinkDialog({ open: false, userId: "", name: "", email: "" })} disabled={linking}>Cancelar</Button>
+            <Button onClick={handleLinkUser} disabled={linking || !linkTargetTenant}>
+              {linking ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Building2 className="w-4 h-4 mr-1" />}
+              Vincular
             </Button>
           </DialogFooter>
         </DialogContent>
