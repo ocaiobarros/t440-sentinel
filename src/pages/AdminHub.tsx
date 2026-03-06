@@ -266,9 +266,6 @@ export default function AdminHub() {
           const fallbackMembers = await loadMembersFallback();
           nextProfiles = fallbackMembers.profiles;
           nextRoles = fallbackMembers.roles;
-          if (!isUnsupportedActionError(membersFunctionError)) {
-            throw new Error(membersFunctionError || "Falha ao listar membros.");
-          }
         } else {
           const membersPayload = (membersRes.data ?? {}) as {
             error?: string;
