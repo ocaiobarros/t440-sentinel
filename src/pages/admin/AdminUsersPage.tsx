@@ -37,7 +37,7 @@ export default function AdminUsersPage() {
 
   // Invite
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteForm, setInviteForm] = useState({ email: "", display_name: "", role: "viewer", password: "" });
+  const [inviteForm, setInviteForm] = useState({ email: "", display_name: "", role: "viewer", password: "", target_tenant_id: "" });
   const [inviting, setInviting] = useState(false);
 
   // Remove from org
