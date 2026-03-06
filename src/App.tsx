@@ -24,7 +24,16 @@ const ZabbixConnections = lazyRetry(() => import("./pages/ZabbixConnections"));
 const RMSConnections = lazyRetry(() => import("./pages/RMSConnections"));
 const Index = lazyRetry(() => import("./pages/Index"));
 const FleetIntelligence = lazyRetry(() => import("./pages/FleetIntelligence"));
-const AdminHub = lazyRetry(() => import("./pages/AdminHub"));
+const AdminLayout = lazyRetry(() => import("./pages/admin/AdminContext"));
+const AdminLanding = lazyRetry(() => import("./pages/admin/AdminLanding"));
+const AdminAccessLanding = lazyRetry(() => import("./pages/admin/AdminAccessLanding"));
+const AdminUsersPage = lazyRetry(() => import("./pages/admin/AdminUsersPage"));
+const AdminTeamsPage = lazyRetry(() => import("./pages/admin/AdminTeamsPage"));
+const AdminOrgsPage = lazyRetry(() => import("./pages/admin/AdminOrgsPage"));
+const AdminConnectionsPage = lazyRetry(() => import("./pages/admin/AdminConnectionsPage"));
+const AdminTelemetryPage = lazyRetry(() => import("./pages/admin/AdminTelemetryPage"));
+const AdminOpsPage = lazyRetry(() => import("./pages/admin/AdminOpsPage"));
+const AdminDiagPage = lazyRetry(() => import("./pages/admin/AdminDiagPage"));
 const VirtualizationMonitor = lazyRetry(() => import("./pages/VirtualizationMonitor"));
 const VirtualMachinesMonitor = lazyRetry(() => import("./pages/VirtualMachinesMonitor"));
 const BgpFlowMonitor = lazyRetry(() => import("./pages/BgpFlowMonitor"));
@@ -140,9 +149,19 @@ const App = () => (
                           <Route path="settings/rms-connections" element={
                             <ProtectedRoute roles={["admin"]}><RMSConnections /></ProtectedRoute>
                           } />
-                          <Route path="settings/users" element={
-                            <ProtectedRoute roles={["admin"]}><AdminHub /></ProtectedRoute>
-                          } />
+                          <Route path="settings/admin" element={
+                            <ProtectedRoute roles={["admin"]}><AdminLayout /></ProtectedRoute>
+                          }>
+                            <Route index element={<AdminLanding />} />
+                            <Route path="access" element={<AdminAccessLanding />} />
+                            <Route path="users" element={<AdminUsersPage />} />
+                            <Route path="teams" element={<AdminTeamsPage />} />
+                            <Route path="orgs" element={<AdminOrgsPage />} />
+                            <Route path="connections" element={<AdminConnectionsPage />} />
+                            <Route path="telemetry" element={<AdminTelemetryPage />} />
+                            <Route path="ops" element={<AdminOpsPage />} />
+                            <Route path="diagnostics" element={<AdminDiagPage />} />
+                          </Route>
                           <Route path="settings/profile" element={<UserSettings />} />
                           <Route path="settings/telegram" element={
                             <ProtectedRoute roles={["admin"]}><TelegramSettings /></ProtectedRoute>
@@ -184,7 +203,8 @@ const App = () => (
               <Route path="/flowmap/maps/:mapId" element={<LegacyFlowmapRedirect />} />
               <Route path="/settings/connections" element={<Navigate to="/app/settings/connections" replace />} />
               <Route path="/settings/rms-connections" element={<Navigate to="/app/settings/rms-connections" replace />} />
-              <Route path="/admin" element={<Navigate to="/app/settings/users" replace />} />
+              <Route path="/admin" element={<Navigate to="/app/settings/admin" replace />} />
+              <Route path="/app/settings/users" element={<Navigate to="/app/settings/admin" replace />} />
 
               {/* ── Legacy template redirects ── */}
               <Route path="/templates/server-monitor" element={<Navigate to="/app/monitoring/server" replace />} />

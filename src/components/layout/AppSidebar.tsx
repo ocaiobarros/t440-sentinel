@@ -69,7 +69,7 @@ function useSidebarItems() {
     { title: t("sidebar.zabbixConnectors"), url: "/app/settings/connections", icon: Settings },
     { title: t("sidebar.rmsConnectors"), url: "/app/settings/rms-connections", icon: Zap },
     { title: t("sidebar.telegram"), url: "/app/settings/telegram", icon: Send },
-    { title: t("sidebar.users"), url: "/app/settings/users", icon: Users },
+    { title: t("sidebar.users"), url: "/app/settings/admin", icon: Users },
     
   ];
 
