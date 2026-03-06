@@ -264,8 +264,19 @@ export default function AdminHub() {
     }
   }, [selectedTenantId, tenant?.name, tenant?.slug]);
 
-  const tenantProfiles = profiles.filter((p) => p.tenant_id === selectedTenantId);
   const tenantRoles = roles.filter((r) => r.tenant_id === selectedTenantId);
+  const profileById = new Map(profiles.map((p) => [p.id, p]));
+  const tenantProfiles = Array.from(new Map(tenantRoles.map((r) => [r.user_id, r])).values()).map((memberRole) => {
+    const profile = profileById.get(memberRole.user_id);
+    return {
+      id: memberRole.user_id,
+      display_name: profile?.display_name ?? null,
+      email: profile?.email ?? null,
+      avatar_url: profile?.avatar_url ?? null,
+      tenant_id: selectedTenantId ?? memberRole.tenant_id,
+      created_at: profile?.created_at ?? memberRole.created_at ?? new Date().toISOString(),
+    } satisfies Profile;
+  });
 
   const getRoleForUser = (userId: string) => tenantRoles.find((r) => r.user_id === userId)?.role ?? "viewer";
 
