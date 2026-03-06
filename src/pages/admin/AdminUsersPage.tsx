@@ -449,7 +449,7 @@ export default function AdminUsersPage() {
             </TabsTrigger>
           </TabsList>
           {activeTab === "org" && (
-            <Button size="sm" onClick={() => setInviteOpen(true)} disabled={!selectedTenantId}>
+            <Button size="sm" onClick={() => { setInviteForm(f => ({ ...f, target_tenant_id: selectedTenantId || "" })); setInviteOpen(true); }} disabled={!selectedTenantId}>
               <Plus className="w-4 h-4 mr-1" /> Invite
             </Button>
           )}
