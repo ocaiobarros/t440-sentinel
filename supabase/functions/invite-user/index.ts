@@ -277,6 +277,7 @@ Deno.serve(async (req) => {
     }
 
     const existingAuthUser = Boolean(userId);
+    const mode = existingAuthUser ? requestedMode : "move";
 
     if (!userId) {
       stage = "create_or_resolve_auth_user";
