@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { ArrowLeft, FileText, Calendar, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useQuery } from "@tanstack/react-query";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 
 interface BillingEntry {
   hostId: string;
@@ -25,15 +26,18 @@ interface BillingLog {
 
 export default function BillingHistory() {
   const navigate = useNavigate();
+  const { activeTenantId } = useTenantFilter();
 
   const { data: logs = [], isLoading } = useQuery<BillingLog[]>({
-    queryKey: ["billing-logs"],
+    queryKey: ["billing-logs", activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase
+      let q = supabase
         .from("billing_logs")
         .select("*")
         .order("period", { ascending: false })
         .limit(24);
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return (data ?? []).map((d: any) => ({
         ...d,

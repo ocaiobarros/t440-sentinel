@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 
 export interface ZabbixConnectionItem {
   id: string;
@@ -22,12 +23,13 @@ function invoke(action: string, extra: Record<string, unknown> = {}) {
 export function useZabbixConnections() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const key = ["zabbix-connections"];
+  const { activeTenantId } = useTenantFilter();
+  const key = ["zabbix-connections", activeTenantId];
 
   const query = useQuery({
     queryKey: key,
     queryFn: async () => {
-      const { data, error } = await invoke("list");
+      const { data, error } = await invoke("list", activeTenantId ? { tenant_id: activeTenantId } : {});
       if (error) throw error;
       return (data as { connections: ZabbixConnectionItem[] }).connections;
     },

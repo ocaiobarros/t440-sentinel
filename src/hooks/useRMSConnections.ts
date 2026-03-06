@@ -2,6 +2,7 @@ import { useState, useCallback } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 
 export interface RMSConnectionItem {
   id: string;
@@ -21,12 +22,13 @@ function invoke(action: string, extra: Record<string, unknown> = {}) {
 export function useRMSConnections() {
   const { toast } = useToast();
   const qc = useQueryClient();
-  const key = ["rms-connections"];
+  const { activeTenantId } = useTenantFilter();
+  const key = ["rms-connections", activeTenantId];
 
   const query = useQuery({
     queryKey: key,
     queryFn: async () => {
-      const { data, error } = await invoke("list");
+      const { data, error } = await invoke("list", activeTenantId ? { tenant_id: activeTenantId } : {});
       if (error) throw error;
       return (data as { connections: RMSConnectionItem[] }).connections;
     },

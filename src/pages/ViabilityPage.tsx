@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useMemo } from "react";
 import { generateUUID } from "@/lib/uuid";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -54,11 +55,14 @@ interface ViaCepResponse {
 }
 
 /* ── hooks ── */
-function useFlowMaps() {
+function useFlowMapsForViability() {
+  const { activeTenantId } = useTenantFilter();
   return useQuery({
-    queryKey: ["viability-flow-maps"],
+    queryKey: ["viability-flow-maps", activeTenantId],
     queryFn: async () => {
-      const { data, error } = await supabase.from("flow_maps").select("id, name, tenant_id").order("name");
+      let q = supabase.from("flow_maps").select("id, name, tenant_id").order("name");
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
+      const { data, error } = await q;
       if (error) throw error;
       return data ?? [];
     },

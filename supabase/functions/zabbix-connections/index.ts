@@ -159,10 +159,12 @@ Deno.serve(async (req) => {
     const action = body.action as string;
 
     if (action === "list") {
-      const { data, error } = await supabase
+      let q = supabase
         .from("zabbix_connections")
         .select("id, name, url, username, is_active, created_at, updated_at")
         .order("created_at", { ascending: false });
+      if (body.tenant_id) q = q.eq("tenant_id", body.tenant_id);
+      const { data, error } = await q;
       if (error) throw new Error(error.message);
       return json({ connections: data });
     }

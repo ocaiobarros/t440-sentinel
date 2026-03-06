@@ -9,13 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Send, Bot, Shield, Bell, MessageSquare, Wifi, Cpu, UserPlus, Save, Link2, CheckCircle2, AlertTriangle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { toast } from "sonner";
-
-function useTenantId() {
-  const { user } = useAuth();
-  return (user?.app_metadata as Record<string, string> | undefined)?.tenant_id ?? null;
-}
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 
 interface TelegramConfig {
   bot_token: string;
