@@ -309,13 +309,13 @@ export default function AdminUsersPage() {
           </td>
         )}
         <td className="px-4 py-3 text-center">
-          {changingRole === p.id ? (
+          {changingRole === `${p.id}:${scopeTenantId ?? ""}` ? (
             <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
           ) : scopeTenantId ? (
             isSelf ? (
               <Badge variant={getRoleBadgeVariant(roleInScope!)}>{roleInScope}</Badge>
             ) : (
-              <Select value={roleInScope!} onValueChange={(v) => handleRoleChange(p.id, v, scopeTenantId)}>
+              <Select value={roleInScope!} onValueChange={(v) => handleRoleChange(p.id, v, scopeTenantId, p.email, p.display_name)}>
                 <SelectTrigger className="w-28 h-8 mx-auto bg-muted/50 border-border text-xs"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="admin">Admin</SelectItem>
