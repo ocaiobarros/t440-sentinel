@@ -431,6 +431,12 @@ export default function AdminHub() {
         emailToSend = `${emailToSend}@flowpulse.local`;
       }
 
+      // Check if the user already exists in profiles — if so, use "link" mode to avoid moving them
+      const existingProfile = profiles.find(
+        (p) => (p.email ?? "").toLowerCase() === emailToSend
+      );
+      const useMode = existingProfile ? "link" : undefined; // undefined = default "move" for new users
+
       const { data, error } = await supabase.functions.invoke("invite-user", {
         body: {
           email: emailToSend,
@@ -438,6 +444,7 @@ export default function AdminHub() {
           role: inviteForm.role,
           password: inviteForm.password.trim() || undefined,
           target_tenant_id: selectedTenantId,
+          ...(useMode ? { mode: useMode } : {}),
         },
       });
 
@@ -447,10 +454,12 @@ export default function AdminHub() {
         throw new Error("A função de criação de usuário ainda não está implementada no backend local.");
       }
 
-      const msg = inviteForm.password.trim()
-        ? `${emailToSend} criado com a senha definida.`
-        : `${emailToSend} foi adicionado ao time.`;
-      toast({ title: "Usuário adicionado", description: msg });
+      const msg = existingProfile
+        ? `${emailToSend} foi vinculado à organização "${tenant?.name ?? ""}".`
+        : inviteForm.password.trim()
+          ? `${emailToSend} criado com a senha definida.`
+          : `${emailToSend} foi adicionado ao time.`;
+      toast({ title: existingProfile ? "Usuário vinculado" : "Usuário adicionado", description: msg });
       setInviteOpen(false);
       setInviteForm({ email: "", display_name: "", role: "viewer", password: "" });
       await fetchData();
@@ -744,7 +753,7 @@ export default function AdminHub() {
                             <td className="px-4 py-3 text-center">
                               {!isSelf && (
                                 <div className="flex items-center justify-center gap-1">
-                                  {isSuperAdmin && tenants.length > 1 && (
+                                  {tenants.length > 1 && (
                                     <Button variant="ghost" size="icon" title="Vincular a Organização"
                                       onClick={() => { setLinkDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", email: p.email ?? "" }); setLinkTargetTenant(""); setLinkRole("viewer"); }}>
                                       <Building2 className="w-4 h-4" />
