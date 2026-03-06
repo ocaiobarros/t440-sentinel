@@ -752,7 +752,7 @@ export default function AdminHub() {
                                   )}
                                   <Button variant="ghost" size="icon"
                                     className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    title="Remover do time"
+                                    title="Remover da organização"
                                     onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
                                     <Trash2 className="w-4 h-4" />
                                   </Button>
