@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useEffect, useCallback, useState } from "react";
 import { useToast } from "@/hooks/use-toast";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 
 export interface AlertInstance {
   id: string;
@@ -44,8 +45,9 @@ export function useAlertInstances(filters: {
   statuses?: ("open" | "ack" | "resolved")[];
   severities?: ("info" | "warning" | "average" | "high" | "disaster")[];
 }) {
+  const { activeTenantId } = useTenantFilter();
   return useQuery({
-    queryKey: ["alert-instances", filters],
+    queryKey: ["alert-instances", filters, activeTenantId],
     queryFn: async () => {
       let q = supabase
         .from("alert_instances")
@@ -53,6 +55,7 @@ export function useAlertInstances(filters: {
         .order("opened_at", { ascending: false })
         .limit(500);
 
+      if (activeTenantId) q = q.eq("tenant_id", activeTenantId);
       if (filters.statuses?.length) {
         q = q.in("status", filters.statuses);
       }
