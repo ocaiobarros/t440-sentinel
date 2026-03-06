@@ -291,6 +291,11 @@ export default function AdminHub() {
         if (allTenants.length === 0) return null;
         return allTenants[0].id;
       });
+      setUsersTenantFilter((current) => {
+        if (!superAdmin) return allTenants[0]?.id ?? "all";
+        if (current === "all") return "all";
+        return allTenants.some((t) => t.id === current) ? current : "all";
+      });
       hasInitializedTenantSelection.current = allTenants.length > 0;
 
       setProfiles(nextProfiles);
