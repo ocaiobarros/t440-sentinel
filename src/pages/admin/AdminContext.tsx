@@ -103,9 +103,10 @@ export default function AdminLayout() {
       let nextRoles: UserRole[] = [];
 
       if (superAdmin) {
-        const [tRes, mRes] = await Promise.all([
+        const [tRes, mRes, pRes] = await Promise.all([
           supabase.functions.invoke("tenant-admin", { body: { action: "list" } }),
           supabase.functions.invoke("tenant-admin", { body: { action: "members" } }),
+          supabase.from("profiles").select("*").order("created_at", { ascending: true }),
         ]);
         if (tRes.error || tRes.data?.error) {
           const { data } = await supabase.from("tenants").select("id, name, slug, created_at").order("created_at", { ascending: true });
@@ -113,16 +114,26 @@ export default function AdminLayout() {
         } else {
           allTenants = (tRes.data?.tenants ?? []) as TenantInfo[];
         }
+
         if (mRes.error || mRes.data?.error) {
-          const [pR, rR] = await Promise.all([
-            supabase.from("profiles").select("*").order("created_at", { ascending: true }),
-            supabase.from("user_roles").select("*"),
-          ]);
-          nextProfiles = (pR.data ?? []) as Profile[];
-          nextRoles = (rR.data ?? []) as UserRole[];
+          const { data: rolesData, error: rolesError } = await supabase.from("user_roles").select("*");
+          if (rolesError) throw rolesError;
+
+          nextProfiles = (pRes.data ?? []) as Profile[];
+          nextRoles = (rolesData ?? []) as UserRole[];
         } else {
-          nextProfiles = mRes.data?.profiles ?? [];
-          nextRoles = mRes.data?.roles ?? [];
+          const edgeProfiles = (mRes.data?.profiles ?? []) as Profile[];
+          const edgeRoles = (mRes.data?.roles ?? []) as UserRole[];
+          const dbProfiles = (pRes.data ?? []) as Profile[];
+
+          const mergedProfiles = new Map<string, Profile>();
+          edgeProfiles.forEach((p) => mergedProfiles.set(p.id, p));
+          dbProfiles.forEach((p) => mergedProfiles.set(p.id, p));
+
+          nextProfiles = Array.from(mergedProfiles.values()).sort((a, b) =>
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+          nextRoles = edgeRoles;
         }
       } else {
         const [tRes, pRes, rRes] = await Promise.all([
