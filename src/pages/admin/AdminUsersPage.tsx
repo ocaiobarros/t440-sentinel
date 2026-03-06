@@ -14,10 +14,13 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from "@/components/ui/dialog";
 import {
+  DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Tabs, TabsContent, TabsList, TabsTrigger,
 } from "@/components/ui/tabs";
 import {
-  Users, Building2, Loader2, Trash2, Plus, Search, Crown,
+  Users, Building2, Loader2, Trash2, Plus, Search, Crown, MoreHorizontal, Pencil, UserX,
 } from "lucide-react";
 import AdminBreadcrumb from "./AdminBreadcrumb";
 
@@ -37,9 +40,13 @@ export default function AdminUsersPage() {
   const [inviteForm, setInviteForm] = useState({ email: "", display_name: "", role: "viewer", password: "" });
   const [inviting, setInviting] = useState(false);
 
-  // Remove
+  // Remove from org
   const [removeDialog, setRemoveDialog] = useState<{ open: boolean; userId: string; name: string; tenantId: string }>({ open: false, userId: "", name: "", tenantId: "" });
   const [removing, setRemoving] = useState(false);
+
+  // Delete user permanently
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; userId: string; name: string }>({ open: false, userId: "", name: "" });
+  const [deleting, setDeleting] = useState(false);
 
   // Link
   const [linkDialog, setLinkDialog] = useState<{ open: boolean; userId: string; name: string; email: string }>({ open: false, userId: "", name: "", email: "" });
@@ -180,7 +187,26 @@ export default function AdminUsersPage() {
     }
   };
 
-  /* ── Render helpers ── */
+  const handleDeleteUser = async () => {
+    if (!deleteDialog.userId) return;
+    setDeleting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("delete-user", {
+        body: { user_id: deleteDialog.userId },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast({ title: "Usuário excluído", description: `${deleteDialog.name} foi removido permanentemente.` });
+      setDeleteDialog({ open: false, userId: "", name: "" });
+      await fetchData();
+    } catch (err: any) {
+      const desc = await getFunctionErrorMessage(err, "Falha ao excluir usuário.");
+      toast({ variant: "destructive", title: "Erro", description: desc });
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const renderUserRow = (p: typeof allUserProfiles[0], scopeTenantId: string | null) => {
     const isSelf = p.id === user?.id;
     const userTenants = [...new Set(p._roles.map((r) => r.tenant_id))].map((tid) => tenants.find((t) => t.id === tid)).filter(Boolean);
@@ -243,20 +269,30 @@ export default function AdminUsersPage() {
         </td>
         <td className="px-4 py-3 text-center">
           {!isSelf && (
-            <div className="flex items-center justify-center gap-1">
-              {!scopeTenantId && tenants.length > 1 && (
-                <Button variant="ghost" size="icon" title="Vincular a Organização"
-                  onClick={() => { setLinkDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", email: p.email ?? "" }); setLinkTargetTenant(""); setLinkRole("viewer"); }}>
-                  <Building2 className="w-4 h-4" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="w-4 h-4" />
                 </Button>
-              )}
-              {scopeTenantId && (
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Remover da organização"
-                  onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", tenantId: scopeTenantId })}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {!scopeTenantId && tenants.length > 1 && (
+                  <DropdownMenuItem onClick={() => { setLinkDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", email: p.email ?? "" }); setLinkTargetTenant(""); setLinkRole("viewer"); }}>
+                    <Building2 className="w-4 h-4 mr-2" /> Vincular a Organização
+                  </DropdownMenuItem>
+                )}
+                {scopeTenantId && (
+                  <DropdownMenuItem onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", tenantId: scopeTenantId })}>
+                    <UserX className="w-4 h-4 mr-2" /> Remover da organização
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                  onClick={() => setDeleteDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
+                  <Trash2 className="w-4 h-4 mr-2" /> Excluir usuário
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </td>
       </tr>
@@ -481,6 +517,24 @@ export default function AdminUsersPage() {
             <Button variant="ghost" onClick={() => setLinkDialog({ open: false, userId: "", name: "", email: "" })} disabled={linking}>Cancelar</Button>
             <Button onClick={handleLink} disabled={linking || !linkTargetTenant}>
               {linking ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Building2 className="w-4 h-4 mr-1" />} Vincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Delete User Dialog ── */}
+      <Dialog open={deleteDialog.open} onOpenChange={(o) => !deleting && setDeleteDialog((s) => ({ ...s, open: o }))}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir usuário permanentemente</DialogTitle>
+            <DialogDescription>
+              Tem certeza que deseja excluir <strong>{deleteDialog.name}</strong>? Esta ação é irreversível e removerá o usuário de todas as organizações.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setDeleteDialog({ open: false, userId: "", name: "" })} disabled={deleting}>Cancelar</Button>
+            <Button variant="destructive" onClick={handleDeleteUser} disabled={deleting}>
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Trash2 className="w-4 h-4 mr-1" />} Excluir permanentemente
             </Button>
           </DialogFooter>
         </DialogContent>
