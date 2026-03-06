@@ -210,6 +210,33 @@ export default function AdminHub() {
         ? supabase.functions.invoke("tenant-admin", { body: { action: "list" } })
         : supabase.from("tenants").select("id, name, slug, created_at").order("created_at", { ascending: true });
 
+      const loadTenantsFallback = async (): Promise<TenantInfo[]> => {
+        const { data: tenantRows, error: tenantRowsError } = await supabase
+          .from("tenants")
+          .select("id, name, slug, created_at")
+          .order("created_at", { ascending: true });
+        if (tenantRowsError) throw tenantRowsError;
+        return (tenantRows ?? []) as TenantInfo[];
+      };
+
+      const loadMembersFallback = async (): Promise<{ profiles: Profile[]; roles: UserRole[] }> => {
+        const [profilesRes, rolesRes] = await Promise.all([
+          supabase.from("profiles").select("*").order("created_at", { ascending: true }),
+          supabase.from("user_roles").select("*"),
+        ]);
+
+        if (profilesRes.error) throw profilesRes.error;
+        if (rolesRes.error) throw rolesRes.error;
+
+        return {
+          profiles: (profilesRes.data ?? []) as Profile[],
+          roles: (rolesRes.data ?? []) as UserRole[],
+        };
+      };
+
+      const isUnsupportedActionError = (message: string | null | undefined) =>
+        typeof message === "string" && message.toLowerCase().includes("unsupported action");
+
       let allTenants: TenantInfo[] = [];
       let nextProfiles: Profile[] = [];
       let nextRoles: UserRole[] = [];
@@ -220,29 +247,41 @@ export default function AdminHub() {
           supabase.functions.invoke("tenant-admin", { body: { action: "members" } }),
         ]);
 
-        const { data, error } = tenantsRes as { data: any; error: any };
-        if (error) {
-          const parsed = await getFunctionErrorMessage(error, "Falha ao listar organizações.");
-          throw new Error(parsed);
+        const tenantsResponse = tenantsRes as { data: any; error: any };
+        const tenantsFunctionError = tenantsResponse.error
+          ? await getFunctionErrorMessage(tenantsResponse.error, "Falha ao listar organizações.")
+          : (typeof tenantsResponse.data?.error === "string" ? tenantsResponse.data.error : "");
+
+        if (tenantsResponse.error || tenantsResponse.data?.error) {
+          allTenants = await loadTenantsFallback();
+          if (!isUnsupportedActionError(tenantsFunctionError)) {
+            throw new Error(tenantsFunctionError || "Falha ao listar organizações.");
+          }
+        } else {
+          allTenants = (tenantsResponse.data?.tenants ?? []) as TenantInfo[];
         }
-        if (data?.error) throw new Error(data.error);
-        allTenants = (data?.tenants ?? []) as TenantInfo[];
 
-        if (membersRes.error) {
-          const parsed = await getFunctionErrorMessage(membersRes.error, "Falha ao listar membros.");
-          throw new Error(parsed);
+        const membersFunctionError = membersRes.error
+          ? await getFunctionErrorMessage(membersRes.error, "Falha ao listar membros.")
+          : (typeof membersRes.data?.error === "string" ? membersRes.data.error : "");
+
+        if (membersRes.error || membersRes.data?.error) {
+          const fallbackMembers = await loadMembersFallback();
+          nextProfiles = fallbackMembers.profiles;
+          nextRoles = fallbackMembers.roles;
+          if (!isUnsupportedActionError(membersFunctionError)) {
+            throw new Error(membersFunctionError || "Falha ao listar membros.");
+          }
+        } else {
+          const membersPayload = (membersRes.data ?? {}) as {
+            error?: string;
+            profiles?: Profile[];
+            roles?: UserRole[];
+          };
+
+          nextProfiles = membersPayload.profiles ?? [];
+          nextRoles = membersPayload.roles ?? [];
         }
-
-        const membersPayload = (membersRes.data ?? {}) as {
-          error?: string;
-          profiles?: Profile[];
-          roles?: UserRole[];
-        };
-
-        if (membersPayload.error) throw new Error(membersPayload.error);
-
-        nextProfiles = membersPayload.profiles ?? [];
-        nextRoles = membersPayload.roles ?? [];
       } else {
         const [tenantsRes, profilesRes, rolesRes] = await Promise.all([
           tenantRequest,
