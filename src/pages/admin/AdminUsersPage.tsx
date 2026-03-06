@@ -47,20 +47,25 @@ export default function AdminUsersPage() {
   const [linkRole, setLinkRole] = useState("viewer");
   const [linking, setLinking] = useState(false);
 
-  /* ── Computed: All Users ── */
-  const allUserIds = [...new Set(roles.map((r) => r.user_id))];
-  const allUserProfiles: (Profile & { _roles: UserRole[] })[] = allUserIds.map((uid) => {
-    const p = profileById.get(uid);
-    return {
+  /* ── Computed: All Users (profiles as source of truth) ── */
+  const roleUserIds = new Set(roles.map((r) => r.user_id));
+  const allUserProfiles: (Profile & { _roles: UserRole[] })[] = [
+    // Start from all profiles
+    ...profiles.map((p) => ({
+      ...p,
+      _roles: roles.filter((r) => r.user_id === p.id),
+    })),
+    // Add any users that have roles but no profile visible (edge case)
+    ...([...roleUserIds].filter((uid) => !profiles.some((p) => p.id === uid)).map((uid) => ({
       id: uid,
-      display_name: p?.display_name ?? null,
-      email: p?.email ?? null,
-      avatar_url: p?.avatar_url ?? null,
-      tenant_id: p?.tenant_id ?? "",
-      created_at: p?.created_at ?? new Date().toISOString(),
+      display_name: null,
+      email: null,
+      avatar_url: null,
+      tenant_id: "",
+      created_at: new Date().toISOString(),
       _roles: roles.filter((r) => r.user_id === uid),
-    };
-  });
+    }))),
+  ];
 
   /* ── Computed: Org Users ── */
   const orgTenantId = selectedTenantId;
