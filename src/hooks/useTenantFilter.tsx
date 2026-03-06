@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useQueryClient } from "@tanstack/react-query";
 
 interface TenantOption {
   id: string;
@@ -9,17 +10,19 @@ interface TenantOption {
 }
 
 interface TenantFilterContextType {
-  /** The currently active tenant filter (null = show all / normal user) */
+  /** The currently active tenant */
   activeTenantId: string | null;
   /** Set a specific tenant to filter by */
   setActiveTenantId: (id: string | null) => void;
   /** Whether the current user is a super admin */
   isSuperAdmin: boolean;
-  /** List of all tenants (only populated for super admins) */
+  /** Whether the user has access to multiple tenants */
+  hasMultipleTenants: boolean;
+  /** List of tenants the user belongs to */
   tenants: TenantOption[];
   /** Name of the active tenant */
   activeTenantName: string | null;
-  /** Clear the filter (show all) */
+  /** Clear the filter (show all — super admin only) */
   clearFilter: () => void;
 }
 
@@ -27,6 +30,7 @@ const TenantFilterCtx = createContext<TenantFilterContextType>({
   activeTenantId: null,
   setActiveTenantId: () => {},
   isSuperAdmin: false,
+  hasMultipleTenants: false,
   tenants: [],
   activeTenantName: null,
   clearFilter: () => {},
@@ -36,6 +40,7 @@ const STORAGE_KEY = "fp_tenant_filter";
 
 export function TenantFilterProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(() => {
     try {
       return sessionStorage.getItem(STORAGE_KEY) || null;
@@ -46,7 +51,7 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [tenants, setTenants] = useState<TenantOption[]>([]);
 
-  // Load super admin status and tenants
+  // Load tenants the user belongs to (via user_roles)
   useEffect(() => {
     if (!user?.id) {
       setIsSuperAdmin(false);
@@ -57,51 +62,67 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
 
     (async () => {
+      // Check super admin status
       const { data: isSA } = await supabase.rpc("is_super_admin", { p_user_id: user.id });
       if (cancelled) return;
       const superAdmin = Boolean(isSA);
       setIsSuperAdmin(superAdmin);
 
+      let tenantList: TenantOption[] = [];
+
       if (superAdmin) {
-        // Load all tenants via edge function
+        // Super admins see ALL tenants via edge function (bypasses RLS)
         const { data } = await supabase.functions.invoke("tenant-admin", {
           body: { action: "list" },
         });
         if (cancelled) return;
-        const list = (data?.tenants ?? []) as TenantOption[];
-        setTenants(list);
-
-        // If user had a stored filter, validate it still exists
-        const stored = sessionStorage.getItem(STORAGE_KEY);
-        if (stored && !list.some((t) => t.id === stored)) {
-          sessionStorage.removeItem(STORAGE_KEY);
-          setActiveTenantIdState(null);
-        }
-
-        // Auto-select user's own tenant if no filter is set
-        if (!stored && list.length > 0) {
-          const { data: profile } = await supabase
-            .from("profiles")
-            .select("tenant_id")
-            .eq("id", user.id)
-            .maybeSingle();
-          if (cancelled) return;
-          if (profile?.tenant_id) {
-            setActiveTenantIdState(profile.tenant_id);
-            sessionStorage.setItem(STORAGE_KEY, profile.tenant_id);
-          }
-        }
+        tenantList = (data?.tenants ?? []) as TenantOption[];
       } else {
-        // Normal users: get their tenant_id from profile
+        // Regular users: get tenants from user_roles
+        const { data: roles } = await supabase
+          .from("user_roles")
+          .select("tenant_id")
+          .eq("user_id", user.id);
+        if (cancelled) return;
+
+        const uniqueTenantIds = [...new Set((roles ?? []).map((r) => r.tenant_id))];
+
+        if (uniqueTenantIds.length > 0) {
+          const { data: tenantRows } = await supabase
+            .from("tenants")
+            .select("id, name, slug")
+            .in("id", uniqueTenantIds)
+            .order("name");
+          if (cancelled) return;
+          tenantList = (tenantRows ?? []) as TenantOption[];
+        }
+      }
+
+      setTenants(tenantList);
+
+      // Validate stored filter
+      const stored = sessionStorage.getItem(STORAGE_KEY);
+      if (stored && !tenantList.some((t) => t.id === stored)) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        setActiveTenantIdState(null);
+      }
+
+      // Auto-select: use stored, or user's profile tenant, or first available
+      const currentStored = sessionStorage.getItem(STORAGE_KEY);
+      if (!currentStored && tenantList.length > 0) {
         const { data: profile } = await supabase
           .from("profiles")
           .select("tenant_id")
           .eq("id", user.id)
           .maybeSingle();
         if (cancelled) return;
-        if (profile?.tenant_id) {
-          setActiveTenantIdState(profile.tenant_id);
-        }
+
+        const defaultTenant = profile?.tenant_id && tenantList.some((t) => t.id === profile.tenant_id)
+          ? profile.tenant_id
+          : tenantList[0].id;
+
+        setActiveTenantIdState(defaultTenant);
+        sessionStorage.setItem(STORAGE_KEY, defaultTenant);
       }
     })();
 
@@ -115,14 +136,18 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
     } else {
       sessionStorage.removeItem(STORAGE_KEY);
     }
-  }, []);
+    // Invalidate all cached queries so data reloads for the new tenant
+    queryClient.invalidateQueries();
+  }, [queryClient]);
 
   const clearFilter = useCallback(() => {
     setActiveTenantIdState(null);
     sessionStorage.removeItem(STORAGE_KEY);
-  }, []);
+    queryClient.invalidateQueries();
+  }, [queryClient]);
 
   const activeTenantName = tenants.find((t) => t.id === activeTenantId)?.name ?? null;
+  const hasMultipleTenants = tenants.length > 1;
 
   return (
     <TenantFilterCtx.Provider
@@ -130,6 +155,7 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
         activeTenantId,
         setActiveTenantId,
         isSuperAdmin,
+        hasMultipleTenants,
         tenants,
         activeTenantName,
         clearFilter,
