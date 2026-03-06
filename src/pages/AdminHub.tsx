@@ -816,8 +816,12 @@ export default function AdminHub() {
                     </thead>
                     <tbody>
                       {filteredProfiles.map((p) => {
-                        const role = getRoleForUser(p.id);
+                        const scopedRoles = getRolesForUserInScope(p.id);
+                        const primaryRole = usersScopeTenantId ? getRoleForUser(p.id, usersScopeTenantId) : null;
+                        const editableRole = primaryRole ?? "viewer";
+                        const distinctRoles = [...new Set(scopedRoles.map((r) => r.role))];
                         const isSelf = p.id === user?.id;
+
                         return (
                           <tr key={p.id} className="border-b border-border/50 hover:bg-muted/30 transition-colors">
                             <td className="px-4 py-3">
@@ -850,21 +854,33 @@ export default function AdminHub() {
                             <td className="px-4 py-3 text-center">
                               {changingRole === p.id ? (
                                 <Loader2 className="w-4 h-4 animate-spin mx-auto text-primary" />
-                              ) : isSelf ? (
-                                <Badge variant={getRoleBadgeVariant(role)}>{role}</Badge>
+                              ) : usersScopeTenantId ? (
+                                isSelf ? (
+                                  <Badge variant={getRoleBadgeVariant(editableRole)}>{editableRole}</Badge>
+                                ) : (
+                                  <Select value={editableRole} onValueChange={(v) => handleRoleChange(p.id, v, usersScopeTenantId)}>
+                                    <SelectTrigger className="w-28 h-8 mx-auto bg-muted/50 border-border text-xs">
+                                      <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                      <SelectItem value="admin">Admin</SelectItem>
+                                      <SelectItem value="editor">Editor</SelectItem>
+                                      <SelectItem value="tech">Técnico</SelectItem>
+                                      <SelectItem value="sales">Vendedor</SelectItem>
+                                      <SelectItem value="viewer">Viewer</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                )
+                              ) : distinctRoles.length > 0 ? (
+                                <div className="flex items-center justify-center gap-1 flex-wrap">
+                                  {distinctRoles.map((role) => (
+                                    <Badge key={`${p.id}-${role}`} variant={getRoleBadgeVariant(role)} className="text-[10px]">
+                                      {role}
+                                    </Badge>
+                                  ))}
+                                </div>
                               ) : (
-                                <Select value={role} onValueChange={(v) => handleRoleChange(p.id, v)}>
-                                  <SelectTrigger className="w-28 h-8 mx-auto bg-muted/50 border-border text-xs">
-                                    <SelectValue />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="admin">Admin</SelectItem>
-                                    <SelectItem value="editor">Editor</SelectItem>
-                                    <SelectItem value="tech">Técnico</SelectItem>
-                                    <SelectItem value="sales">Vendedor</SelectItem>
-                                    <SelectItem value="viewer">Viewer</SelectItem>
-                                  </SelectContent>
-                                </Select>
+                                <span className="text-xs text-muted-foreground">—</span>
                               )}
                             </td>
                             <td className="px-4 py-3 text-center text-xs text-muted-foreground">
@@ -879,12 +895,14 @@ export default function AdminHub() {
                                       <Building2 className="w-4 h-4" />
                                     </Button>
                                   )}
-                                  <Button variant="ghost" size="icon"
-                                    className="text-destructive hover:text-destructive hover:bg-destructive/10"
-                                    title="Remover da organização"
-                                    onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
-                                    <Trash2 className="w-4 h-4" />
-                                  </Button>
+                                  {usersScopeTenantId && (
+                                    <Button variant="ghost" size="icon"
+                                      className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                                      title="Remover da organização"
+                                      onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
+                                      <Trash2 className="w-4 h-4" />
+                                    </Button>
+                                  )}
                                 </div>
                               )}
                             </td>
