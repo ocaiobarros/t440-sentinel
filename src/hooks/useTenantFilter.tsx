@@ -71,12 +71,33 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
       let tenantList: TenantOption[] = [];
 
       if (superAdmin) {
-        // Super admins see ALL tenants via edge function (bypasses RLS)
-        const { data } = await supabase.functions.invoke("tenant-admin", {
+        // Super admins prefer edge function list, but fallback to direct table for backward compatibility
+        const { data, error } = await supabase.functions.invoke("tenant-admin", {
           body: { action: "list" },
         });
         if (cancelled) return;
-        tenantList = (data?.tenants ?? []) as TenantOption[];
+
+        const functionError =
+          (typeof data?.error === "string" && data.error) ||
+          (typeof error?.message === "string" && error.message) ||
+          "";
+
+        if (error || data?.error) {
+          const { data: tenantRows, error: tenantRowsError } = await supabase
+            .from("tenants")
+            .select("id, name, slug")
+            .order("name");
+          if (cancelled) return;
+
+          if (tenantRowsError) {
+            console.error("[TenantFilter] Falha ao listar tenants:", functionError || tenantRowsError.message);
+            tenantList = [];
+          } else {
+            tenantList = (tenantRows ?? []) as TenantOption[];
+          }
+        } else {
+          tenantList = (data?.tenants ?? []) as TenantOption[];
+        }
       } else {
         // Regular users: get tenants from user_roles
         const { data: roles } = await supabase
