@@ -254,9 +254,6 @@ export default function AdminHub() {
 
         if (tenantsResponse.error || tenantsResponse.data?.error) {
           allTenants = await loadTenantsFallback();
-          if (!isUnsupportedActionError(tenantsFunctionError)) {
-            throw new Error(tenantsFunctionError || "Falha ao listar organizações.");
-          }
         } else {
           allTenants = (tenantsResponse.data?.tenants ?? []) as TenantInfo[];
         }
