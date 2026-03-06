@@ -32,7 +32,7 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
   const { user, signOut } = useAuth();
   const { theme, toggleTheme } = useTheme();
   const { profile } = useProfile();
-  const { isSuperAdmin, tenants, activeTenantId, setActiveTenantId, activeTenantName } = useTenantFilter();
+  const { isSuperAdmin, tenants, activeTenantId, setActiveTenantId, activeTenantName, hasMultipleTenants } = useTenantFilter();
   const navigate = useNavigate();
   const { t } = useTranslation();
   const [searchOpen, setSearchOpen] = useState(false);
@@ -71,21 +71,21 @@ export default function GlassHeader({ isKiosk, onToggleKiosk }: GlassHeaderProps
         <div className="flex items-center gap-2">
           <SidebarTrigger className="h-7 w-7 text-muted-foreground hover:text-foreground" />
 
-          {/* ── Tenant selector (Super Admin only) ── */}
-          {isSuperAdmin && tenants.length > 1 && (
+          {/* ── Tenant selector (any user with multiple tenants) ── */}
+          {hasMultipleTenants && (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <button className="flex items-center gap-1.5 px-2.5 py-1 rounded-md
                   bg-primary/10 border border-primary/20 text-xs font-mono text-primary
                   hover:bg-primary/20 transition-colors max-w-[200px]">
                   <Building2 className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{activeTenantName || "Todas"}</span>
+                  <span className="truncate">{activeTenantName || "Selecionar"}</span>
                   <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />
                 </button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" className="w-64 bg-card border-border/50 backdrop-blur-xl z-50 max-h-[400px] overflow-y-auto">
                 <DropdownMenuLabel className="text-[10px] uppercase tracking-wider text-muted-foreground/60 font-display">
-                  Contexto de Organização
+                  {isSuperAdmin ? "Contexto de Organização" : "Minhas Organizações"}
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator className="bg-border/30" />
                 {tenants.map((t) => (
