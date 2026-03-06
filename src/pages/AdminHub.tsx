@@ -629,13 +629,14 @@ export default function AdminHub() {
     }
   };
 
-  const filteredProfiles = tenantProfiles.filter((p) => {
+  const filteredProfiles = userRows.filter((p) => {
     const term = search.trim().toLowerCase();
+    const rolesInView = getRolesForUserInScope(p.id);
     const matchesSearch =
       term === "" ||
       (p.display_name?.toLowerCase().includes(term) ?? false) ||
       (p.email?.toLowerCase().includes(term) ?? false);
-    const matchesRole = roleFilter === "all" || getRoleForUser(p.id) === roleFilter;
+    const matchesRole = roleFilter === "all" || rolesInView.some((r) => r.role === roleFilter);
     return matchesSearch && matchesRole;
   });
 
