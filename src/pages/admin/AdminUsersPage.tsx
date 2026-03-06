@@ -123,6 +123,12 @@ export default function AdminUsersPage() {
   const filteredAll = applyFilter(allUserProfiles, { tenantScope: null, includeOrgFilter: true });
   const filteredOrg = applyFilter(orgUsers, { tenantScope: orgTenantId, includeOrgFilter: false });
 
+  useEffect(() => {
+    if (activeTab === "org" && orgFilter !== "all") {
+      setOrgFilter("all");
+    }
+  }, [activeTab, orgFilter]);
+
   /* ── Handlers ── */
   const handleRoleChange = async (userId: string, newRole: string, tenantId: string, emailHint?: string | null, nameHint?: string | null) => {
     const changeKey = `${userId}:${tenantId}`;
