@@ -760,17 +760,15 @@ export default function AdminHub() {
                     <h2 className="text-base font-bold font-[Orbitron] tracking-wide text-foreground">
                       USUÁRIOS ({filteredProfiles.length})
                     </h2>
-                    <Button size="sm" onClick={() => setInviteOpen(true)}>
-                      <Plus className="w-4 h-4 mr-1" /> Novo Usuário
-                    </Button>
                   </div>
                   <div className="flex items-center gap-2">
                     {isSuperAdmin && tenants.length > 1 && (
-                      <Select value={selectedTenantId ?? ""} onValueChange={setSelectedTenantId}>
-                        <SelectTrigger className="w-40 h-9 bg-muted/50 border-border text-xs">
+                      <Select value={usersTenantFilter} onValueChange={setUsersTenantFilter}>
+                        <SelectTrigger className="w-48 h-9 bg-muted/50 border-border text-xs">
                           <SelectValue placeholder="Organização" />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="all">Todas organizações</SelectItem>
                           {tenants.map((t) => (
                             <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
                           ))}
