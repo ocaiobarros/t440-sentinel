@@ -187,6 +187,11 @@ export default function AdminHub() {
     if (!user) return;
     setLoading(true);
     try {
+      const { data: isSA, error: isSAError } = await supabase.rpc("is_super_admin", { p_user_id: user.id });
+      if (isSAError) throw isSAError;
+      const superAdmin = Boolean(isSA);
+      setIsSuperAdmin(superAdmin);
+
       const { data: myRoles, error: myRolesError } = await supabase
         .from("user_roles")
         .select("role")
@@ -195,17 +200,12 @@ export default function AdminHub() {
       if (myRolesError) throw myRolesError;
 
       const hasAdminRole = (myRoles ?? []).some((row) => row.role === "admin");
-      if (!hasAdminRole) {
+      if (!superAdmin && !hasAdminRole) {
         setIsAdmin(false);
         setLoading(false);
         return;
       }
       setIsAdmin(true);
-
-      const { data: isSA, error: isSAError } = await supabase.rpc("is_super_admin", { p_user_id: user.id });
-      if (isSAError) throw isSAError;
-      const superAdmin = Boolean(isSA);
-      setIsSuperAdmin(superAdmin);
 
       const tenantRequest = superAdmin
         ? supabase.functions.invoke("tenant-admin", { body: { action: "list" } })
