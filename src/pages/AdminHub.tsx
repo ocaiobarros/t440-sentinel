@@ -199,31 +199,56 @@ export default function AdminHub() {
       }
       setIsAdmin(true);
 
-      // Check super admin
-      const { data: isSA } = await supabase.rpc("is_super_admin", { p_user_id: user.id });
-      setIsSuperAdmin(Boolean(isSA));
+      const { data: isSA, error: isSAError } = await supabase.rpc("is_super_admin", { p_user_id: user.id });
+      if (isSAError) throw isSAError;
+      const superAdmin = Boolean(isSA);
+      setIsSuperAdmin(superAdmin);
+
+      const tenantRequest = superAdmin
+        ? supabase.functions.invoke("tenant-admin", { body: { action: "list" } })
+        : supabase.from("tenants").select("id, name, slug, created_at").order("created_at", { ascending: true });
 
       const [tenantsRes, profilesRes, rolesRes] = await Promise.all([
-        supabase.from("tenants").select("*").order("created_at", { ascending: true }),
+        tenantRequest,
         supabase.from("profiles").select("*").order("created_at", { ascending: true }),
         supabase.from("user_roles").select("*"),
       ]);
-      const allTenants = tenantsRes.data ?? [];
-      setTenants(allTenants);
-      if (allTenants.length > 0 && !selectedTenantId && !hasInitializedTenantSelection.current) {
-        setSelectedTenantId(allTenants[0].id);
-        setTeamName(allTenants[0].name);
-        setTeamSlug(allTenants[0].slug);
-        hasInitializedTenantSelection.current = true;
+
+      let allTenants: TenantInfo[] = [];
+      if (superAdmin) {
+        const { data, error } = tenantsRes as { data: any; error: any };
+        if (error) {
+          const parsed = await getFunctionErrorMessage(error, "Falha ao listar organizações.");
+          throw new Error(parsed);
+        }
+        if (data?.error) throw new Error(data.error);
+        allTenants = (data?.tenants ?? []) as TenantInfo[];
+      } else {
+        const { data, error } = tenantsRes as { data: TenantInfo[] | null; error: { message: string } | null };
+        if (error) throw new Error(error.message);
+        allTenants = data ?? [];
       }
-      if (profilesRes.data) setProfiles(profilesRes.data);
-      if (rolesRes.data) setRoles(rolesRes.data as UserRole[]);
-    } catch {
-      toast({ variant: "destructive", title: "Erro", description: "Falha ao carregar dados." });
+
+      if (profilesRes.error) throw profilesRes.error;
+      if (rolesRes.error) throw rolesRes.error;
+
+      setTenants(allTenants);
+      setSelectedTenantId((current) => {
+        if (current && allTenants.some((t) => t.id === current)) return current;
+        if (current === null && hasInitializedTenantSelection.current && allTenants.length > 1) return null;
+        if (allTenants.length === 0) return null;
+        return allTenants[0].id;
+      });
+      hasInitializedTenantSelection.current = allTenants.length > 0;
+
+      setProfiles(profilesRes.data ?? []);
+      setRoles((rolesRes.data ?? []) as UserRole[]);
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro", description: err?.message || "Falha ao carregar dados." });
     } finally {
       setLoading(false);
     }
-  }, [user, toast, selectedTenantId]);
+  }, [user, toast]);
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
@@ -297,24 +322,31 @@ export default function AdminHub() {
     if (!moveTargetTenant || !moveDialog.userId) return;
     setMoving(true);
     try {
-      const { error: profileErr } = await supabase.from("profiles")
-        .update({ tenant_id: moveTargetTenant })
-        .eq("id", moveDialog.userId);
-      if (profileErr) throw profileErr;
+      const profileToMove = profiles.find((p) => p.id === moveDialog.userId);
+      const email = profileToMove?.email?.trim().toLowerCase();
+      if (!email) {
+        throw new Error("Não foi possível mover: usuário sem e-mail válido.");
+      }
 
       const oldRole = roles.find((r) => r.user_id === moveDialog.userId && r.tenant_id === selectedTenantId);
       const roleValue = oldRole?.role ?? "viewer";
-      if (oldRole) {
-        await supabase.from("user_roles").delete().eq("id", oldRole.id);
-      }
-      const { error: roleErr } = await supabase.from("user_roles").insert({
-        user_id: moveDialog.userId,
-        tenant_id: moveTargetTenant,
-        role: roleValue,
-      });
-      if (roleErr) throw roleErr;
 
-      toast({ title: "Usuário movido", description: `${moveDialog.name} foi transferido para outro time.` });
+      const { data, error } = await supabase.functions.invoke("invite-user", {
+        body: {
+          email,
+          display_name: profileToMove?.display_name ?? "",
+          role: roleValue,
+          target_tenant_id: moveTargetTenant,
+        },
+      });
+
+      if (error) {
+        const parsed = await getFunctionErrorMessage(error, "Falha ao mover usuário.");
+        throw new Error(parsed);
+      }
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: "Usuário movido", description: `${moveDialog.name} foi transferido para outra organização.` });
       setMoveDialog({ open: false, userId: "", name: "" });
       setMoveTargetTenant("");
       await fetchData();
@@ -333,9 +365,18 @@ export default function AdminHub() {
         toast({ variant: "destructive", title: "Erro", description: "Não é possível excluir um time com membros." });
         return;
       }
-      const { error } = await supabase.from("tenants").delete().eq("id", tenantId);
-      if (error) throw error;
-      toast({ title: "Time excluído", description: "Organização removida com sucesso." });
+
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "delete", tenant_id: tenantId },
+      });
+
+      if (error) {
+        const parsed = await getFunctionErrorMessage(error, "Falha ao excluir organização.");
+        throw new Error(parsed);
+      }
+      if (data?.error) throw new Error(data.error);
+
+      toast({ title: "Organização excluída", description: "Ecossistema removido com sucesso." });
       if (selectedTenantId === tenantId) {
         setSelectedTenantId(tenants.find((t) => t.id !== tenantId)?.id ?? null);
       }
