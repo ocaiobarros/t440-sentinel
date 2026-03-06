@@ -269,20 +269,30 @@ export default function AdminUsersPage() {
         </td>
         <td className="px-4 py-3 text-center">
           {!isSelf && (
-            <div className="flex items-center justify-center gap-1">
-              {!scopeTenantId && tenants.length > 1 && (
-                <Button variant="ghost" size="icon" title="Vincular a Organização"
-                  onClick={() => { setLinkDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", email: p.email ?? "" }); setLinkTargetTenant(""); setLinkRole("viewer"); }}>
-                  <Building2 className="w-4 h-4" />
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8">
+                  <MoreHorizontal className="w-4 h-4" />
                 </Button>
-              )}
-              {scopeTenantId && (
-                <Button variant="ghost" size="icon" className="text-destructive hover:text-destructive hover:bg-destructive/10" title="Remover da organização"
-                  onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", tenantId: scopeTenantId })}>
-                  <Trash2 className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                {!scopeTenantId && tenants.length > 1 && (
+                  <DropdownMenuItem onClick={() => { setLinkDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", email: p.email ?? "" }); setLinkTargetTenant(""); setLinkRole("viewer"); }}>
+                    <Building2 className="w-4 h-4 mr-2" /> Vincular a Organização
+                  </DropdownMenuItem>
+                )}
+                {scopeTenantId && (
+                  <DropdownMenuItem onClick={() => setRemoveDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário", tenantId: scopeTenantId })}>
+                    <UserX className="w-4 h-4 mr-2" /> Remover da organização
+                  </DropdownMenuItem>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="text-destructive focus:text-destructive focus:bg-destructive/10"
+                  onClick={() => setDeleteDialog({ open: true, userId: p.id, name: p.display_name ?? p.email ?? "usuário" })}>
+                  <Trash2 className="w-4 h-4 mr-2" /> Excluir usuário
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
         </td>
       </tr>
