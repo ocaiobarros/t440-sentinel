@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin, getFunctionErrorMessage, type Profile, type UserRole } from "./AdminContext";
 import { useToast } from "@/hooks/use-toast";
