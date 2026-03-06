@@ -234,9 +234,6 @@ export default function AdminHub() {
         };
       };
 
-      const isUnsupportedActionError = (message: string | null | undefined) =>
-        typeof message === "string" && message.toLowerCase().includes("unsupported action");
-
       let allTenants: TenantInfo[] = [];
       let nextProfiles: Profile[] = [];
       let nextRoles: UserRole[] = [];
@@ -248,19 +245,11 @@ export default function AdminHub() {
         ]);
 
         const tenantsResponse = tenantsRes as { data: any; error: any };
-        const tenantsFunctionError = tenantsResponse.error
-          ? await getFunctionErrorMessage(tenantsResponse.error, "Falha ao listar organizações.")
-          : (typeof tenantsResponse.data?.error === "string" ? tenantsResponse.data.error : "");
-
         if (tenantsResponse.error || tenantsResponse.data?.error) {
           allTenants = await loadTenantsFallback();
         } else {
           allTenants = (tenantsResponse.data?.tenants ?? []) as TenantInfo[];
         }
-
-        const membersFunctionError = membersRes.error
-          ? await getFunctionErrorMessage(membersRes.error, "Falha ao listar membros.")
-          : (typeof membersRes.data?.error === "string" ? membersRes.data.error : "");
 
         if (membersRes.error || membersRes.data?.error) {
           const fallbackMembers = await loadMembersFallback();
