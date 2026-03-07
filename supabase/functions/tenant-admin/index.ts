@@ -49,19 +49,49 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, serviceRoleKey);
 
+    stage = "parse_request";
+    const body = await req.json();
+    const action = String(body?.action || "create").trim().toLowerCase();
+
     stage = "authorize_caller";
     const { data: isSuperAdmin } = await adminClient.rpc("is_super_admin", { p_user_id: caller.id });
+    const { data: callerTenant } = await adminClient.rpc("get_user_tenant_id", { p_user_id: caller.id });
 
-    if (!isSuperAdmin) {
+    let membersTenantScope: string | null = String(body?.tenant_id || "").trim() || null;
+
+    if (action === "members" && !isSuperAdmin) {
+      const tenantToCheck = membersTenantScope || String(callerTenant || "");
+
+      if (!tenantToCheck) {
+        return new Response(JSON.stringify({ error: "No tenant found for caller", stage }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: isTenantAdmin } = await adminClient.rpc("has_role", {
+        p_user_id: caller.id,
+        p_tenant_id: tenantToCheck,
+        p_role: "admin",
+      });
+
+      if (!isTenantAdmin) {
+        return new Response(JSON.stringify({ error: "Admin role required", stage }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Tenant admin só pode listar membros do tenant autorizado.
+      membersTenantScope = tenantToCheck;
+    }
+
+    if (!isSuperAdmin && action !== "members") {
       return new Response(JSON.stringify({ error: "Super admin role required", stage }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
-
-    stage = "parse_request";
-    const body = await req.json();
-    const action = String(body?.action || "create").trim().toLowerCase();
 
     /* ── LIST ── */
     if (action === "list") {
@@ -86,7 +116,7 @@ Deno.serve(async (req) => {
 
     /* ── MEMBERS ── */
     if (action === "members") {
-      const tenantId = String(body?.tenant_id || "").trim();
+      const tenantId = membersTenantScope ?? "";
 
       stage = "list_member_roles";
       const rolesBaseQuery = adminClient

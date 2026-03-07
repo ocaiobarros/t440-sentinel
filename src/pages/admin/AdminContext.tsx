@@ -136,17 +136,26 @@ export default function AdminLayout() {
           nextRoles = edgeRoles;
         }
       } else {
-        const [tRes, pRes, rRes] = await Promise.all([
+        const [tRes, mRes] = await Promise.all([
           supabase.from("tenants").select("id, name, slug, created_at").order("created_at", { ascending: true }),
-          supabase.from("profiles").select("*").order("created_at", { ascending: true }),
-          supabase.from("user_roles").select("*"),
+          supabase.functions.invoke("tenant-admin", { body: { action: "members" } }),
         ]);
         if (tRes.error) throw tRes.error;
         allTenants = (tRes.data ?? []) as TenantInfo[];
-        if (pRes.error) throw pRes.error;
-        if (rRes.error) throw rRes.error;
-        nextProfiles = (pRes.data ?? []) as Profile[];
-        nextRoles = (rRes.data ?? []) as UserRole[];
+
+        if (mRes.error || mRes.data?.error) {
+          const [pRes, rRes] = await Promise.all([
+            supabase.from("profiles").select("*").order("created_at", { ascending: true }),
+            supabase.from("user_roles").select("*"),
+          ]);
+          if (pRes.error) throw pRes.error;
+          if (rRes.error) throw rRes.error;
+          nextProfiles = (pRes.data ?? []) as Profile[];
+          nextRoles = (rRes.data ?? []) as UserRole[];
+        } else {
+          nextProfiles = (mRes.data?.profiles ?? []) as Profile[];
+          nextRoles = (mRes.data?.roles ?? []) as UserRole[];
+        }
       }
 
       setTenants(allTenants);
