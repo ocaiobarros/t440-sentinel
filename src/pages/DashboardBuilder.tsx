@@ -172,16 +172,17 @@ export default function DashboardBuilder() {
 
   const loadPreset = useCallback((preset: DashboardPreset) => {
     pushHistory();
+    // Replace-Only: clear all existing widgets before loading the new template
     setConfig((prev) => ({
       ...prev,
       name: prev.name === "Novo Dashboard" ? preset.name : prev.name,
       description: prev.description || preset.description,
-      widgets: [...prev.widgets, ...preset.widgets],
+      widgets: preset.widgets,  // REPLACE, not append
       settings: { ...prev.settings, ...preset.settings, category: preset.category },
     }));
     setSelectedWidgetId(null);
     setSidebarMode("widgets");
-    toast({ title: `Template "${preset.name}" carregado`, description: `${preset.widgets.length} widgets adicionados ao canvas.` });
+    toast({ title: `Template "${preset.name}" aplicado`, description: `${preset.widgets.length} widgets carregados. Clique em "Salvar" para persistir.` });
   }, [pushHistory, toast]);
 
   const updateWidget = useCallback((updated: WidgetConfig) => {
