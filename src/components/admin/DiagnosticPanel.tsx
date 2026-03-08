@@ -168,7 +168,6 @@ export default function DiagnosticPanel({ tenants, selectedTenantId }: Diagnosti
 
     // 5. invite-user Edge Function
     const testEmail = `diag-${Date.now()}@flowpulse.test`;
-    const targetTenant = selectedTenantId || tenants[0]?.id;
     let createdUserId: string | null = null;
 
     const t4 = Date.now();
