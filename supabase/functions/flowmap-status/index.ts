@@ -620,7 +620,7 @@ Deno.serve(async (req) => {
     const linkTraffic = await fetchLinkTraffic(
       serviceClient,
       typedLinks,
-      tenantId as string,
+      resolvedTenantId,
       conn.url,
       zabbixAuth,
     );
@@ -629,13 +629,13 @@ Deno.serve(async (req) => {
     const { data: activeEvents } = await serviceClient
       .from("flow_map_link_events")
       .select("id, link_id, status, started_at, ended_at, duration_seconds")
-      .eq("tenant_id", tenantId as string)
+      .eq("tenant_id", resolvedTenantId)
       .in("link_id", typedLinks.map((l) => l.id))
       .order("started_at", { ascending: false })
       .limit(100);
 
     // ─── SLA Transition Engine (fire-and-forget) ───
-    processLinkTransitions(serviceClient, typedLinks, resultByHostId, tenantId as string, linkStatusMap)
+    processLinkTransitions(serviceClient, typedLinks, resultByHostId, resolvedTenantId, linkStatusMap)
       .catch((err) => console.error("[flowmap-status] SLA transition error:", err));
 
     const responseData = {
@@ -674,7 +674,7 @@ Deno.serve(async (req) => {
         // Upsert cache row
         serviceClient.from("flow_map_effective_cache").upsert({
           map_id,
-          tenant_id: tenantId as string,
+          tenant_id: resolvedTenantId,
           payload: effData ?? [],
           computed_at: new Date().toISOString(),
           rpc_duration_ms: rpcDuration,
