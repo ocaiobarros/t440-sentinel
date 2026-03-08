@@ -268,9 +268,22 @@ export default function DashboardBuilder() {
     }));
   }, []);
 
-  // Save mutation
+  // AbortController for in-flight save cancellation on unmount
+  const saveAbortRef = useRef<AbortController | null>(null);
+
+  // Cleanup: abort any in-flight save when component unmounts
+  useEffect(() => {
+    return () => {
+      saveAbortRef.current?.abort();
+    };
+  }, []);
+
   const saveMutation = useMutation({
     mutationFn: async () => {
+      // Cancel any previous in-flight save
+      saveAbortRef.current?.abort();
+      const controller = new AbortController();
+      saveAbortRef.current = controller;
       const { data: session } = await supabase.auth.getSession();
       if (!session?.session) throw new Error("Not authenticated");
 
