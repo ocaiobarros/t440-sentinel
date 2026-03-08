@@ -24,7 +24,7 @@
     "zabbixConnectors": "Conectores Zabbix",
     "rmsConnectors": "Conectores RMS",
     "telegram": "Telegram",
-    "users": "Usuários",
+    "users": "Administração",
     "tenants": "Tenants",
     "system": "Sistema",
     "hostStatus": "Status do Host",

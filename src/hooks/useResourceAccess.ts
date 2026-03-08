@@ -86,7 +86,7 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
       const resolvedTenantId = await resolveResourceTenantId();
       if (!resolvedTenantId) throw new Error("Tenant do recurso não identificado");
 
-      console.log("[ResourceAccess] Granting:", { tenantId: resolvedTenantId, resourceType, resourceId, ...params, granted_by: user.id });
+      
 
       const { data, error } = await supabase.from("resource_access").upsert({
         tenant_id: resolvedTenantId,
@@ -104,7 +104,7 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
         console.error("[ResourceAccess] Grant failed:", error);
         throw new Error(`Falha ao conceder acesso: ${error.message}`);
       }
-      console.log("[ResourceAccess] Grant success:", data);
+      
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });
