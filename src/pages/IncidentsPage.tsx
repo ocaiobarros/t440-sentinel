@@ -1,5 +1,6 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef, useCallback } from "react";
 import { useTranslation } from "react-i18next";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,7 +13,6 @@ import { useAlertInstances, useAlertRealtime, type AlertInstance } from "@/hooks
 import IncidentDetailDrawer from "@/components/incidents/IncidentDetailDrawer";
 import { formatDistanceToNow } from "date-fns";
 import { ptBR, enUS, es } from "date-fns/locale";
-import { motion, AnimatePresence } from "framer-motion";
 
 type SeverityFilter = "disaster" | "high" | "average" | "warning" | "info";
 type StatusFilter = "open" | "ack" | "resolved";
