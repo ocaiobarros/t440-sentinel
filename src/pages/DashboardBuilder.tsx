@@ -285,10 +285,12 @@ export default function DashboardBuilder() {
       const controller = new AbortController();
       saveAbortRef.current = controller;
       const { data: session } = await supabase.auth.getSession();
+      if (controller.signal.aborted) throw new DOMException("Save cancelled", "AbortError");
       if (!session?.session) throw new Error("Not authenticated");
 
       const userId = session.session.user.id;
       const { data: tenantData, error: tenantErr } = await supabase.rpc("get_user_tenant_id", { p_user_id: userId });
+      if (controller.signal.aborted) throw new DOMException("Save cancelled", "AbortError");
       if (tenantErr) throw tenantErr;
       const tenantId = tenantData as string | null;
       if (!tenantId) throw new Error("Tenant não identificado para o usuário autenticado");
