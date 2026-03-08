@@ -25,6 +25,7 @@ interface ReactorHealth {
 
 export default function LatencyMonitorWidget() {
   const [snapshots, setSnapshots] = useState<LatencySnapshot[]>([]);
+  const [clockDrift, setClockDrift] = useState<ClockDriftAlert | null>(null);
   const [health, setHealth] = useState<ReactorHealth>({
     storeBackend: "unknown",
     retryCount: 0,
