@@ -358,7 +358,7 @@ export function useFlowMapStatus({
       try { bc.close(); } catch { /* ignore */ }
       channelRef.current = null;
     };
-  }, [canPoll, startPolling, stopPolling, scheduleRecompute]);
+  }, [canPoll, mapId, startPolling, stopPolling, scheduleRecompute]);
 
   // ─── Visibility change: pause/resume polling ───
   useEffect(() => {
