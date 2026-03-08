@@ -215,7 +215,18 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     }
 
     const { data: session } = await supabase.auth.getSession();
-    if (!session?.session?.access_token) return;
+    if (!session?.session?.access_token) {
+      setConsecutiveErrors((c) => c + 1);
+      if (Date.now() - lastErrorToastRef.current > 120_000) {
+        lastErrorToastRef.current = Date.now();
+        toast({
+          title: "Sessão expirada",
+          description: "Faça login novamente para restaurar a atualização em tempo real.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
 
     const widgetConfigs = dash.widgets.map((w) => ({
       widget_id: w.id,
@@ -240,6 +251,9 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     inflightRef.current = true;
     setIsPollingActive(true);
     const pollStart = performance.now();
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(() => controller.abort(), 25_000);
+
     try {
       const response = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/zabbix-poller?t=${Date.now()}`,
@@ -255,6 +269,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
             dashboard_id: dash.id,
             widgets: widgetConfigs,
           }),
+          signal: controller.signal,
         },
       );
 
@@ -274,6 +289,10 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       setLastPollLatencyMs(Math.round(performance.now() - pollStart));
       setConsecutiveErrors(0); // reset on success
     } catch (err: any) {
+      const message = err?.name === "AbortError"
+        ? "Tempo limite excedido na coleta do Zabbix."
+        : (err?.message || "Erro desconhecido");
+
       console.error("[FlowPulse] Poll failed:", err);
       setConsecutiveErrors((c) => c + 1);
       // Throttle: only show toast once per 2 minutes
@@ -281,14 +300,15 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
         lastErrorToastRef.current = Date.now();
         toast({
           title: "Falha na coleta de dados",
-          description: err?.message?.includes("500")
+          description: message.includes("500")
             ? "O serviço de telemetria retornou erro. Verifique se os secrets de produção estão configurados."
-            : "Não foi possível coletar dados do Zabbix. A próxima tentativa será automática.",
+            : message,
           variant: "destructive",
         });
       }
       setLastPollLatencyMs(Math.round(performance.now() - pollStart));
     } finally {
+      window.clearTimeout(timeoutId);
       inflightRef.current = false;
       setIsPollingActive(false);
     }

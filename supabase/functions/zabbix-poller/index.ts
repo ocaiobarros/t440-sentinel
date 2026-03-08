@@ -342,83 +342,73 @@ Deno.serve(async (req) => {
     return json({ error: "Invalid token" }, 401);
   }
 
-  const userId = claims.claims.sub as string;
-  const tenantIdFromJwt = extractTenantIdFromClaims(claims.claims as Record<string, unknown>);
+    const userId = claims.claims.sub as string;
 
-  try {
-    const body: PollRequest = await req.json();
-    const { connection_id, dashboard_id, widgets } = body;
+    try {
+      const body: PollRequest = await req.json();
+      const { connection_id, dashboard_id, widgets } = body;
 
-    if (!connection_id || !dashboard_id || !widgets?.length) {
-      return json({ error: "connection_id, dashboard_id, and widgets[] are required" }, 400);
-    }
-
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
-    const { data: tenantData } = await serviceClient.rpc("get_user_tenant_id", { p_user_id: userId });
-
-    // Fallback chain for on-prem bootstrap edge-cases:
-    // profile tenant -> JWT app_metadata tenant -> user_roles tenant
-    let tenantId = (tenantData as string | null) ?? tenantIdFromJwt;
-    if (!tenantId) {
-      const { data: fallbackRole } = await serviceClient
-        .from("user_roles")
-        .select("tenant_id")
-        .eq("user_id", userId)
-        .limit(1)
-        .maybeSingle();
-      tenantId = fallbackRole?.tenant_id ?? null;
-    }
-
-    const { data: isSuperAdmin } = await serviceClient.rpc("is_super_admin", { p_user_id: userId });
-
-    if (!tenantId && !isSuperAdmin) {
-      return json({ error: "Tenant not found" }, 403);
-    }
-
-    if (!isSuperAdmin && tenantId) {
-      const { data: hasTenantRole } = await serviceClient.rpc("has_any_role", {
-        p_user_id: userId,
-        p_tenant_id: tenantId,
-        p_roles: ["admin", "editor", "viewer", "tech", "sales"],
-      });
-      if (!hasTenantRole) {
-        return json({ error: "User has no role in tenant" }, 403);
+      if (!connection_id || !dashboard_id || !widgets?.length) {
+        return json({ error: "connection_id, dashboard_id, and widgets[] are required" }, 400);
       }
-    }
 
-    let dashboardQuery = serviceClient
-      .from("dashboards")
-      .select("id, tenant_id")
-      .eq("id", dashboard_id);
+      const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const { data: isSuperAdmin } = await serviceClient.rpc("is_super_admin", { p_user_id: userId });
 
-    if (!isSuperAdmin && tenantId) {
-      dashboardQuery = dashboardQuery.eq("tenant_id", tenantId);
-    }
+      const { data: dashboard, error: dashboardErr } = await serviceClient
+        .from("dashboards")
+        .select("id, tenant_id")
+        .eq("id", dashboard_id)
+        .maybeSingle();
 
-    const { data: dashboard, error: dashboardErr } = await dashboardQuery.maybeSingle();
+      if (dashboardErr || !dashboard) {
+        return json({ error: "Dashboard not found or access denied" }, 403);
+      }
 
-    if (dashboardErr || !dashboard) {
-      return json({ error: "Dashboard not found or access denied" }, 403);
-    }
+      let canAccessDashboard = !!isSuperAdmin;
+      if (!canAccessDashboard) {
+        const [{ data: hasTenantRole }, { data: hasSharedAccess }, { data: isCreator }] = await Promise.all([
+          serviceClient.rpc("has_any_role", {
+            p_user_id: userId,
+            p_tenant_id: dashboard.tenant_id,
+            p_roles: ["admin", "editor", "viewer", "tech", "sales"],
+          }),
+          serviceClient.rpc("has_resource_access", {
+            p_user_id: userId,
+            p_tenant_id: dashboard.tenant_id,
+            p_resource_type: "dashboard",
+            p_resource_id: dashboard.id,
+          }),
+          serviceClient.rpc("is_resource_creator", {
+            p_user_id: userId,
+            p_resource_type: "dashboard",
+            p_resource_id: dashboard.id,
+          }),
+        ]);
 
-    if (!tenantId) {
-      tenantId = dashboard.tenant_id;
-    }
+        canAccessDashboard = !!hasTenantRole || !!hasSharedAccess || !!isCreator;
+      }
 
-    let connQuery = serviceClient
-      .from("zabbix_connections")
-      .select("id, tenant_id, url, username, password_ciphertext, password_iv, password_tag, is_active")
-      .eq("id", connection_id);
+      if (!canAccessDashboard) {
+        return json({ error: "Dashboard access denied" }, 403);
+      }
 
-    if (!isSuperAdmin && tenantId) {
-      connQuery = connQuery.eq("tenant_id", tenantId);
-    }
+      const tenantId = dashboard.tenant_id;
 
-    const { data: conn, error: connErr } = await connQuery.maybeSingle();
+      let connQuery = serviceClient
+        .from("zabbix_connections")
+        .select("id, tenant_id, url, username, password_ciphertext, password_iv, password_tag, is_active")
+        .eq("id", connection_id);
 
-    if (connErr || !conn) return json({ error: "Connection not found or access denied" }, 403);
-    if (!isSuperAdmin && conn.tenant_id !== tenantId) return json({ error: "Connection tenant mismatch" }, 403);
-    if (!conn.is_active) return json({ error: "Connection disabled" }, 400);
+      if (!isSuperAdmin) {
+        connQuery = connQuery.eq("tenant_id", tenantId);
+      }
+
+      const { data: conn, error: connErr } = await connQuery.maybeSingle();
+
+      if (connErr || !conn) return json({ error: "Connection not found or access denied" }, 403);
+      if (!isSuperAdmin && conn.tenant_id !== tenantId) return json({ error: "Connection tenant mismatch" }, 403);
+      if (!conn.is_active) return json({ error: "Connection disabled" }, 400);
 
     if (!tenantId) {
       return json({ error: "Tenant resolution failed" }, 403);

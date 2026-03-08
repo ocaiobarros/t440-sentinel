@@ -160,10 +160,18 @@ export function useFlowMapStatus({
     const controller = new AbortController();
     abortRef.current = controller;
 
+    let timedOut = false;
+    const timeoutId = window.setTimeout(() => {
+      timedOut = true;
+      controller.abort();
+    }, 25_000);
+
     try {
       setLoading(true);
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session?.access_token) return;
+      if (!session?.access_token) {
+        throw new Error("Sessão expirada. Faça login novamente para restaurar o monitoramento.");
+      }
 
       const res = await fetch(
         `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/flowmap-status?t=${Date.now()}`,
@@ -209,20 +217,26 @@ export function useFlowMapStatus({
 
       setError(null);
     } catch (err: any) {
-      if (err.name === "AbortError") return;
-      console.error("[FlowMapStatus] poll error:", err);
-      setError(err.message);
+      if (err.name === "AbortError" && !timedOut) return;
+
+      const normalizedError = timedOut
+        ? new Error("Tempo limite excedido ao consultar status do mapa.")
+        : err;
+
+      console.error("[FlowMapStatus] poll error:", normalizedError);
+      setError(normalizedError.message);
       if (Date.now() - lastErrorToastRef.current > 120_000) {
         lastErrorToastRef.current = Date.now();
         toast({
           title: "Falha no status do mapa",
-          description: err?.message?.includes("401") || err?.message?.includes("403")
+          description: normalizedError?.message?.includes("401") || normalizedError?.message?.includes("403")
             ? "Sessão expirada. Faça login novamente para restaurar o monitoramento."
-            : "Não foi possível obter o status dos hosts. A próxima tentativa será automática.",
+            : normalizedError.message,
           variant: "destructive",
         });
       }
     } finally {
+      window.clearTimeout(timeoutId);
       setLoading(false);
     }
   }, [mapId, connectionId, fetchEffectiveStatus]);

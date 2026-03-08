@@ -423,46 +423,51 @@ Deno.serve(async (req) => {
   const { data: claims, error: claimsErr } = await supabase.auth.getClaims(token);
   if (claimsErr || !claims?.claims) return json({ error: "Invalid token" }, 401);
 
-  const userId = claims.claims.sub as string;
-  const tenantIdFromJwt = extractTenantIdFromClaims(claims.claims as Record<string, unknown>);
+    const userId = claims.claims.sub as string;
 
-  try {
-    const body = await req.json() as { map_id: string; connection_id: string };
-    const { map_id, connection_id } = body;
-    if (!map_id || !connection_id) return json({ error: "map_id and connection_id are required" }, 400);
+    try {
+      const body = await req.json() as { map_id: string; connection_id: string };
+      const { map_id, connection_id } = body;
+      if (!map_id || !connection_id) return json({ error: "map_id and connection_id are required" }, 400);
 
-    const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const serviceClient = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+      const { data: isSuperAdmin } = await serviceClient.rpc("is_super_admin", { p_user_id: userId });
 
-    const { data: tenantData } = await serviceClient.rpc("get_user_tenant_id", { p_user_id: userId });
-    let tenantId = (tenantData as string | null) ?? tenantIdFromJwt;
-
-    if (!tenantId) {
-      const { data: fallbackRole } = await serviceClient
-        .from("user_roles")
-        .select("tenant_id")
-        .eq("user_id", userId)
-        .limit(1)
+      const { data: mapRow, error: mapErr } = await serviceClient
+        .from("flow_maps")
+        .select("id, tenant_id")
+        .eq("id", map_id)
         .maybeSingle();
-      tenantId = fallbackRole?.tenant_id ?? null;
-    }
 
-    const { data: isSuperAdmin } = await serviceClient.rpc("is_super_admin", { p_user_id: userId });
+      if (mapErr || !mapRow) return json({ error: "Map not found or access denied" }, 403);
 
-    if (!tenantId && !isSuperAdmin) return json({ error: "Tenant not found" }, 403);
+      let canAccessMap = !!isSuperAdmin;
+      if (!canAccessMap) {
+        const [{ data: hasTenantRole }, { data: hasSharedAccess }, { data: isCreator }] = await Promise.all([
+          serviceClient.rpc("has_any_role", {
+            p_user_id: userId,
+            p_tenant_id: mapRow.tenant_id,
+            p_roles: ["admin", "editor", "viewer", "tech", "sales"],
+          }),
+          serviceClient.rpc("has_resource_access", {
+            p_user_id: userId,
+            p_tenant_id: mapRow.tenant_id,
+            p_resource_type: "flow_map",
+            p_resource_id: mapRow.id,
+          }),
+          serviceClient.rpc("is_resource_creator", {
+            p_user_id: userId,
+            p_resource_type: "flow_map",
+            p_resource_id: mapRow.id,
+          }),
+        ]);
 
-    let mapQuery = serviceClient
-      .from("flow_maps")
-      .select("id, tenant_id")
-      .eq("id", map_id);
+        canAccessMap = !!hasTenantRole || !!hasSharedAccess || !!isCreator;
+      }
 
-    if (!isSuperAdmin && tenantId) {
-      mapQuery = mapQuery.eq("tenant_id", tenantId);
-    }
+      if (!canAccessMap) return json({ error: "Map access denied" }, 403);
 
-    const { data: mapRow, error: mapErr } = await mapQuery.maybeSingle();
-    if (mapErr || !mapRow) return json({ error: "Map not found or access denied" }, 403);
-
-    const resolvedTenantId = mapRow.tenant_id;
+      const resolvedTenantId = mapRow.tenant_id;
 
     // ─── Check in-memory cache ───
     const cacheKey = `${resolvedTenantId}:${map_id}`;
