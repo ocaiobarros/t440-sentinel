@@ -41,6 +41,7 @@ async function zabbixLogin(url: string, username: string, password: string): Pro
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", method: "user.login", params: { username, password }, id: 1 }),
+    signal: AbortSignal.timeout(15_000),
   });
   const data = await res.json();
   if (data.error) throw new Error(`Zabbix login failed: ${JSON.stringify(data.error)}`);
@@ -52,6 +53,7 @@ async function zabbixCall(url: string, auth: string, method: string, params: Rec
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ jsonrpc: "2.0", method, params, auth, id: 2 }),
+    signal: AbortSignal.timeout(30_000),
   });
 
   const raw = await res.text();
