@@ -221,6 +221,8 @@ Deno.serve(async (req) => {
 
   if (!supabaseUrl || !serviceRoleKey) return json({ error: "Missing Supabase config" }, 500);
 
+  const webhookReceivedAt = Date.now();
+
   try {
     const payload = await req.json() as ZabbixWebhookPayload;
 
