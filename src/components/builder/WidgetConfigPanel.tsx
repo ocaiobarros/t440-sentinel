@@ -19,6 +19,10 @@ import { Trash2, X, Search, Palette, Type, Sparkles, Database, Settings2, ImageI
 import ZabbixItemBrowser from "./ZabbixItemBrowser";
 import ColorMapEditor from "./ColorMapEditor";
 import UnitPicker from "./UnitPicker";
+import ThresholdEditor from "./ThresholdEditor";
+import FieldOverrideEditor from "./FieldOverrideEditor";
+import type { ThresholdConfig } from "@/lib/threshold-engine";
+import type { FieldOverrideRule } from "./FieldOverrideEditor";
 import { Icon } from "@iconify/react";
 
 interface Props {
@@ -835,13 +839,42 @@ export default function WidgetConfigPanel({ widget, onUpdate, onDelete, onClose,
               </div>
             )}
 
-            {/* ── Color Mapping ── */}
-            <ColorMapEditor
-              colorMap={(widget.extra?.color_map as Record<string, string>) || {}}
-              onChange={(map) => onUpdate({ ...widget, extra: { ...widget.extra, color_map: map } })}
-              defaultColor={(widget.extra?.default_color as string) || "#A0A0A0"}
-              onDefaultColorChange={(c) => onUpdate({ ...widget, extra: { ...widget.extra, default_color: c } })}
+            {/* ── Thresholds ── */}
+            <ThresholdEditor
+              config={(widget.extra?.thresholds as ThresholdConfig) || undefined}
+              onChange={(cfg) => onUpdate({ ...widget, extra: { ...widget.extra, thresholds: cfg } })}
             />
+
+            {/* ── Field Overrides (multi-series widgets) ── */}
+            {["timeseries", "table"].includes(widget.widget_type) && (
+              <FieldOverrideEditor
+                overrides={(widget.extra?.fieldOverrides as FieldOverrideRule[]) || []}
+                onChange={(overrides) => onUpdate({ ...widget, extra: { ...widget.extra, fieldOverrides: overrides } })}
+              />
+            )}
+
+            {/* ── Action Link ── */}
+            <div className="space-y-1.5 p-2 rounded-md border border-border/30 bg-accent/5">
+              <div className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-muted-foreground">
+                  <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+                  <polyline points="15 3 21 3 21 9" />
+                  <line x1="10" y1="14" x2="21" y2="3" />
+                </svg>
+                <span className="text-[9px] font-display text-muted-foreground uppercase tracking-wider">
+                  Action Link
+                </span>
+              </div>
+              <Input
+                value={(widget.extra?.actionUrl as string) || ""}
+                onChange={(e) => onUpdate({ ...widget, extra: { ...widget.extra, actionUrl: e.target.value } })}
+                placeholder="https://zabbix.local/host/${host_id}"
+                className="h-6 text-[9px] font-mono"
+              />
+              <p className="text-[8px] text-muted-foreground">
+                Variáveis: <code className="text-primary/70">${"${host_id}"} ${`\${value}`} ${`\${title}`} ${`\${item_id}`} ${`\${host_name}`} ${`\${extra.campo}`}</code>
+              </p>
+            </div>
           </TabsContent>
         </Tabs>
       </ScrollArea>
