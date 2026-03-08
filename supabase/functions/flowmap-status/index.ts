@@ -90,6 +90,21 @@ interface HostStatusResult {
   triggerProblem?: boolean;
 }
 
+function extractTenantIdFromClaims(claims: Record<string, unknown>): string | null {
+  const appMetadata = claims.app_metadata as Record<string, unknown> | undefined;
+  const tenantFromAppMetadata = appMetadata?.tenant_id;
+  if (typeof tenantFromAppMetadata === "string" && tenantFromAppMetadata.length > 0) {
+    return tenantFromAppMetadata;
+  }
+
+  const tenantFromRootClaim = claims.tenant_id;
+  if (typeof tenantFromRootClaim === "string" && tenantFromRootClaim.length > 0) {
+    return tenantFromRootClaim;
+  }
+
+  return null;
+}
+
 /* ─── Ring break detection (BFS) ─── */
 interface LinkRow {
   id: string;
