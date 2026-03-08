@@ -156,8 +156,8 @@ export default function IncidentsPage() {
         </div>
       </div>
 
-      {/* ── Table ── */}
-      <div className="flex-1 overflow-y-auto">
+      {/* ── Virtualized Table ── */}
+      <div className="flex-1 overflow-hidden flex flex-col">
         {isLoading ? (
           <div className="p-4 space-y-2">
             {Array.from({ length: 8 }).map((_, i) => (
@@ -171,76 +171,27 @@ export default function IncidentsPage() {
             <p className="text-xs">{t("incidents.adjustFilters")}</p>
           </div>
         ) : (
-          <table className="w-full text-xs">
-            <thead className="sticky top-0 bg-background z-10">
-              <tr className="border-b border-border text-[10px] text-muted-foreground font-display uppercase tracking-wider">
-                <th className="py-2 px-3 text-left w-8">{t("incidents.sev")}</th>
-                <th className="py-2 px-3 text-left w-10">Status</th>
-                <th className="py-2 px-3 text-left">{t("incidents.host")}</th>
-                <th className="py-2 px-3 text-left">{t("incidents.alert")}</th>
-                <th className="py-2 px-3 text-left w-28">{t("incidents.start")}</th>
-                <th className="py-2 px-3 text-left w-24">{t("incidents.duration")}</th>
-                <th className="py-2 px-3 text-left w-12">{t("incidents.rc")}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence initial={false}>
-                {filtered.map((alert) => {
-                  const sev = SEVERITY_CONFIG[alert.severity] ?? SEVERITY_CONFIG.info;
-                  const st = STATUS_CONFIG[alert.status] ?? STATUS_CONFIG.open;
-                  const SevIcon = sev.icon;
-                  const StIcon = st.icon;
-                  const hostName = (alert.payload as any)?.hostname || (alert.payload as any)?.host || "—";
-                  const isRootCause = (alert.payload as any)?.is_root_cause === true;
-                  const isolatedCount = (alert.payload as any)?.isolated_count;
-
-                  return (
-                    <motion.tr
-                      key={alert.id}
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, x: -20 }}
-                      onClick={() => setSelectedAlert(alert)}
-                      className={`border-b border-border/50 cursor-pointer transition-colors hover:bg-muted/30 ${
-                        isRootCause ? "bg-neon-red/5 hover:bg-neon-red/10" : ""
-                      } ${alert.status === "resolved" ? "opacity-50" : ""}`}
-                    >
-                      <td className="py-2 px-3">
-                        <SevIcon className={`w-4 h-4 ${sev.color}`} />
-                      </td>
-                      <td className="py-2 px-3">
-                        <StIcon className={`w-4 h-4 ${st.color}`} />
-                      </td>
-                      <td className="py-2 px-3 font-mono font-bold text-foreground truncate max-w-[160px]">
-                        {hostName}
-                      </td>
-                      <td className="py-2 px-3 text-foreground truncate max-w-[300px]">
-                        <span>{alert.title}</span>
-                        {isolatedCount && (
-                          <Badge variant="outline" className="ml-2 text-[8px] text-neon-red border-neon-red/30">
-                            +{isolatedCount} {t("incidents.isolated")}
-                          </Badge>
-                        )}
-                      </td>
-                      <td className="py-2 px-3 font-mono text-muted-foreground">
-                        {new Date(alert.opened_at).toLocaleString(i18n.language === "en" ? "en-US" : i18n.language === "es" ? "es" : "pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
-                      </td>
-                      <td className="py-2 px-3">
-                        <span className={`font-mono ${alert.status !== "resolved" ? "text-neon-amber" : "text-muted-foreground"}`}>
-                          {formatDistanceToNow(new Date(alert.opened_at), { locale: dateFnsLocale })}
-                        </span>
-                      </td>
-                      <td className="py-2 px-3">
-                        {isRootCause && (
-                          <Flame className="w-3.5 h-3.5 text-neon-red animate-pulse" />
-                        )}
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
-            </tbody>
-          </table>
+          <>
+            {/* Sticky header */}
+            <div className="shrink-0 grid grid-cols-[32px_40px_160px_1fr_112px_96px_48px] text-[10px] text-muted-foreground font-display uppercase tracking-wider border-b border-border bg-background">
+              <span className="py-2 px-3">{t("incidents.sev")}</span>
+              <span className="py-2 px-3">Status</span>
+              <span className="py-2 px-3">{t("incidents.host")}</span>
+              <span className="py-2 px-3">{t("incidents.alert")}</span>
+              <span className="py-2 px-3">{t("incidents.start")}</span>
+              <span className="py-2 px-3">{t("incidents.duration")}</span>
+              <span className="py-2 px-3">{t("incidents.rc")}</span>
+            </div>
+            {/* Virtualized rows */}
+            <VirtualAlertList
+              alerts={filtered}
+              severityConfig={SEVERITY_CONFIG}
+              statusConfig={STATUS_CONFIG}
+              dateFnsLocale={dateFnsLocale}
+              lang={i18n.language}
+              onSelect={setSelectedAlert}
+            />
+          </>
         )}
       </div>
 
@@ -250,6 +201,82 @@ export default function IncidentsPage() {
         open={!!selectedAlert}
         onClose={() => setSelectedAlert(null)}
       />
+    </div>
+  );
+}
+
+/* ── Virtualized row list (extracted for memo isolation) ── */
+const ROW_HEIGHT = 40;
+
+interface VirtualAlertListProps {
+  alerts: AlertInstance[];
+  severityConfig: Record<string, { icon: React.ElementType; color: string; bg: string; label: string }>;
+  statusConfig: Record<string, { icon: React.ElementType; color: string; label: string }>;
+  dateFnsLocale: typeof ptBR;
+  lang: string;
+  onSelect: (a: AlertInstance) => void;
+}
+
+function VirtualAlertList({ alerts, severityConfig, statusConfig, dateFnsLocale, lang, onSelect }: VirtualAlertListProps) {
+  const parentRef = useRef<HTMLDivElement>(null);
+
+  const virtualizer = useVirtualizer({
+    count: alerts.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    overscan: 15,
+  });
+
+  const dateLocale = lang === "en" ? "en-US" : lang === "es" ? "es" : "pt-BR";
+
+  return (
+    <div ref={parentRef} className="flex-1 overflow-y-auto">
+      <div style={{ height: virtualizer.getTotalSize(), position: "relative" }}>
+        {virtualizer.getVirtualItems().map((vRow) => {
+          const alert = alerts[vRow.index];
+          const sev = severityConfig[alert.severity] ?? severityConfig.info;
+          const st = statusConfig[alert.status] ?? statusConfig.open;
+          const SevIcon = sev.icon;
+          const StIcon = st.icon;
+          const hostName = (alert.payload as any)?.hostname || (alert.payload as any)?.host || "—";
+          const isRootCause = (alert.payload as any)?.is_root_cause === true;
+          const isolatedCount = (alert.payload as any)?.isolated_count;
+
+          return (
+            <div
+              key={alert.id}
+              data-index={vRow.index}
+              ref={virtualizer.measureElement}
+              style={{ position: "absolute", top: 0, left: 0, width: "100%", transform: `translateY(${vRow.start}px)` }}
+              onClick={() => onSelect(alert)}
+              className={`grid grid-cols-[32px_40px_160px_1fr_112px_96px_48px] items-center text-xs border-b border-border/50 cursor-pointer transition-colors hover:bg-muted/30 ${
+                isRootCause ? "bg-[hsl(var(--neon-red)/0.05)] hover:bg-[hsl(var(--neon-red)/0.1)]" : ""
+              } ${alert.status === "resolved" ? "opacity-50" : ""}`}
+            >
+              <span className="py-2 px-3"><SevIcon className={`w-4 h-4 ${sev.color}`} /></span>
+              <span className="py-2 px-3"><StIcon className={`w-4 h-4 ${st.color}`} /></span>
+              <span className="py-2 px-3 font-mono font-bold text-foreground truncate">{hostName}</span>
+              <span className="py-2 px-3 text-foreground truncate flex items-center gap-1">
+                {alert.title}
+                {isolatedCount && (
+                  <Badge variant="outline" className="text-[8px] text-[hsl(var(--neon-red))] border-[hsl(var(--neon-red)/0.3)] shrink-0">
+                    +{isolatedCount}
+                  </Badge>
+                )}
+              </span>
+              <span className="py-2 px-3 font-mono text-muted-foreground">
+                {new Date(alert.opened_at).toLocaleString(dateLocale, { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit" })}
+              </span>
+              <span className={`py-2 px-3 font-mono ${alert.status !== "resolved" ? "text-[hsl(var(--neon-amber))]" : "text-muted-foreground"}`}>
+                {formatDistanceToNow(new Date(alert.opened_at), { locale: dateFnsLocale })}
+              </span>
+              <span className="py-2 px-3">
+                {isRootCause && <Flame className="w-3.5 h-3.5 text-[hsl(var(--neon-red))] animate-pulse" />}
+              </span>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
