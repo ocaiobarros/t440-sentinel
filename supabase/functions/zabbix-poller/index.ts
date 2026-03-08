@@ -412,10 +412,6 @@ Deno.serve(async (req) => {
       if (!isSuperAdmin && conn.tenant_id !== tenantId) return json({ error: "Connection tenant mismatch" }, 403);
       if (!conn.is_active) return json({ error: "Connection disabled" }, 400);
 
-    if (!tenantId) {
-      return json({ error: "Tenant resolution failed" }, 403);
-    }
-
     const password = await decryptPassword(
       conn.password_ciphertext, conn.password_iv, conn.password_tag, encryptionKey,
     );
