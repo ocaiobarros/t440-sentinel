@@ -83,26 +83,27 @@ export default function BackendHealthPanel() {
 
       const start = Date.now();
       try {
-        // We use OPTIONS preflight as a lightweight health check — 
-        // it doesn't require auth and tests if the function is deployed & responding.
-        const projectId = import.meta.env.VITE_SUPABASE_PROJECT_ID;
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const baseUrl = supabaseUrl || `https://${projectId}.supabase.co`;
+        // Use supabase.functions.invoke() for proper CORS handling.
+        // We send a lightweight POST — functions return errors but that proves they're deployed.
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new DOMException("Timeout", "AbortError")), 8000)
+        );
 
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 8000);
-
-        const response = await fetch(`${baseUrl}/functions/v1/${fn.name}`, {
-          method: "OPTIONS",
-          signal: controller.signal,
+        const invokePromise = supabase.functions.invoke(fn.name, {
+          method: "POST",
+          body: { _healthcheck: true },
         });
 
-        clearTimeout(timeoutId);
+        const { data, error } = await Promise.race([invokePromise, timeoutPromise]) as any;
         const latency = Date.now() - start;
 
-        // OPTIONS returning 2xx or 204 means the function is deployed
-        // Some functions may return 4xx on OPTIONS if CORS isn't set — still means deployed
-        const isOnline = response.status < 500;
+        // If we got ANY response (even an error like 401/403/400), the function is deployed & online.
+        // Only FunctionsRelayError or network failures mean the function is down.
+        const isNetworkError = error?.message?.includes("Failed to fetch") || 
+                               error?.message?.includes("FunctionsRelayError") ||
+                               error?.message?.includes("non-2xx");
+        // If there's no error, or the error is a business logic error (not network), it's online
+        const isOnline = !error || !isNetworkError;
 
         setFunctions((prev) =>
           prev.map((f, i) =>
@@ -111,8 +112,8 @@ export default function BackendHealthPanel() {
                   ...f,
                   status: isOnline ? "online" : "error",
                   latency,
-                  httpStatus: response.status,
-                  error: isOnline ? undefined : `HTTP ${response.status}`,
+                  httpStatus: undefined,
+                  error: isOnline ? undefined : (error?.message || "Erro desconhecido"),
                   lastCheck: new Date().toLocaleTimeString("pt-BR"),
                 }
               : f
