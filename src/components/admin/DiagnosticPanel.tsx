@@ -185,38 +185,42 @@ export default function DiagnosticPanel({ tenants, selectedTenantId }: Diagnosti
       });
 
       if (error) {
-        // Extract response body from FunctionsHttpError
-        let errorBody = "";
-        try {
-          if (error.context && typeof error.context.json === "function") {
-            const body = await error.context.json();
-            errorBody = JSON.stringify(body);
-          } else if (error.context && typeof error.context.text === "function") {
-            errorBody = await error.context.text();
-          }
-        } catch { /* ignore parse errors */ }
-        throw new Error(
-          errorBody
-            ? `${error.name || "Error"}: ${errorBody}`
-            : (error.message || JSON.stringify(error))
-        );
+        const fnError = await extractFunctionError(error);
+        throw new Error(`${error?.name || "FunctionsError"}: ${fnError}`);
       }
-      if (data?.error) throw new Error(data.error);
+      if (data?.error) throw new Error(String(data.error));
 
-      createdUserId = data?.user_id || null;
+      createdUserId = typeof data?.user_id === "string" ? data.user_id : null;
 
       updateTest(4, {
         status: "pass",
-        message: data?.existing ? `Usuário existente vinculado` : `Usuário criado com sucesso`,
+        message: data?.existing ? "Usuário existente vinculado" : "Usuário criado com sucesso",
         duration: Date.now() - t4,
         details: `user_id: ${createdUserId}\nemail: ${testEmail}\nexisting: ${data?.existing}\nmoved: ${data?.moved}`,
       });
     } catch (e: any) {
+      let recoveredFromProfile = false;
+
+      try {
+        const { data: fallbackProfile } = await supabase
+          .from("profiles")
+          .select("id")
+          .ilike("email", testEmail)
+          .maybeSingle();
+
+        if (fallbackProfile?.id) {
+          createdUserId = fallbackProfile.id;
+          recoveredFromProfile = true;
+        }
+      } catch {
+        // ignore fallback lookup errors
+      }
+
       updateTest(4, {
         status: "fail",
         message: e.message,
         duration: Date.now() - t4,
-        details: `email_teste: ${testEmail}\ntarget_tenant: ${targetTenant}\nErro completo: ${e.message}`,
+        details: `email_teste: ${testEmail}\ntarget_tenant: ${targetTenant}\nErro completo: ${e.message}${tenantResolutionNote ? `\nobservação_tenant: ${tenantResolutionNote}` : ""}${recoveredFromProfile ? `\nuser_id_recuperado: ${createdUserId}` : ""}`,
       });
     }
 
