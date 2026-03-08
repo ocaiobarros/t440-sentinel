@@ -12,6 +12,52 @@ const LAST_VALUE_TTL_S = 60;       // replay window
 const MAX_BATCH = 200;
 const CONTRACT_VERSION = 1;
 
+/* ─── resilience config ───────────────────────────── */
+const FETCH_TIMEOUT_MS = 3000;     // abort after 3s
+const MAX_RETRIES = 2;             // retry up to 2 times
+const RETRY_BASE_MS = 150;         // exponential backoff base
+
+/* ─── resilient fetch with timeout + retry + keep-alive ─── */
+async function resilientFetch(
+  url: string,
+  init: RequestInit,
+  retries = MAX_RETRIES,
+): Promise<Response> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+
+    try {
+      const resp = await fetch(url, {
+        ...init,
+        signal: controller.signal,
+        keepalive: true,
+        headers: {
+          ...init.headers as Record<string, string>,
+          "Connection": "keep-alive",
+        },
+      });
+      clearTimeout(timer);
+      return resp;
+    } catch (err) {
+      clearTimeout(timer);
+      lastError = err instanceof Error ? err : new Error(String(err));
+
+      if (attempt < retries) {
+        const delayMs = RETRY_BASE_MS * Math.pow(2, attempt); // 150ms, 300ms
+        console.warn(
+          `[reactor] Upstash fetch attempt ${attempt + 1} failed (${lastError.message}), retrying in ${delayMs}ms…`,
+        );
+        await new Promise((r) => setTimeout(r, delayMs));
+      }
+    }
+  }
+
+  throw lastError!;
+}
+
 /* ─── Storage helper (Upstash + fallback local) ────────── */
 interface ReactorStore {
   setNX(key: string, value: string, ttlSeconds: number): Promise<boolean>;
@@ -36,7 +82,7 @@ class UpstashRedis implements ReactorStore {
   }
 
   async pipeline(commands: string[][]): Promise<Array<{ result: unknown }>> {
-    const resp = await fetch(`${this.url}/pipeline`, {
+    const resp = await resilientFetch(`${this.url}/pipeline`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${this.token}`,
@@ -137,12 +183,73 @@ class InMemoryStore implements ReactorStore {
   }
 }
 
+/** Creates an Upstash-backed store with automatic fallback to InMemoryStore on failure. */
+class ResilientStore implements ReactorStore {
+  private primary: UpstashRedis;
+  private fallback: InMemoryStore;
+  private useFallback = false;
+
+  constructor(url: string, token: string) {
+    this.primary = new UpstashRedis(url, token);
+    this.fallback = new InMemoryStore();
+  }
+
+  private active(): ReactorStore {
+    return this.useFallback ? this.fallback : this.primary;
+  }
+
+  private async withFallback<T>(fn: () => Promise<T>, fallbackFn: () => Promise<T>): Promise<T> {
+    if (this.useFallback) return fallbackFn();
+    try {
+      return await fn();
+    } catch (err) {
+      console.error(`[reactor] Upstash failed after retries, falling back to memory: ${err instanceof Error ? err.message : err}`);
+      this.useFallback = true;
+      return fallbackFn();
+    }
+  }
+
+  setNX(key: string, value: string, ttlSeconds: number): Promise<boolean> {
+    return this.withFallback(
+      () => this.primary.setNX(key, value, ttlSeconds),
+      () => this.fallback.setNX(key, value, ttlSeconds),
+    );
+  }
+
+  setEx(key: string, value: string, ttlSeconds: number): Promise<void> {
+    return this.withFallback(
+      () => this.primary.setEx(key, value, ttlSeconds),
+      () => this.fallback.setEx(key, value, ttlSeconds),
+    );
+  }
+
+  setLastValueAndGetTs(
+    lastValueKey: string,
+    lastTsKey: string,
+    value: string,
+    incomingTs: number,
+    ttl: number,
+  ): Promise<number> {
+    return this.withFallback(
+      () => this.primary.setLastValueAndGetTs(lastValueKey, lastTsKey, value, incomingTs, ttl),
+      () => this.fallback.setLastValueAndGetTs(lastValueKey, lastTsKey, value, incomingTs, ttl),
+    );
+  }
+
+  mget(keys: string[]): Promise<Array<string | null>> {
+    return this.withFallback(
+      () => this.primary.mget(keys),
+      () => this.fallback.mget(keys),
+    );
+  }
+}
+
 function createStore(redisUrl?: string | null, redisToken?: string | null): {
   store: ReactorStore;
   backend: "upstash" | "memory";
 } {
   if (redisUrl && redisToken) {
-    return { store: new UpstashRedis(redisUrl, redisToken), backend: "upstash" };
+    return { store: new ResilientStore(redisUrl, redisToken), backend: "upstash" };
   }
   return { store: new InMemoryStore(), backend: "memory" };
 }
