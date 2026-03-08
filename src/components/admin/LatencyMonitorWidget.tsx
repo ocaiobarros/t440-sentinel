@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from "react";
-import { Activity, Database, RefreshCw, Wifi, WifiOff } from "lucide-react";
+import { Activity, AlertTriangle, Database, RefreshCw, Wifi, WifiOff, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 interface LatencySnapshot {
@@ -7,7 +7,14 @@ interface LatencySnapshot {
   timeToGlassMs: number;
   originToReactorMs: number | null;
   reactorToBrowserMs: number | null;
+  clockDriftMs?: number | null;
   receivedAt: number;
+}
+
+interface ClockDriftAlert {
+  driftMs: number;
+  detectedAt: number;
+  key: string;
 }
 
 interface ReactorHealth {
