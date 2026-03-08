@@ -47,6 +47,40 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
   const customCSS = useMemo(() => buildWidgetCSS(styleConfig as any), [styleConfig]);
   const glassClass = getGlassClass(styleConfig as any);
 
+  // ── Action Link support (hooks must be before early returns) ──
+  const actionUrl = (config?.actionUrl as string) || "";
+  const resolvedUrl = useMemo(() => {
+    if (!actionUrl) return "";
+    const extra = config?.extra as Record<string, unknown> | undefined;
+    let url = actionUrl;
+    const rawVal = entry ? extractRawValue(entry.data) : "";
+    url = url.replace(/\$\{value\}/g, encodeURIComponent(rawVal || ""));
+    url = url.replace(/\$\{title\}/g, encodeURIComponent(title));
+    url = url.replace(/\$\{key\}/g, encodeURIComponent(telemetryKey));
+    url = url.replace(/\$\{host_id\}/g, encodeURIComponent((extra?.zabbix_host_id as string) || ""));
+    url = url.replace(/\$\{host_name\}/g, encodeURIComponent((extra?.zabbix_host_name as string) || ""));
+    url = url.replace(/\$\{item_id\}/g, encodeURIComponent(telemetryKey.replace("zbx:item:", "")));
+    url = url.replace(/\$\{extra\.(\w+)\}/g, (_, key) => encodeURIComponent(String(extra?.[key] ?? "")));
+    return url;
+  }, [actionUrl, entry?.ts, title, telemetryKey, config]);
+
+  // ── Thresholds Engine ──
+  const thresholdConfig = (config?.thresholds as ThresholdConfig) || undefined;
+  const thresholdResult = useMemo(() => {
+    if (!thresholdConfig || !entry) return null;
+    const rawVal = extractRawValue(entry.data);
+    const num = rawVal !== null ? parseFloat(rawVal) : null;
+    return evaluateThresholds(num !== null && !isNaN(num) ? num : null, thresholdConfig);
+  }, [thresholdConfig, entry?.ts]);
+
+  const thresholdStyle: React.CSSProperties = thresholdResult && thresholdResult.stepIndex >= 0
+    ? {
+        backgroundColor: thresholdResult.bgColor + "22",
+        borderColor: thresholdResult.bgColor,
+        color: thresholdResult.textColor !== "inherit" ? thresholdResult.textColor : undefined,
+      }
+    : {};
+
   // Sync pulse: flash green dot when new data arrives
   useEffect(() => {
     if (!entry) return;
