@@ -107,8 +107,8 @@ export function useDashboardRealtime({
 
     // Instant flush for priority keys OR critical severity (bypass buffer)
     const isCriticalSeverity = (() => {
-      const d = payload.data as Record<string, unknown>;
-      // Check severity field in data payload — Zabbix severity >= 4 is High/Disaster
+      const d = payload.data as unknown as Record<string, unknown> | undefined;
+      if (!d) return false;
       const sev = d?.severity ?? d?.trigger_severity;
       if (typeof sev === "number") return sev >= 4;
       if (typeof sev === "string") {
