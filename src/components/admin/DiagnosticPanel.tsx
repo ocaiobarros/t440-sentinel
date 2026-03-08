@@ -40,6 +40,46 @@ export default function DiagnosticPanel({ tenants, selectedTenantId }: Diagnosti
     setTests(prev => prev.map((t, i) => i === index ? { ...t, ...update } : t));
   }, []);
 
+  const extractFunctionError = useCallback(async (error: any) => {
+    const context = error?.context;
+
+    if (context?.clone && typeof context.clone === "function") {
+      try {
+        const json = await context.clone().json();
+        if (json && typeof json === "object") return JSON.stringify(json);
+      } catch {
+        // ignore
+      }
+
+      try {
+        const text = await context.clone().text();
+        if (text?.trim()) return text;
+      } catch {
+        // ignore
+      }
+    }
+
+    if (typeof context?.json === "function") {
+      try {
+        const json = await context.json();
+        if (json && typeof json === "object") return JSON.stringify(json);
+      } catch {
+        // ignore
+      }
+    }
+
+    if (typeof context?.text === "function") {
+      try {
+        const text = await context.text();
+        if (text?.trim()) return text;
+      } catch {
+        // ignore
+      }
+    }
+
+    return error?.message || "Erro desconhecido";
+  }, []);
+
   const runDiagnostics = useCallback(async () => {
     setRunning(true);
     const startAll = Date.now();
