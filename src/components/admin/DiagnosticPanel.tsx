@@ -130,7 +130,23 @@ export default function DiagnosticPanel({ tenants, selectedTenantId }: Diagnosti
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Extract response body from FunctionsHttpError
+        let errorBody = "";
+        try {
+          if (error.context && typeof error.context.json === "function") {
+            const body = await error.context.json();
+            errorBody = JSON.stringify(body);
+          } else if (error.context && typeof error.context.text === "function") {
+            errorBody = await error.context.text();
+          }
+        } catch { /* ignore parse errors */ }
+        throw new Error(
+          errorBody
+            ? `${error.name || "Error"}: ${errorBody}`
+            : (error.message || JSON.stringify(error))
+        );
+      }
       if (data?.error) throw new Error(data.error);
 
       createdUserId = data?.user_id || null;
@@ -146,7 +162,7 @@ export default function DiagnosticPanel({ tenants, selectedTenantId }: Diagnosti
         status: "fail",
         message: e.message,
         duration: Date.now() - t4,
-        details: `email_teste: ${testEmail}\ntarget_tenant: ${targetTenant}\nErro completo: ${JSON.stringify(e)}`,
+        details: `email_teste: ${testEmail}\ntarget_tenant: ${targetTenant}\nErro completo: ${e.message}`,
       });
     }
 
