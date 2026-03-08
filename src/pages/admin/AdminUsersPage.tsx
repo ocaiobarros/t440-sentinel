@@ -596,7 +596,49 @@ export default function AdminUsersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Link Dialog ── */}
+      {/* ── Unlink from Org Dialog (All users tab) ── */}
+      <Dialog open={unlinkDialog.open} onOpenChange={(o) => !removing && setUnlinkDialog((s) => ({ ...s, open: o }))}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Desvincular de Organização</DialogTitle>
+            <DialogDescription>Remover <strong>{unlinkDialog.name}</strong> de qual organização?</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label className="text-xs text-muted-foreground">Organização</Label>
+            <Select value={unlinkTargetTenant} onValueChange={setUnlinkTargetTenant}>
+              <SelectTrigger className="bg-muted/50 border-border"><SelectValue placeholder="Selecione a organização..." /></SelectTrigger>
+              <SelectContent>
+                {unlinkDialog.userTenantIds.map((tid) => {
+                  const t = tenants.find((x) => x.id === tid);
+                  return t ? <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem> : null;
+                })}
+              </SelectContent>
+            </Select>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setUnlinkDialog({ open: false, userId: "", name: "", userTenantIds: [] })} disabled={removing}>Cancelar</Button>
+            <Button variant="destructive" onClick={async () => {
+              if (!unlinkTargetTenant) return;
+              setRemoving(true);
+              try {
+                const { error } = await supabase.from("user_roles").delete().eq("user_id", unlinkDialog.userId).eq("tenant_id", unlinkTargetTenant);
+                if (error) throw error;
+                const tName = tenants.find((t) => t.id === unlinkTargetTenant)?.name ?? "";
+                toast({ title: "Vínculo removido", description: `${unlinkDialog.name} desvinculado de "${tName}".` });
+                setUnlinkDialog({ open: false, userId: "", name: "", userTenantIds: [] });
+                setUnlinkTargetTenant("");
+                await fetchData();
+              } catch (err: any) {
+                toast({ variant: "destructive", title: "Erro", description: err.message });
+              } finally {
+                setRemoving(false);
+              }
+            }} disabled={removing || !unlinkTargetTenant}>
+              {removing ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <UserX className="w-4 h-4 mr-1" />} Desvincular
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <Dialog open={linkDialog.open} onOpenChange={(o) => !linking && setLinkDialog((s) => ({ ...s, open: o }))}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
