@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Trash2, X, Search, Palette, Type, Sparkles, Database, Settings2, ImageIcon, Maximize2 } from "lucide-react";
 import ZabbixItemBrowser from "./ZabbixItemBrowser";
 import ColorMapEditor from "./ColorMapEditor";
+import UnitPicker from "./UnitPicker";
 import { Icon } from "@iconify/react";
 
 interface Props {
