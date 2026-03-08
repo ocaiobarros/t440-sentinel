@@ -543,7 +543,22 @@ Deno.serve(async (req) => {
     await Promise.all(
       widgets.map(async (w) => {
         try {
-          const result = await zabbixCall(conn.url, zabbixAuth, w.query.method, normalizeWidgetQuery(w));
+          let result: unknown;
+          try {
+            result = await zabbixCall(conn.url, zabbixAuth, w.query.method, normalizeWidgetQuery(w));
+          } catch (callErr: any) {
+            // Session expired — invalidate cache, re-login once, retry
+            if (callErr?.isSessionError && !sessionRetried) {
+              sessionRetried = true;
+              console.warn(`[zabbix-poller] session error, re-authenticating…`);
+              await invalidateCachedZabbixToken(conn.id, redisUrl, redisToken);
+              zabbixAuth = await zabbixLogin(conn.url, conn.username, password);
+              await setCachedZabbixToken(conn.id, zabbixAuth, redisUrl, redisToken);
+              result = await zabbixCall(conn.url, zabbixAuth, w.query.method, normalizeWidgetQuery(w));
+            } else {
+              throw callErr;
+            }
+          }
           const payloads = await adaptResultWithHistory(conn.url, zabbixAuth, result, w);
           for (const p of payloads) {
             p.tenant_id = tenantId;

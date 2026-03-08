@@ -105,8 +105,28 @@ export function useDashboardRealtime({
       } catch { /* ignore */ }
     }
 
-    // Instant flush for priority keys (bypass buffer)
-    if (priorityKeysRef.current.some((pk) => payload.key === pk || payload.key.includes(pk))) {
+    // Instant flush for priority keys OR critical severity (bypass buffer)
+    const isCriticalSeverity = (() => {
+      const d = payload.data as Record<string, unknown>;
+      // Check severity field in data payload — Zabbix severity >= 4 is High/Disaster
+      const sev = d?.severity ?? d?.trigger_severity;
+      if (typeof sev === "number") return sev >= 4;
+      if (typeof sev === "string") {
+        const sevLower = sev.toLowerCase();
+        return sevLower === "high" || sevLower === "disaster" || parseInt(sev) >= 4;
+      }
+      // Check if type indicates a status/trigger update with critical data
+      const status = d?.status ?? d?.value;
+      if (payload.type === "stat" && (status === "PROBLEM" || status === "1")) return true;
+      return false;
+    })();
+
+    const isPriorityKey = priorityKeysRef.current.some((pk) => payload.key === pk || payload.key.includes(pk));
+
+    if (isPriorityKey || isCriticalSeverity) {
+      if (isCriticalSeverity) {
+        console.log(`[FlowPulse] CRITICAL ALERT bypass: ${payload.key} (instant render)`);
+      }
       onUpdateRef.current(new Map(cache));
     } else {
       dirtyRef.current = true;
