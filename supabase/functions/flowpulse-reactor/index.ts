@@ -468,8 +468,6 @@ Deno.serve(async (req) => {
           event: "DATA_UPDATE",
           payload: { ...broadcastPayload, _sig },
         });
-          },
-        });
         metrics.broadcast_total++;
         metrics.broadcast_latency_ms.push(Date.now() - evt.ts!);
       }
