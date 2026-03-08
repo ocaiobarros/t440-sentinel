@@ -128,6 +128,26 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
     }
   }, []);
 
+  // Auto-reconciliation: replay all widget keys on WebSocket reconnect
+  const handleReconnect = useCallback(() => {
+    const dash = dashboardRef.current;
+    if (!dash?.widgets?.length || !dashboardId) return;
+    console.log("[FlowPulse] Auto-reconciliation: replaying all widget keys after reconnect");
+    const keys: string[] = [];
+    for (const w of dash.widgets) {
+      const mainKey = w.adapter?.telemetry_key || `zbx:widget:${w.id}`;
+      if (mainKey) keys.push(mainKey);
+      const extraKeys = ((w.config as any)?.extra?.telemetry_keys || (w.config as any)?.telemetry_keys || []) as string[];
+      for (const k of extraKeys) {
+        if (k && !keys.includes(k)) keys.push(k);
+      }
+    }
+    if (keys.length === 0) return;
+    replayKeys(keys).then((entries) => {
+      if (entries.length > 0) seedCache(entries);
+    });
+  }, [dashboardId, replayKeys, seedCache]);
+
   // Realtime subscription
   const { seedCache, clearCache } = useDashboardRealtime({
     dashboardId,
@@ -140,6 +160,7 @@ export function useDashboardData(dashboardId: string | null, pollIntervalOverrid
       inflightRef.current = false;
       pollNow();
     },
+    onReconnect: handleReconnect,
   });
 
   // Replay warm start

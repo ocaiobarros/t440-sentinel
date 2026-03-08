@@ -12,6 +12,27 @@ const LAST_VALUE_TTL_S = 60;       // replay window
 const MAX_BATCH = 200;
 const CONTRACT_VERSION = 1;
 
+/* ─── HMAC-SHA256 Broadcast Signing ───────────────── */
+let _hmacKey: CryptoKey | null = null;
+
+async function getHmacKey(): Promise<CryptoKey | null> {
+  if (_hmacKey) return _hmacKey;
+  const secret = Deno.env.get("FLOWPULSE_BROADCAST_HMAC_KEY") || Deno.env.get("FLOWPULSE_WEBHOOK_TOKEN");
+  if (!secret) return null;
+  const keyData = new TextEncoder().encode(secret);
+  _hmacKey = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  return _hmacKey;
+}
+
+async function signPayload(payload: Record<string, unknown>): Promise<string> {
+  const key = await getHmacKey();
+  if (!key) return "0".repeat(64); // fallback — no key configured
+  // Sign the canonical JSON of key+ts+type for speed (not the full payload)
+  const message = `${payload.key}:${payload.ts}:${payload.type}`;
+  const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
+  return Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /* ─── resilience config ───────────────────────────── */
 const FETCH_TIMEOUT_MS = 3000;     // abort after 3s
 const MAX_RETRIES = 2;             // retry up to 2 times
