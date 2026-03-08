@@ -124,10 +124,13 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
   // Single-series: prefer timeseries points, fall back to scalar accumulation
   const singleChartData = useMemo(() => {
     if (ts?.points && ts.points.length > 0) {
-      // Full timeseries from backend — use it and sync buffer
-      const pts = ts.points.map((p) => ({
-        time: new Date(p.ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-        value: p.value,
+      // LTTB downsample before rendering
+      const raw = ts.points.map((p) => ({ x: p.ts, y: p.value }));
+      const downsampled = lttb(raw, MAX_RENDER_POINTS);
+
+      const pts = downsampled.map((p) => ({
+        time: new Date(p.x).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        value: p.y,
       }));
       bufferRef.current = pts.slice(-MAX_BUFFER_POINTS);
       lastBufferTsRef.current = ts.points[ts.points.length - 1]?.ts || 0;
