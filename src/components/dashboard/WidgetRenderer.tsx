@@ -1,7 +1,9 @@
-import { memo, useEffect, useRef, useMemo, useState } from "react";
+import { memo, useEffect, useRef, useMemo, useState, useCallback } from "react";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { ImageHotspot } from "@/types/builder";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
+import { evaluateThresholds } from "@/lib/threshold-engine";
+import type { ThresholdConfig } from "@/lib/threshold-engine";
 import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { buildWidgetCSS, getGlassClass } from "@/lib/widget-style-utils";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
