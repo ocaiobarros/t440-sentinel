@@ -374,6 +374,8 @@ export default function DashboardBuilder() {
       if (isNew && dashId) navigate(`/builder/${dashId}`, { replace: true });
     },
     onError: (err, _vars, context) => {
+      // Ignore AbortError — component unmounted, no UI to update
+      if (err instanceof DOMException && err.name === "AbortError") return;
       // Rollback optimistic update
       if (context?.previousData) {
         queryClient.setQueryData(["dashboard", dashboardId], context.previousData);
