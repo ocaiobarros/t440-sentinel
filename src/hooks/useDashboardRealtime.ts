@@ -15,6 +15,8 @@ export interface TelemetryCacheEntry {
   originTs?: number;
   /** Epoch ms when the Reactor broadcast the event */
   reactorTs?: number;
+  /** Clock drift between Zabbix server and FlowPulse server in ms */
+  clockDriftMs?: number;
 }
 
 interface UseDashboardRealtimeOptions {
