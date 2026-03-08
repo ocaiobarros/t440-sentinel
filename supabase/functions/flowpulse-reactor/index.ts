@@ -264,6 +264,7 @@ interface TelemetryPayload {
   ts?: number;
   v?: number;
   meta?: Record<string, unknown>;
+  origin_ts?: number; // timestamp from the original source (e.g. zabbix-webhook)
 }
 
 interface Metrics {
