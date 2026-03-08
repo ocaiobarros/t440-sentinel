@@ -221,6 +221,8 @@ Deno.serve(async (req) => {
 
   if (!supabaseUrl || !serviceRoleKey) return json({ error: "Missing Supabase config" }, 500);
 
+  const webhookReceivedAt = Date.now();
+
   try {
     const payload = await req.json() as ZabbixWebhookPayload;
 
@@ -466,6 +468,7 @@ Deno.serve(async (req) => {
             event_id: payload.event_id,
             host_name: payload.host_name,
             ts: Date.now(),
+            origin_ts: webhookReceivedAt,
           },
         });
         await supabase.removeChannel(ch);
@@ -489,11 +492,16 @@ Deno.serve(async (req) => {
 
     console.log(`[zabbix-webhook] Processed event_id=${payload.event_id} host=${payload.host_name} status=${payload.status} alert=${alertResult.action} telegram=${telegramResult.ok}`);
 
+    const webhookProcessingMs = Date.now() - webhookReceivedAt;
+    console.log(`[zabbix-webhook] processing_time=${webhookProcessingMs}ms`);
+
     return json({
       received: true,
       event_id: payload.event_id,
       alert: alertResult,
       telegram: { sent: telegramResult.ok, error: telegramResult.error },
+      origin_ts: webhookReceivedAt,
+      processing_ms: webhookProcessingMs,
     });
   } catch (err) {
     console.error("[zabbix-webhook] error:", err);

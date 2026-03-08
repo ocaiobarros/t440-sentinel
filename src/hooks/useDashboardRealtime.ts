@@ -9,6 +9,12 @@ export interface TelemetryCacheEntry {
   ts: number;
   v: number;
   receivedAt: number;
+  /** End-to-end latency in ms from source to browser (Time-to-Glass) */
+  latencyMs?: number;
+  /** Epoch ms when the original source received the event */
+  originTs?: number;
+  /** Epoch ms when the Reactor broadcast the event */
+  reactorTs?: number;
 }
 
 interface UseDashboardRealtimeOptions {
@@ -62,14 +68,42 @@ export function useDashboardRealtime({
     // Drop older timestamps (backend guarantees monotonic per key)
     if (existing && existing.ts >= payload.ts) return;
 
+    const now = Date.now();
+    const originTs = payload.origin_ts;
+    const reactorTs = payload.reactor_ts;
+    const latencyMs = originTs ? now - originTs : undefined;
+
+    // Production perf alert: log if Time-to-Glass exceeds 1500ms
+    if (latencyMs !== undefined && latencyMs > 1500) {
+      console.warn(`[FlowPulse] HIGH LATENCY: ${payload.key} Time-to-Glass=${latencyMs}ms (origin→reactor=${reactorTs && originTs ? reactorTs - originTs : '?'}ms, reactor→browser=${reactorTs ? now - reactorTs : '?'}ms)`);
+    }
+
     cache.set(payload.key, {
       key: payload.key,
       type: payload.type,
       data: payload.data,
       ts: payload.ts,
       v: payload.v ?? 1,
-      receivedAt: Date.now(),
+      receivedAt: now,
+      latencyMs,
+      originTs,
+      reactorTs,
     });
+
+    // Emit latency event for admin monitor widget
+    if (latencyMs !== undefined) {
+      try {
+        window.dispatchEvent(new CustomEvent("flowpulse:latency", {
+          detail: {
+            key: payload.key,
+            timeToGlassMs: latencyMs,
+            originToReactorMs: originTs && reactorTs ? reactorTs - originTs : null,
+            reactorToBrowserMs: reactorTs ? now - reactorTs : null,
+            receivedAt: now,
+          },
+        }));
+      } catch { /* ignore */ }
+    }
 
     // Instant flush for priority keys (bypass buffer)
     if (priorityKeysRef.current.some((pk) => payload.key === pk || payload.key.includes(pk))) {

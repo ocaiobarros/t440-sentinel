@@ -417,6 +417,7 @@ Deno.serve(async (req) => {
     );
     const zabbixAuth = await zabbixLogin(conn.url, conn.username, password);
 
+    const pollerOriginTs = Date.now();
     const allTelemetry: TelemetryPayload[] = [];
     const errors: string[] = [];
 
@@ -428,6 +429,8 @@ Deno.serve(async (req) => {
           for (const p of payloads) {
             p.tenant_id = tenantId;
             p.dashboard_id = dashboard_id;
+            // Propagate origin timestamp for Time-to-Glass tracing
+            (p as any).origin_ts = pollerOriginTs;
           }
           allTelemetry.push(...payloads);
         } catch (err) {

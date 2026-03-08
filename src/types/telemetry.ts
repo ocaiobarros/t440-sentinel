@@ -71,6 +71,10 @@ export interface TelemetryBroadcast {
   data: TelemetryData;
   ts: number;
   v: number;
+  /** Epoch ms when the original source (e.g. Zabbix webhook) received the event */
+  origin_ts?: number;
+  /** Epoch ms when the Reactor processed and broadcast the event */
+  reactor_ts?: number;
 }
 
 /** Replay response shape */

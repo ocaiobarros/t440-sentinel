@@ -264,6 +264,7 @@ interface TelemetryPayload {
   ts?: number;
   v?: number;
   meta?: Record<string, unknown>;
+  origin_ts?: number; // timestamp from the original source (e.g. zabbix-webhook)
 }
 
 interface Metrics {
@@ -439,6 +440,8 @@ Deno.serve(async (req) => {
             data: evt.data,
             ts: evt.ts,
             v: evt.v,
+            origin_ts: evt.origin_ts ?? evt.meta?.origin_ts,
+            reactor_ts: Date.now(),
           },
         });
         metrics.broadcast_total++;
@@ -460,6 +463,7 @@ Deno.serve(async (req) => {
       ...metricsToResponse(metrics),
       avg_broadcast_latency_ms: avgLatency,
       processing_time_ms: Date.now() - broadcastStart,
+      store_backend: backend,
       ...(errors.length > 0 ? { validation_errors: errors } : {}),
     });
   } catch (err) {
