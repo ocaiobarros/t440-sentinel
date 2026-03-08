@@ -98,12 +98,17 @@ export default function BackendHealthPanel() {
         const latency = Date.now() - start;
 
         // If we got ANY response (even an error like 401/403/400), the function is deployed & online.
-        // Only FunctionsRelayError or network failures mean the function is down.
-        const isNetworkError = error?.message?.includes("Failed to fetch") || 
-                               error?.message?.includes("FunctionsRelayError") ||
-                               error?.message?.includes("non-2xx");
-        // If there's no error, or the error is a business logic error (not network), it's online
-        const isOnline = !error || !isNetworkError;
+        // FunctionsHttpError = function responded with non-2xx → still ONLINE (deployed & reachable)
+        // FunctionsRelayError / FunctionsFetchError / "Failed to fetch" = actually DOWN
+        const isTrulyDown = error && (
+          error?.message?.includes("Failed to fetch") || 
+          error?.message?.includes("FunctionsRelayError") ||
+          error?.message?.includes("FunctionsFetchError") ||
+          error?.name === "FunctionsRelayError" ||
+          error?.name === "FunctionsFetchError"
+        );
+        // FunctionsHttpError (non-2xx) means the function IS running, just returned an error code
+        const isOnline = !error || !isTrulyDown;
 
         setFunctions((prev) =>
           prev.map((f, i) =>
