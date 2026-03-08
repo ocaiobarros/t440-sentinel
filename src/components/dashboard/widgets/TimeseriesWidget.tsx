@@ -100,10 +100,15 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
       const tsData = entry.data as TelemetryTimeseriesData | null;
       if (!tsData?.points) return;
       const displayName = seriesDisplayMap.get(s.itemid)?.displayName || s.name;
-      for (const p of tsData.points) {
-        const rounded = roundToMinute(p.ts);
+
+      // LTTB downsample per series before merging
+      const raw = tsData.points.map((p) => ({ x: p.ts, y: p.value }));
+      const downsampled = lttb(raw, MAX_RENDER_POINTS);
+
+      for (const p of downsampled) {
+        const rounded = roundToMinute(p.x);
         const existing = allPoints.get(rounded) || {};
-        existing[displayName] = p.value;
+        existing[displayName] = p.y;
         allPoints.set(rounded, existing);
       }
     });
