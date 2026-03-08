@@ -160,11 +160,17 @@ export default function VMCard({ vm, index }: Props) {
         </div>
 
         {/* Bottom row: Network + Disk + Uptime */}
-        <div className="flex items-center justify-between pt-1 border-t border-border/20">
+        <div className="flex items-center justify-between pt-1 border-t border-border/20 flex-wrap gap-y-1">
           <div className="flex items-center gap-1.5" title="Network In / Out">
             <Network className="w-2.5 h-2.5 text-muted-foreground/40" />
             <span className="text-[8px] font-mono text-muted-foreground">
               {vm.netIn || "—"} <span className="text-muted-foreground/30">↕</span> {vm.netOut || "—"}
+            </span>
+          </div>
+          <div className="flex items-center gap-1" title="Disk I/O (Read / Write)">
+            <HardDrive className="w-2.5 h-2.5 text-muted-foreground/40" />
+            <span className="text-[8px] font-mono text-muted-foreground">
+              R:{vm.diskRead || "0"} <span className="text-muted-foreground/30">/</span> W:{vm.diskWrite || "0"}
             </span>
           </div>
           <div className="flex items-center gap-1" title="Uptime">
