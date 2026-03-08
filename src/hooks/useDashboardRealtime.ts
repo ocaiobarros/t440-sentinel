@@ -201,10 +201,17 @@ export function useDashboardRealtime({
     resetWatchdog();
 
     // ── HMAC Integrity Gate: reject unsigned or malformed broadcasts ──
+    if (payload._sig === undefined || payload._sig === null) {
+      rejectedUnsignedRef.current++;
+      if (rejectedUnsignedRef.current <= 5) {
+        console.warn(`[FlowPulse] REJECTED broadcast for key=${payload.key}: _sig MISSING from payload (Reactor may be running old version without HMAC signing)`);
+      }
+      return;
+    }
     if (!isValidSignature(payload._sig)) {
       rejectedUnsignedRef.current++;
       if (rejectedUnsignedRef.current <= 5) {
-        console.warn(`[FlowPulse] REJECTED unsigned broadcast for key=${payload.key} (total rejected: ${rejectedUnsignedRef.current})`);
+        console.warn(`[FlowPulse] REJECTED broadcast for key=${payload.key}: _sig MALFORMED (got "${String(payload._sig).substring(0, 16)}…", expected 64-char hex)`);
       }
       return;
     }
