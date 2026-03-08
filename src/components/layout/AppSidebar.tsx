@@ -87,6 +87,34 @@ interface NavGroupProps {
   collapsed: boolean;
 }
 
+/** Route prefetch map — triggers dynamic import on hover for instant navigation */
+const PREFETCH_MAP: Record<string, () => Promise<unknown>> = {
+  "/app/monitoring/dashboards": () => import("@/pages/monitoring/DashboardsList"),
+  "/app/monitoring/server": () => import("@/pages/monitoring/ServerMonitorList"),
+  "/app/monitoring/virtualization": () => import("@/pages/monitoring/VirtualizationList"),
+  "/app/monitoring/virtual-machines": () => import("@/pages/monitoring/VirtualMachinesList"),
+  "/app/monitoring/bgp": () => import("@/pages/monitoring/BgpFlowList"),
+  "/app/monitoring/fleet": () => import("@/pages/monitoring/FleetIntelligenceList"),
+  "/app/monitoring/printers": () => import("@/pages/monitoring/PrinterList"),
+  "/app/operations/home": () => import("@/pages/OperationsHome"),
+  "/app/operations/flowmap": () => import("@/pages/FlowMapPage"),
+  "/app/operations/incidents": () => import("@/pages/IncidentsPage"),
+  "/app/engineering/inventory": () => import("@/pages/InventoryPage"),
+  "/app/engineering/viability": () => import("@/pages/ViabilityPage"),
+  "/app/engineering/capacity": () => import("@/pages/CapacityPage"),
+};
+
+const prefetchedRoutes = new Set<string>();
+
+function prefetchRoute(url: string) {
+  if (prefetchedRoutes.has(url)) return;
+  const factory = PREFETCH_MAP[url];
+  if (factory) {
+    prefetchedRoutes.add(url);
+    factory().catch(() => { prefetchedRoutes.delete(url); });
+  }
+}
+
 function NavGroup({ label, items, collapsed }: NavGroupProps) {
   return (
     <SidebarGroup>
@@ -102,6 +130,7 @@ function NavGroup({ label, items, collapsed }: NavGroupProps) {
                   <SidebarMenuButton asChild>
                     <NavLink
                       to={item.url}
+                      onMouseEnter={() => prefetchRoute(item.url)}
                       className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
                       activeClassName="bg-sidebar-accent text-primary font-medium"
                     >

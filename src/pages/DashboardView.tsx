@@ -241,12 +241,15 @@ export default function DashboardView() {
               </span>
             )}
 
-            {/* Latency indicator */}
+            {/* Poll RTT indicator */}
             {lastPollLatencyMs !== null && (
               <span className={`text-[9px] font-mono ${lastPollLatencyMs > 3000 ? "text-yellow-400" : "text-muted-foreground/60"}`}>
-                RTT {lastPollLatencyMs}ms
+                Poll RTT {lastPollLatencyMs}ms
               </span>
             )}
+
+            {/* Realtime Time-to-Glass indicator */}
+            <RealtimeLatencyBadge telemetryCache={telemetryCache} />
 
             {/* Realtime status */}
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
