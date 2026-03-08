@@ -105,12 +105,27 @@ export default function DiagnosticPanel({ tenants, selectedTenantId }: Diagnosti
       return;
     }
 
+    let availableTenants: { id: string; name: string }[] = [];
+    let targetTenant: string | null = null;
+    let tenantResolutionNote = "";
+
     // 2. Tenants
     const t1 = Date.now();
     try {
       const { data, error, count } = await supabase
         .from("tenants").select("id, name", { count: "exact" });
       if (error) throw error;
+
+      availableTenants = (data ?? []) as { id: string; name: string }[];
+      const selectedIsValid = Boolean(selectedTenantId && availableTenants.some((t) => t.id === selectedTenantId));
+      targetTenant = selectedIsValid
+        ? selectedTenantId
+        : (availableTenants[0]?.id ?? null);
+
+      if (selectedTenantId && !selectedIsValid) {
+        tenantResolutionNote = "selectedTenantId inválido no contexto atual; usando primeiro tenant disponível.";
+      }
+
       updateTest(1, {
         status: "pass",
         message: `${count ?? data?.length ?? 0} organização(ões) encontrada(s)`,
