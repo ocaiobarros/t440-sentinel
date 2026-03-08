@@ -3,6 +3,15 @@ import { generateUUID } from "@/lib/uuid";
 import { Responsive, type Layout } from "react-grid-layout";
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+import {
+  GRID_BREAKPOINTS,
+  GRID_COLS as GRID_COLS_MAP,
+  GRID_ROW_HEIGHTS,
+  GRID_MARGIN,
+  GRID_CONTAINER_PADDING,
+  activeBreakpoint,
+  scaleLayout,
+} from "@/lib/grid-config";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
