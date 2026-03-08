@@ -452,17 +452,22 @@ Deno.serve(async (req) => {
       });
 
       for (const [, evt] of keyMap) {
+        const broadcastPayload = {
+          key: evt.key,
+          type: evt.type,
+          data: evt.data,
+          ts: evt.ts,
+          v: evt.v,
+          origin_ts: evt.origin_ts ?? evt.meta?.origin_ts,
+          reactor_ts: Date.now(),
+        };
+        // Sign the payload with HMAC-SHA256 for broadcast integrity
+        const _sig = await signPayload(broadcastPayload);
         await channel.send({
           type: "broadcast",
           event: "DATA_UPDATE",
-          payload: {
-            key: evt.key,
-            type: evt.type,
-            data: evt.data,
-            ts: evt.ts,
-            v: evt.v,
-            origin_ts: evt.origin_ts ?? evt.meta?.origin_ts,
-            reactor_ts: Date.now(),
+          payload: { ...broadcastPayload, _sig },
+        });
           },
         });
         metrics.broadcast_total++;
