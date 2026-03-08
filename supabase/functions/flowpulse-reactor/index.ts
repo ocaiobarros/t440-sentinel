@@ -440,6 +440,8 @@ Deno.serve(async (req) => {
             data: evt.data,
             ts: evt.ts,
             v: evt.v,
+            origin_ts: evt.origin_ts ?? evt.meta?.origin_ts,
+            reactor_ts: Date.now(),
           },
         });
         metrics.broadcast_total++;
