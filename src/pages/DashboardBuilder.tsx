@@ -344,12 +344,25 @@ export default function DashboardBuilder() {
 
       return dashId;
     },
+    onMutate: async () => {
+      // Optimistic: immediately show success feedback
+      await queryClient.cancelQueries({ queryKey: ["dashboard", dashboardId] });
+      const previousData = queryClient.getQueryData(["dashboard", dashboardId]);
+      // Optimistically update cache with current config
+      queryClient.setQueryData(["dashboard", dashboardId], config);
+      toast({ title: "Salvando…", description: "Persistindo alterações em background." });
+      return { previousData };
+    },
     onSuccess: (dashId) => {
       toast({ title: "Dashboard salvo!", description: "Todas as alterações foram persistidas." });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
       if (isNew && dashId) navigate(`/builder/${dashId}`, { replace: true });
     },
-    onError: (err) => {
+    onError: (err, _vars, context) => {
+      // Rollback optimistic update
+      if (context?.previousData) {
+        queryClient.setQueryData(["dashboard", dashboardId], context.previousData);
+      }
       const e = err as { message?: string; code?: string; details?: string; hint?: string };
       const details = [e.message, e.code ? `code: ${e.code}` : null, e.details, e.hint].filter(Boolean).join(" | ");
       toast({

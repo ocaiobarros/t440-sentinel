@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useMemo, useState, useCallback } from "react";
+import { memo, lazy, Suspense, useEffect, useRef, useMemo, useState, useCallback } from "react";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { ImageHotspot } from "@/types/builder";
 import { extractRawValue, getMappedStatus } from "@/lib/telemetry-utils";
@@ -8,19 +8,24 @@ import { useWidgetVisibility } from "@/hooks/useWidgetVisibility";
 import { buildWidgetCSS, getGlassClass } from "@/lib/widget-style-utils";
 import { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider } from "@/components/ui/tooltip";
 import WidgetSkeleton from "./widgets/WidgetSkeleton";
+import WidgetErrorBoundary from "./widgets/WidgetErrorBoundary";
+
+/* ── Lightweight widgets (static imports) ── */
 import StatWidget from "./widgets/StatWidget";
-import GaugeWidget from "./widgets/GaugeWidget";
-import TimeseriesWidget from "./widgets/TimeseriesWidget";
-import TableWidget from "./widgets/TableWidget";
-import TextWidget from "./widgets/TextWidget";
-import ImageMapWidget from "./widgets/ImageMapWidget";
-import HardwareMapWidget from "./widgets/HardwareMapWidget";
 import StatusWidget from "./widgets/StatusWidget";
 import ProgressWidget from "./widgets/ProgressWidget";
 import IconValueWidget from "./widgets/IconValueWidget";
 import TrafficLightWidget from "./widgets/TrafficLightWidget";
 import LabelWidget from "./widgets/LabelWidget";
 import BatteryBarWidget from "./widgets/BatteryBarWidget";
+import TextWidget from "./widgets/TextWidget";
+
+/* ── Heavy widgets (lazy-loaded, split into separate chunks) ── */
+const TimeseriesWidget = lazy(() => import("./widgets/TimeseriesWidget"));
+const GaugeWidget = lazy(() => import("./widgets/GaugeWidget"));
+const TableWidget = lazy(() => import("./widgets/TableWidget"));
+const ImageMapWidget = lazy(() => import("./widgets/ImageMapWidget"));
+const HardwareMapWidget = lazy(() => import("./widgets/HardwareMapWidget"));
 
 interface Props {
   widgetType: string;
@@ -142,6 +147,9 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
     );
   }
 
+  /** Whether this widget type uses a lazy-loaded component */
+  const isLazy = ["timeseries", "gauge", "table", "image-map", "hardware-map"].includes(widgetType);
+
   const inner = (() => {
     switch (widgetType) {
       case "stat":
@@ -193,6 +201,19 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
     }
   })();
 
+  // Wrap in ErrorBoundary + Suspense (for lazy widgets)
+  const guarded = (
+    <WidgetErrorBoundary widgetId={widgetId} widgetType={widgetType}>
+      {isLazy ? (
+        <Suspense fallback={<WidgetSkeleton type={widgetType} />}>
+          {inner}
+        </Suspense>
+      ) : (
+        inner
+      )}
+    </WidgetErrorBoundary>
+  );
+
   // Apply the same style envelope used in the Builder's WidgetPreviewCard
   const hasCustomStyle = Object.keys(styleConfig).length > 0;
 
@@ -220,11 +241,11 @@ function WidgetRendererInner({ widgetType, widgetId, telemetryKey, title, cache,
           className={`h-full w-full rounded-lg border border-border/50 overflow-hidden ${glassClass}`}
           style={{ ...customCSS, ...thresholdStyle, borderStyle: "solid" }}
         >
-          {inner}
+          {guarded}
         </div>
       ) : (
         <div className="h-full" style={thresholdStyle}>
-          {inner}
+          {guarded}
         </div>
       )}
       {/* Action link indicator */}
