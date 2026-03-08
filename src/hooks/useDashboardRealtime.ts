@@ -17,6 +17,8 @@ export interface TelemetryCacheEntry {
   reactorTs?: number;
   /** Clock drift between Zabbix server and FlowPulse server in ms */
   clockDriftMs?: number;
+  /** True if this entry is still in the debounce stabilization window */
+  _debouncing?: boolean;
 }
 
 interface UseDashboardRealtimeOptions {
@@ -50,13 +52,62 @@ function isValidSignature(sig: unknown): boolean {
   return typeof sig === "string" && HMAC_SIG_REGEX.test(sig);
 }
 
+/* ─── Visual Debounce Engine ────────────────────────────────────────
+ * Status widgets (stat type with status-like values) get a 1.5s
+ * stabilization window: the visual update only fires once the value
+ * hasn't changed for DEBOUNCE_MS. This prevents "flicker" from
+ * flapping signals (e.g. link toggling UP/DOWN rapidly).
+ *
+ * Critical-safety keys (fire_alarm, security_breach, etc.) and
+ * priority keys ALWAYS bypass the debounce for instant rendering.
+ *
+ * Non-status widget types (timeseries, gauge, table, text) are
+ * never debounced — they show the latest value immediately.
+ * ─────────────────────────────────────────────────────────────────── */
+const DEBOUNCE_MS = 1500;
+
+/** Widget types that should be debounced for visual stability */
+const DEBOUNCE_TYPES = new Set<string>(["stat"]);
+
+/** Keys that ALWAYS bypass debounce (life-safety / security) */
+const INSTANT_KEYS = [
+  "fire_alarm", "security_breach", "intrusion",
+  "smoke_detector", "gas_leak", "emergency",
+];
+
+function isStatusLikeValue(data: unknown): boolean {
+  if (!data || typeof data !== "object") return false;
+  const d = data as Record<string, unknown>;
+  const val = d.value;
+  if (typeof val === "string") {
+    const v = val.toUpperCase();
+    return ["UP", "DOWN", "OK", "PROBLEM", "ON", "OFF", "0", "1", "DEGRADED", "CRITICAL", "UNKNOWN"].includes(v);
+  }
+  if (typeof val === "number") return val === 0 || val === 1;
+  return false;
+}
+
+function isInstantKey(key: string): boolean {
+  return INSTANT_KEYS.some((ik) => key.includes(ik));
+}
+
+/* ─── Kiosk Watchdog ─────────────────────────────────────────────────
+ * If no signal (broadcast, FORCE_POLL, or status change) is received
+ * for WATCHDOG_TIMEOUT_MS, force a full page reload. This prevents
+ * NOC kiosk screens from staying frozen due to memory leaks or
+ * expired sessions.
+ * ─────────────────────────────────────────────────────────────────── */
+const WATCHDOG_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Hook: 1 Realtime channel per dashboard.
  * - Receives DATA_UPDATE broadcasts from the Reactor
  * - Validates HMAC signature presence (integrity gate)
  * - Maintains a per-key cache with ts-based dedup (drop older — monotonic guaranteed by backend)
+ * - Visual debounce for status widgets (1.5s stabilization)
  * - Throttled flush to avoid render storms
  * - Auto-reconciliation on WebSocket reconnect
+ * - Kiosk Watchdog: auto-reload after 5min of silence
  * - Supports warm start via seedCache() from replay endpoint
  */
 export function useDashboardRealtime({
@@ -86,8 +137,69 @@ export function useDashboardRealtime({
   /** Count of rejected unsigned broadcasts (for telemetry) */
   const rejectedUnsignedRef = useRef(0);
 
+  /* ─── Debounce timers per key ───────────────────── */
+  const debounceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  /** Pending debounce entries — stored here until stabilization completes */
+  const debouncePendingRef = useRef<Map<string, TelemetryCacheEntry>>(new Map());
+
+  /* ─── Kiosk Watchdog timer ─────────────────────── */
+  const watchdogRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const resetWatchdog = useCallback(() => {
+    if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    watchdogRef.current = setTimeout(() => {
+      console.error("[FlowPulse] WATCHDOG: No signal for 5 minutes — forcing page reload");
+      try {
+        window.dispatchEvent(new CustomEvent("flowpulse:watchdog-reload", {
+          detail: { reason: "no_signal_5min", at: Date.now() },
+        }));
+      } catch { /* ignore */ }
+      // Small delay to let the event propagate
+      setTimeout(() => window.location.reload(), 500);
+    }, WATCHDOG_TIMEOUT_MS);
+  }, []);
+
+  // Start watchdog when enabled
+  useEffect(() => {
+    if (!enabled || !dashboardId) return;
+    resetWatchdog();
+    return () => {
+      if (watchdogRef.current) clearTimeout(watchdogRef.current);
+    };
+  }, [enabled, dashboardId, resetWatchdog]);
+
+  // Cleanup debounce timers on unmount
+  useEffect(() => {
+    return () => {
+      for (const timer of debounceTimersRef.current.values()) {
+        clearTimeout(timer);
+      }
+      debounceTimersRef.current.clear();
+      debouncePendingRef.current.clear();
+    };
+  }, []);
+
+  /** Commit a debounced entry to the real cache and trigger flush */
+  const commitDebounced = useCallback((key: string) => {
+    const entry = debouncePendingRef.current.get(key);
+    if (!entry) return;
+    debouncePendingRef.current.delete(key);
+    debounceTimersRef.current.delete(key);
+
+    const cache = cacheRef.current;
+    const existing = cache.get(key);
+    // Final monotonicity check — another newer value may have arrived
+    if (existing && existing.ts >= entry.ts) return;
+
+    cache.set(key, { ...entry, _debouncing: undefined });
+    dirtyRef.current = true;
+  }, []);
+
   // Handle incoming broadcast
   const handleBroadcast = useCallback((payload: TelemetryBroadcast & { _sig?: string; clock_drift_ms?: number }) => {
+    // ── Reset Kiosk Watchdog on any signal ──
+    resetWatchdog();
+
     // ── HMAC Integrity Gate: reject unsigned or malformed broadcasts ──
     if (!isValidSignature(payload._sig)) {
       rejectedUnsignedRef.current++;
@@ -109,12 +221,10 @@ export function useDashboardRealtime({
     const clockDriftMs = payload.clock_drift_ms ?? null;
 
     // ── Drift-corrected Time-to-Glass ──
-    // If we know the clock drift, subtract it from latency so the measurement
-    // reflects real processing time instead of clock difference between servers.
     let latencyMs = originTs ? now - originTs : undefined;
     if (latencyMs !== undefined && clockDriftMs !== null) {
       latencyMs = latencyMs - clockDriftMs;
-      if (latencyMs < 0) latencyMs = 0; // clamp negative after correction
+      if (latencyMs < 0) latencyMs = 0;
     }
 
     // Production perf alert: log if Time-to-Glass exceeds 1500ms
@@ -126,16 +236,12 @@ export function useDashboardRealtime({
     if (clockDriftMs !== null && Math.abs(clockDriftMs) > 5000) {
       try {
         window.dispatchEvent(new CustomEvent("flowpulse:clock-drift", {
-          detail: {
-            driftMs: clockDriftMs,
-            detectedAt: now,
-            key: payload.key,
-          },
+          detail: { driftMs: clockDriftMs, detectedAt: now, key: payload.key },
         }));
       } catch { /* ignore */ }
     }
 
-    cache.set(payload.key, {
+    const newEntry: TelemetryCacheEntry = {
       key: payload.key,
       type: payload.type,
       data: payload.data,
@@ -146,7 +252,7 @@ export function useDashboardRealtime({
       originTs,
       reactorTs,
       clockDriftMs: clockDriftMs ?? undefined,
-    });
+    };
 
     // Emit latency event for admin monitor widget
     if (latencyMs !== undefined) {
@@ -164,7 +270,10 @@ export function useDashboardRealtime({
       } catch { /* ignore */ }
     }
 
-    // Instant flush for priority keys OR critical severity (bypass buffer)
+    // ── Determine bypass vs debounce ──
+    const isPriorityKey = priorityKeysRef.current.some((pk) => payload.key === pk || payload.key.includes(pk));
+    const isSafetyInstant = isInstantKey(payload.key);
+
     const isCriticalSeverity = (() => {
       const d = payload.data as unknown as Record<string, unknown> | undefined;
       if (!d) return false;
@@ -174,23 +283,58 @@ export function useDashboardRealtime({
         const sevLower = sev.toLowerCase();
         return sevLower === "high" || sevLower === "disaster" || parseInt(sev) >= 4;
       }
-      // Check if type indicates a status/trigger update with critical data
       const status = d?.status ?? d?.value;
       if (payload.type === "stat" && (status === "PROBLEM" || status === "1")) return true;
       return false;
     })();
 
-    const isPriorityKey = priorityKeysRef.current.some((pk) => payload.key === pk || payload.key.includes(pk));
+    const bypassDebounce = isPriorityKey || isSafetyInstant || isCriticalSeverity;
 
-    if (isPriorityKey || isCriticalSeverity) {
+    // ── Visual Debounce for status-like stat widgets ──
+    const shouldDebounce = !bypassDebounce
+      && DEBOUNCE_TYPES.has(payload.type)
+      && isStatusLikeValue(payload.data);
+
+    if (shouldDebounce) {
+      // Cancel any existing debounce timer for this key
+      const existingTimer = debounceTimersRef.current.get(payload.key);
+      if (existingTimer) clearTimeout(existingTimer);
+
+      // Store pending entry
+      debouncePendingRef.current.set(payload.key, newEntry);
+
+      // Start stabilization timer
+      const timer = setTimeout(() => {
+        commitDebounced(payload.key);
+      }, DEBOUNCE_MS);
+      debounceTimersRef.current.set(payload.key, timer);
+
+      return; // Don't write to cache yet
+    }
+
+    // ── Immediate path (no debounce) ──
+    // If there's a pending debounce for this key, cancel it — new value supersedes
+    const pendingTimer = debounceTimersRef.current.get(payload.key);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      debounceTimersRef.current.delete(payload.key);
+      debouncePendingRef.current.delete(payload.key);
+    }
+
+    cache.set(payload.key, newEntry);
+
+    if (bypassDebounce) {
       if (isCriticalSeverity) {
         console.log(`[FlowPulse] CRITICAL ALERT bypass: ${payload.key} (instant render)`);
+      }
+      if (isSafetyInstant) {
+        console.log(`[FlowPulse] SAFETY KEY bypass: ${payload.key} (instant render)`);
       }
       onUpdateRef.current(new Map(cache));
     } else {
       dirtyRef.current = true;
     }
-  }, []);
+  }, [resetWatchdog, commitDebounced]);
 
   // Throttled flush loop
   useEffect(() => {
@@ -221,17 +365,16 @@ export function useDashboardRealtime({
         }
       })
       .on("broadcast", { event: "FORCE_POLL" }, () => {
+        resetWatchdog(); // Signal received — reset watchdog
         console.log("[FlowPulse] FORCE_POLL received — triggering immediate re-poll");
         onForcePollRef.current?.();
       })
       .subscribe((status) => {
+        resetWatchdog(); // Any status change = signal alive
         onStatusChangeRef.current?.(status);
 
         if (status === "SUBSCRIBED") {
           if (hasSubscribedOnceRef.current) {
-            // ── AUTO-RECONCILIATION on reconnect ──
-            // WebSocket reconnected after a drop — data may have been lost.
-            // Trigger replay + force poll to reconcile state.
             console.log("[FlowPulse] WebSocket RECONNECTED — triggering auto-reconciliation");
             onReconnectRef.current?.();
             onForcePollRef.current?.();
@@ -243,7 +386,7 @@ export function useDashboardRealtime({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [enabled, dashboardId, handleBroadcast]);
+  }, [enabled, dashboardId, handleBroadcast, resetWatchdog]);
 
   /** Seed cache from replay or initial snapshot. Only updates if ts is newer. */
   const seedCache = useCallback(
@@ -269,6 +412,12 @@ export function useDashboardRealtime({
   /** Clear the cache (e.g. on dashboard switch) */
   const clearCache = useCallback(() => {
     cacheRef.current.clear();
+    // Also clear all debounce timers
+    for (const timer of debounceTimersRef.current.values()) {
+      clearTimeout(timer);
+    }
+    debounceTimersRef.current.clear();
+    debouncePendingRef.current.clear();
     dirtyRef.current = true;
   }, []);
 
