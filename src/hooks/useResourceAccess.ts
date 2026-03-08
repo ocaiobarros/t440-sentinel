@@ -104,7 +104,7 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
         console.error("[ResourceAccess] Grant failed:", error);
         throw new Error(`Falha ao conceder acesso: ${error.message}`);
       }
-      console.log("[ResourceAccess] Grant success:", data);
+      
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });
