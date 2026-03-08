@@ -403,28 +403,21 @@ export default function AdminUsersPage() {
     );
   };
 
-  const renderTable = (list: typeof allUserProfiles, scopeTenantId: string | null) => (
-    <div className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="border-b border-border">
-            <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Usuário</th>
-            <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">E-mail</th>
-            {!scopeTenantId && <th className="text-left px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Belongs to</th>}
-            <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Role</th>
-            <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Desde</th>
-            <th className="text-center px-4 py-3 text-xs font-semibold text-muted-foreground uppercase tracking-wider">Ações</th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((p) => renderUserRow(p, scopeTenantId))}
-          {list.length === 0 && (
-            <tr><td colSpan={scopeTenantId ? 5 : 6} className="px-4 py-8 text-center text-muted-foreground">Nenhum usuário encontrado.</td></tr>
-          )}
-        </tbody>
-      </table>
-    </div>
-  );
+  const renderTable = (list: typeof allUserProfiles, scopeTenantId: string | null) => {
+    const VIRTUALIZE_THRESHOLD = 30;
+    const ROW_EST = 52;
+    const useVirtual = list.length > VIRTUALIZE_THRESHOLD;
+
+    return (
+      <VirtualizedAdminTable
+        list={list}
+        scopeTenantId={scopeTenantId}
+        renderUserRow={renderUserRow}
+        useVirtual={useVirtual}
+        rowEstimate={ROW_EST}
+      />
+    );
+  };
 
   const renderFilters = (showOrgFilter: boolean) => (
     <div className="flex items-center gap-2 flex-wrap">
