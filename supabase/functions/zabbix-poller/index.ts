@@ -628,6 +628,7 @@ Deno.serve(async (req) => {
       polled_widgets: widgets.length,
       telemetry_sent: allTelemetry.length,
       reactor: reactorResult,
+      clock_drift_ms: clockDriftMs,
       ...(errors.length > 0 ? { errors } : {}),
     });
   } catch (err) {
