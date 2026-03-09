@@ -335,7 +335,6 @@ export default function DashboardBuilder() {
           .single();
         if (error) throw error;
         dashId = data.id;
-        setConfig((prev) => ({ ...prev, id: dashId }));
       }
 
       // Sync widgets: delete all then re-insert
