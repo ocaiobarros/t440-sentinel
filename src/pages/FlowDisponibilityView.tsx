@@ -189,7 +189,7 @@ export default function FlowDisponibilityView() {
                   <span className="text-xs hidden sm:inline">Reconfigurar</span>
                 </Button>
 
-                <Button onClick={toggleFullscreen} variant="outline" size="sm" className="gap-1.5 h-7">
+                <Button onClick={toggleKiosk} variant="outline" size="sm" className="gap-1.5 h-7">
                   <Maximize2 className="w-3 h-3" />
                   <span className="text-xs hidden sm:inline">Kiosk</span>
                 </Button>
