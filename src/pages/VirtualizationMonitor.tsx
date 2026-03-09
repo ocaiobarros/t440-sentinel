@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2, Settings2, Server, Cpu, MemoryStick, HardDrive, Network,
-  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock, ArrowLeft, Save,
+  Loader2, Server, Cpu, MemoryStick, HardDrive, Network,
+  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock,
 } from "lucide-react";
+import MonitoringHeader, { useKioskMode } from "@/components/layout/MonitoringHeader";
 import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import { useIdracLive } from "@/hooks/useIdracLive";
 import { extractVirtData } from "@/hooks/useVirtExtractors";
