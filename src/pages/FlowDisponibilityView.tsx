@@ -199,9 +199,9 @@ export default function FlowDisponibilityView() {
         )}
       </AnimatePresence>
 
-      {/* Main content */}
-      <div className="container mx-auto px-4 py-4 relative z-10">
-        <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-4">
+      {/* Main content — full width */}
+      <div className="w-full px-3 py-3 relative z-10">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr] gap-3">
           {/* Stats sidebar */}
           <div>
             <FlowDispStatsSidebar

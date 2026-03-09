@@ -248,25 +248,36 @@ export default function DashboardBuilder() {
     });
   }, []);
 
+  // Convert grid values from current breakpoint cols back to base cols
+  const toBase = useCallback((val: number, field: "x" | "w") => {
+    const bp = activeBreakpoint(canvasWidth);
+    const bpCols = GRID_COLS_MAP[bp];
+    const base = config.settings.cols || 24;
+    if (bpCols === base) return val;
+    const ratio = base / bpCols;
+    if (field === "w") return Math.max(1, Math.round(val * ratio));
+    return Math.round(val * ratio);
+  }, [canvasWidth, config.settings.cols]);
+
   const handleDragStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
     setConfig((prev) => ({
       ...prev,
       widgets: prev.widgets.map((w) => {
         if (w.id !== newItem.i) return w;
-        return { ...w, x: newItem.x, y: newItem.y };
+        return { ...w, x: toBase(newItem.x, "x"), y: newItem.y };
       }),
     }));
-  }, []);
+  }, [toBase]);
 
   const handleResizeStop = useCallback((_layout: Layout[], _oldItem: Layout, newItem: Layout) => {
     setConfig((prev) => ({
       ...prev,
       widgets: prev.widgets.map((w) => {
         if (w.id !== newItem.i) return w;
-        return { ...w, x: newItem.x, y: newItem.y, w: newItem.w, h: newItem.h };
+        return { ...w, x: toBase(newItem.x, "x"), y: newItem.y, w: toBase(newItem.w, "w"), h: newItem.h };
       }),
     }));
-  }, []);
+  }, [toBase]);
 
   // AbortController for in-flight save cancellation on unmount
   const saveAbortRef = useRef<AbortController | null>(null);
