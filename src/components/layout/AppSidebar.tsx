@@ -47,6 +47,7 @@ function useSidebarItems() {
     { title: t("sidebar.bgpFlow"), url: "/app/monitoring/bgp", icon: Globe },
     { title: t("sidebar.fleetIntelligence"), url: "/app/monitoring/fleet", icon: Fuel },
     { title: t("sidebar.printers"), url: "/app/monitoring/printers", icon: Printer },
+    { title: "FlowDisponibility", url: "/app/monitoring/flowdisp", icon: Zap },
   ];
 
   const engineeringItems = [
@@ -96,6 +97,7 @@ const PREFETCH_MAP: Record<string, () => Promise<unknown>> = {
   "/app/monitoring/bgp": () => import("@/pages/monitoring/BgpFlowList"),
   "/app/monitoring/fleet": () => import("@/pages/monitoring/FleetIntelligenceList"),
   "/app/monitoring/printers": () => import("@/pages/monitoring/PrinterList"),
+  "/app/monitoring/flowdisp": () => import("@/pages/monitoring/FlowDisponibilityList"),
   "/app/operations/home": () => import("@/pages/OperationsHome"),
   "/app/operations/flowmap": () => import("@/pages/FlowMapPage"),
   "/app/operations/incidents": () => import("@/pages/IncidentsPage"),
