@@ -1,4 +1,4 @@
-import { memo, useMemo, useRef } from "react";
+import { memo, useMemo, useRef, useState, useEffect } from "react";
 import { useWidgetData } from "@/hooks/useWidgetData";
 import type { TelemetryCacheEntry } from "@/hooks/useDashboardRealtime";
 import type { TelemetryTimeseriesData, TelemetryStatData } from "@/types/telemetry";
@@ -72,10 +72,6 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
   const { data } = useWidgetData({ telemetryKey, cache });
   const ts = data as TelemetryTimeseriesData | null;
 
-  // ── Data retention buffer: accumulate scalar readings into a rolling history ──
-  const bufferRef = useRef<ChartPoint[]>([]);
-  const lastBufferTsRef = useRef<number>(0);
-
   // Build display key mapping: itemid → alias or name
   const seriesDisplayMap = useMemo(() => {
     const map = new Map<string, { displayName: string; color: string }>();
@@ -101,7 +97,6 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
       if (!tsData?.points) return;
       const displayName = seriesDisplayMap.get(s.itemid)?.displayName || s.name;
 
-      // LTTB downsample per series before merging
       const raw = tsData.points.map((p) => ({ x: p.ts, y: p.value }));
       const downsampled = lttb(raw, MAX_RENDER_POINTS);
 
@@ -121,10 +116,37 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
       }));
   }, [isMultiSeries, series, cache, seriesDisplayMap]);
 
+  const bufferRef = useRef<ChartPoint[]>([]);
+  const lastBufferTsRef = useRef<number>(0);
+  const [bufferVersion, setBufferVersion] = useState(0);
+
+  // Accumulate scalar data points into the buffer via effect (not useMemo side-effect)
+  useEffect(() => {
+    if (ts?.points && ts.points.length > 0) return; // timeseries mode, skip
+    if (!data) return;
+
+    const raw = extractRawValue(data);
+    if (raw === null) return;
+    const num = parseFloat(raw);
+    if (isNaN(num)) return;
+
+    const now = Date.now();
+    if (now - lastBufferTsRef.current > 5000) {
+      lastBufferTsRef.current = now;
+      bufferRef.current = [
+        ...bufferRef.current.slice(-(MAX_BUFFER_POINTS - 1)),
+        {
+          time: new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          value: num,
+        },
+      ];
+      setBufferVersion((v) => v + 1);
+    }
+  }, [data, ts?.points]);
+
   // Single-series: prefer timeseries points, fall back to scalar accumulation
   const singleChartData = useMemo(() => {
     if (ts?.points && ts.points.length > 0) {
-      // LTTB downsample before rendering
       const raw = ts.points.map((p) => ({ x: p.ts, y: p.value }));
       const downsampled = lttb(raw, MAX_RENDER_POINTS);
 
@@ -137,31 +159,10 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
       return pts;
     }
 
-    // No timeseries points — try to accumulate from scalar stat data
-    if (data) {
-      const raw = extractRawValue(data);
-      if (raw !== null) {
-        const num = parseFloat(raw);
-        if (!isNaN(num)) {
-          const now = Date.now();
-          // Only add if enough time has passed (>5s) to avoid duplicates
-          if (now - lastBufferTsRef.current > 5000) {
-            lastBufferTsRef.current = now;
-            bufferRef.current.push({
-              time: new Date(now).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-              value: num,
-            });
-            if (bufferRef.current.length > MAX_BUFFER_POINTS) {
-              bufferRef.current = bufferRef.current.slice(-MAX_BUFFER_POINTS);
-            }
-          }
-        }
-      }
-    }
-
     // Return buffer (persisted data — never empty once populated)
     return bufferRef.current;
-  }, [ts?.points, data]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [ts?.points, bufferVersion]);
 
   const chartData = isMultiSeries ? (multiData || []) : singleChartData;
   const hasData = chartData.length > 0;
