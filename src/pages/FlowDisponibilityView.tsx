@@ -1,16 +1,14 @@
 import { useState, useEffect, useCallback } from "react";
 import { useParams, useNavigate, useSearchParams } from "react-router-dom";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  ArrowLeft, RefreshCw, Loader2, Activity, Save, Settings,
-  Maximize2, Minimize2,
-} from "lucide-react";
+import { motion } from "framer-motion";
+import { Loader2, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useFlowDisponibilityData, type FlowDispConfig } from "@/hooks/useFlowDisponibilityData";
 import FlowDispStatsSidebar from "@/components/flowdisp/FlowDispStatsSidebar";
 import HostAvailCard from "@/components/flowdisp/HostAvailCard";
+import MonitoringHeader, { useKioskMode } from "@/components/layout/MonitoringHeader";
 
 export default function FlowDisponibilityView() {
   const { dashboardId } = useParams<{ dashboardId: string }>();
