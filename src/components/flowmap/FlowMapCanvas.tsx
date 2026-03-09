@@ -426,21 +426,10 @@ export default function FlowMapCanvas({
 
       polyline.addTo(linesLayer);
 
-      // ── Persistent traffic label at TRUE midpoint between hosts ──
-      // Use geographic midpoint of origin/dest hosts (not polyline vertex index)
+      // ── Persistent traffic label at TRUE center between hosts ──
       const midLat = (originHost.lat + destHost.lat) / 2;
       const midLon = (originHost.lon + destHost.lon) / 2;
       const midPoint: [number, number] = [midLat, midLon];
-
-      // Calculate perpendicular offset to avoid overlapping the line
-      const dLat = destHost.lat - originHost.lat;
-      const dLon = destHost.lon - originHost.lon;
-      const len = Math.sqrt(dLat * dLat + dLon * dLon);
-      // Offset perpendicular to the link direction (to the right side)
-      const offsetScale = Math.max(0.008, len * 0.06);
-      const perpLat = midLat + (dLon / len) * offsetScale;
-      const perpLon = midLon - (dLat / len) * offsetScale;
-      const labelPoint: [number, number] = [perpLat, perpLon];
 
       const ulBps = traffic?.sideA?.out_bps ?? traffic?.sideB?.out_bps;
       const dlBps = traffic?.sideA?.in_bps ?? traffic?.sideB?.in_bps;
@@ -451,16 +440,15 @@ export default function FlowMapCanvas({
       const qualityColor = linkSt === "DOWN" ? "#ff1744" : linkSt === "DEGRADED" ? "#ff9100" : "#00e676";
       const qualityLabel = linkSt === "DOWN" ? "⛔ DOWN" : linkSt === "DEGRADED" ? "⚠ DEGRADED" : "✔ UP";
 
-      // Utilization bar color (capped at 100% for display)
       const utilVal = util ?? 0;
       const utilColor = utilVal > 80 ? "#ff1744" : utilVal > 50 ? "#ff9100" : "#00e676";
 
       const ts = "text-shadow:0 0 4px #000,0 0 8px #000,0 1px 3px #000;";
       const labelHtml = `
-        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.4;white-space:nowrap;text-align:left;">
+        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.4;white-space:nowrap;text-align:center;">
           <div style="font-size:14px;color:${qualityColor};font-weight:700;${ts}text-shadow:0 0 8px ${qualityColor}80,0 0 4px #000,0 1px 3px #000;">${qualityLabel}</div>
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:6px;font-weight:700;font-size:13px;${ts}">
+            <div style="display:flex;align-items:center;gap:6px;justify-content:center;font-weight:700;font-size:13px;${ts}">
               <span style="color:#ff9100;">▲${fmtBps(ulBps)}</span>
               <span style="color:#00e5ff;">▼${fmtBps(dlBps)}</span>
             </div>
@@ -474,10 +462,10 @@ export default function FlowMapCanvas({
         className: "fm-traffic-label",
         html: labelHtml,
         iconSize: L.point(0, 0),
-        iconAnchor: L.point(-8, 20),
+        iconAnchor: L.point(0, 0),
       });
 
-      const labelMarker = L.marker(labelPoint, { icon: labelIcon, interactive: false });
+      const labelMarker = L.marker(midPoint, { icon: labelIcon, interactive: false });
       labelMarker.addTo(labelsLayer);
     });
 
