@@ -2,7 +2,7 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Printer, Search,
+  Printer, Search, ArrowLeft, Save, Settings2,
   AlertTriangle, FileText, Eye, EyeOff, ExternalLink, Calendar, Edit2, Check, X,
   BarChart3, Loader2,
 } from "lucide-react";
