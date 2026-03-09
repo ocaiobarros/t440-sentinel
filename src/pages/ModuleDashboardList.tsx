@@ -204,7 +204,7 @@ export default function ModuleDashboardList({ category, title, description, icon
         </motion.header>
 
         {isLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 3xl:grid-cols-4 4k:grid-cols-5 gap-4 3xl:gap-6">
             {[1, 2, 3].map((i) => (
               <div key={i} className="glass-card rounded-xl p-6 h-[180px] animate-pulse" />
             ))}
