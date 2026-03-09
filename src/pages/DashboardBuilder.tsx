@@ -335,7 +335,6 @@ export default function DashboardBuilder() {
           .single();
         if (error) throw error;
         dashId = data.id;
-        setConfig((prev) => ({ ...prev, id: dashId }));
       }
 
       // Sync widgets: delete all then re-insert
@@ -370,27 +369,21 @@ export default function DashboardBuilder() {
 
       return dashId;
     },
-    onMutate: async () => {
-      // Optimistic: immediately show success feedback
-      await queryClient.cancelQueries({ queryKey: ["dashboard", dashboardId] });
-      const previousData = queryClient.getQueryData(["dashboard", dashboardId]);
-      // Optimistically update cache with current config
-      queryClient.setQueryData(["dashboard", dashboardId], config);
-      toast({ title: "Salvando…", description: "Persistindo alterações em background." });
-      return { previousData };
-    },
     onSuccess: (dashId) => {
+      // Update config id ONLY in onSuccess to avoid mid-render state thrashing
+      if (dashId && !config.id) {
+        setConfig((prev) => ({ ...prev, id: dashId }));
+      }
       toast({ title: "Dashboard salvo!", description: "Todas as alterações foram persistidas." });
-      queryClient.invalidateQueries({ queryKey: ["dashboard"] });
+      // Invalidate ONLY specific keys to avoid cascading refetches
+      if (dashId) {
+        queryClient.invalidateQueries({ queryKey: ["builder-dashboard", dashId] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard", dashId] });
+      }
       if (isNew && dashId) navigate(`/builder/${dashId}`, { replace: true });
     },
-    onError: (err, _vars, context) => {
-      // Ignore AbortError — component unmounted, no UI to update
+    onError: (err) => {
       if (err instanceof DOMException && err.name === "AbortError") return;
-      // Rollback optimistic update
-      if (context?.previousData) {
-        queryClient.setQueryData(["dashboard", dashboardId], context.previousData);
-      }
       const e = err as { message?: string; code?: string; details?: string; hint?: string };
       const details = [e.message, e.code ? `code: ${e.code}` : null, e.details, e.hint].filter(Boolean).join(" | ");
       toast({
