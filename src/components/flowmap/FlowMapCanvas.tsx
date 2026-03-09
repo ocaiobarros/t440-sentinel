@@ -8,7 +8,7 @@ import type { LinkTraffic, EffectiveHostStatus } from "@/hooks/useFlowMapStatus"
 /* ── Icon factories ── */
 function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean, isIsolated: boolean, depth?: number): L.DivIcon {
   const color = isIsolated ? "#9e9e9e" : status === "UP" ? "#00e676" : status === "DOWN" ? "#ff1744" : "#9e9e9e";
-  const size = isCritical && status === "DOWN" ? 20 : 14;
+  const size = isCritical && status === "DOWN" ? 28 : 20;
   const pulse = status === "DOWN" ? `animation: fmPulse ${isCritical ? "0.8s" : "1.4s"} ease-in-out infinite;` : "";
   // 🅰️ Depth heatmap: deeper isolated nodes are more transparent (0.25 to 0.55)
   const isolatedOpacity = isIsolated ? Math.max(0.25, 0.55 - (depth ?? 0) * 0.05) : 1;
@@ -19,7 +19,7 @@ function hostIcon(status: "UP" | "DOWN" | "UNKNOWN", isCritical: boolean, isIsol
     iconSize: [size * 2, size * 2],
     iconAnchor: [size, size],
     html: `<div style="width:${size * 2}px;height:${size * 2}px;display:flex;align-items:center;justify-content:center;">
-      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};box-shadow:0 0 ${size}px ${color}80;${pulse}${opacity}cursor:pointer;"></div>
+      <div style="width:${size}px;height:${size}px;border-radius:50%;background:${color};box-shadow:0 0 ${size + 4}px ${color}80;${pulse}${opacity}cursor:pointer;"></div>
     </div>`,
   });
 }
@@ -368,7 +368,7 @@ export default function FlowMapCanvas({
       else if (isImpacted) color = "#8b0000";
       else color = "#00e676";
 
-      const weight = linkSt === "DOWN" ? 6 : linkSt === "DEGRADED" ? 5 : isImpacted ? 6 : link.is_ring ? 4 : 3;
+      const weight = linkSt === "DOWN" ? 8 : linkSt === "DEGRADED" ? 7 : isImpacted ? 8 : link.is_ring ? 6 : 5;
       const dashArray = linkSt === "DOWN" ? "10, 6" : linkSt === "DEGRADED" ? "6, 4" : isImpacted ? "8, 4" : undefined;
       const pulseClass = linkSt === "DOWN" ? "fm-link-pulse" : linkSt === "DEGRADED" ? "fm-link-pulse-slow" : "fm-traffic-glow";
       const opacity = hasIncident && !isAffected ? 0.25 : 0.9;
@@ -449,18 +449,18 @@ export default function FlowMapCanvas({
         ? `<div style="color:#ff1744;font-size:9px;font-weight:700;margin-top:2px;">⚠ ${totalErrors} erros</div>`
         : "";
 
-      const ts = "text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;";
+      const ts = "text-shadow:0 0 4px #000,0 0 8px #000,0 1px 3px #000;";
       const labelHtml = `
-        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.3;white-space:nowrap;text-align:center;">
-          <div style="font-size:11px;color:${qualityColor};font-weight:700;${ts}text-shadow:0 0 6px ${qualityColor}80,0 0 3px #000,0 1px 2px #000;">${qualityLabel}</div>
+        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.4;white-space:nowrap;text-align:center;">
+          <div style="font-size:15px;color:${qualityColor};font-weight:700;${ts}text-shadow:0 0 8px ${qualityColor}80,0 0 4px #000,0 1px 3px #000;">${qualityLabel}</div>
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:5px;justify-content:center;font-weight:600;font-size:10px;${ts}">
+            <div style="display:flex;align-items:center;gap:6px;justify-content:center;font-weight:700;font-size:14px;${ts}">
               <span style="color:#ff9100;">▲${fmtBps(ulBps)}</span>
               <span style="color:#00e5ff;">▼${fmtBps(dlBps)}</span>
             </div>
-            ${util != null ? `<div style="color:${utilColor};font-size:9px;font-weight:700;${ts}">${utilVal.toFixed(1)}%</div>` : ""}
+            ${util != null ? `<div style="color:${utilColor};font-size:12px;font-weight:700;${ts}">${utilVal.toFixed(1)}%</div>` : ""}
           ` : ""}
-          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:9px;font-weight:700;${ts}">⚠${totalErrors}</div>` : ""}
+          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:12px;font-weight:700;${ts}">⚠${totalErrors}</div>` : ""}
         </div>
       `;
 
@@ -522,16 +522,16 @@ export default function FlowMapCanvas({
 
       // ── Persistent host name label above marker ──
       const hostName = h.host_name || h.zabbix_host_id;
-      const dotSize = h.is_critical && (st?.status ?? "UNKNOWN") === "DOWN" ? 20 : 14;
-      const fontSize = Math.max(9, Math.round(dotSize * 0.7));
-      const ts = "text-shadow:0 0 4px rgba(0,0,0,0.95),0 0 8px rgba(0,0,0,0.8),0 1px 3px rgba(0,0,0,0.9);";
+      const dotSize = h.is_critical && (st?.status ?? "UNKNOWN") === "DOWN" ? 28 : 20;
+      const fontSize = 15;
+      const ts = "text-shadow:0 0 5px rgba(0,0,0,0.95),0 0 10px rgba(0,0,0,0.9),0 1px 4px rgba(0,0,0,0.95);";
       const hostColor = isIsolated ? "#9e9e9e" : (st?.status ?? "UNKNOWN") === "UP" ? "#00e676" : (st?.status ?? "UNKNOWN") === "DOWN" ? "#ff1744" : "#9e9e9e";
-      const nameHtml = `<div style="font-family:'JetBrains Mono',monospace;font-size:${fontSize}px;font-weight:700;color:${hostColor};white-space:nowrap;text-align:center;${ts}opacity:0.85;letter-spacing:0.5px;">${hostName}</div>`;
+      const nameHtml = `<div style="font-family:'JetBrains Mono',monospace;font-size:${fontSize}px;font-weight:700;color:${hostColor};white-space:nowrap;text-align:center;${ts}opacity:0.95;letter-spacing:0.6px;">${hostName}</div>`;
       const nameIcon = L.divIcon({
         className: "fm-traffic-label",
         html: nameHtml,
         iconSize: L.point(0, 0),
-        iconAnchor: L.point(0, dotSize + 6),
+        iconAnchor: L.point(0, dotSize + 8),
       });
       L.marker([h.lat, h.lon], { icon: nameIcon, interactive: false }).addTo(labelsLayer);
     });
