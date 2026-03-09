@@ -31,30 +31,44 @@ jobs:
 
       - name: Push database migrations (with auto-repair)
         run: |
-          set +e
-          OUTPUT=$(npx supabase@latest db push 2>&1)
-          STATUS=$?
-          set -e
+          MAX_RETRIES=5
+          ATTEMPT=0
 
-          echo "$OUTPUT"
+          while [ $ATTEMPT -lt $MAX_RETRIES ]; do
+            ATTEMPT=$((ATTEMPT + 1))
+            echo "🔄 Attempt $ATTEMPT of $MAX_RETRIES..."
 
-          if [ $STATUS -eq 0 ]; then
-            exit 0
-          fi
+            set +e
+            OUTPUT=$(npx supabase@latest db push 2>&1)
+            STATUS=$?
+            set -e
 
-          if echo "$OUTPUT" | grep -q "Remote migration versions not found in local migrations directory"; then
-            MISSING_VERSION=$(echo "$OUTPUT" | sed -n 's/.*reverted \([0-9]\{14\}\).*/\1/p' | head -n1)
+            echo "$OUTPUT"
 
-            if [ -n "$MISSING_VERSION" ]; then
-              echo "⚠️ Repairing remote-only migration: $MISSING_VERSION"
-              npx supabase@latest migration repair "$MISSING_VERSION" --status reverted
-              echo "🔁 Retrying db push..."
-              npx supabase@latest db push
+            if [ $STATUS -eq 0 ]; then
+              echo "✅ db push succeeded."
               exit 0
             fi
-          fi
 
-          exit $STATUS
+            if echo "$OUTPUT" | grep -q "Remote migration versions not found in local migrations directory"; then
+              # Extract ALL missing version IDs from the suggested repair command
+              VERSIONS=$(echo "$OUTPUT" | grep -oE '[0-9]{14}' | sort -u)
+
+              if [ -n "$VERSIONS" ]; then
+                for VER in $VERSIONS; do
+                  echo "⚠️ Repairing remote-only migration: $VER"
+                  npx supabase@latest migration repair "$VER" --status reverted || true
+                done
+                continue
+              fi
+            fi
+
+            echo "❌ Unrecoverable error on attempt $ATTEMPT"
+            exit $STATUS
+          done
+
+          echo "❌ Exhausted $MAX_RETRIES retries"
+          exit 1
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
