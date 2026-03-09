@@ -72,7 +72,50 @@ function TimeseriesWidgetInner({ telemetryKey, title, cache, config }: Props) {
   const { data } = useWidgetData({ telemetryKey, cache });
   const ts = data as TelemetryTimeseriesData | null;
 
-  // ── Data retention buffer: accumulate scalar readings into a rolling history ──
+  // Build display key mapping: itemid → alias or name
+  const seriesDisplayMap = useMemo(() => {
+    const map = new Map<string, { displayName: string; color: string }>();
+    series.forEach((s) => {
+      map.set(s.itemid, {
+        displayName: s.alias?.trim() || s.name,
+        color: s.color,
+      });
+    });
+    return map;
+  }, [series]);
+
+  // For multi-series: merge all series data aligned by rounded timestamp
+  const multiData = useMemo(() => {
+    if (!isMultiSeries) return null;
+    const allPoints: Map<number, Record<string, number>> = new Map();
+
+    series.forEach((s) => {
+      const key = `zbx:item:${s.itemid}`;
+      const entry = cache.get(key);
+      if (!entry) return;
+      const tsData = entry.data as TelemetryTimeseriesData | null;
+      if (!tsData?.points) return;
+      const displayName = seriesDisplayMap.get(s.itemid)?.displayName || s.name;
+
+      const raw = tsData.points.map((p) => ({ x: p.ts, y: p.value }));
+      const downsampled = lttb(raw, MAX_RENDER_POINTS);
+
+      for (const p of downsampled) {
+        const rounded = roundToMinute(p.x);
+        const existing = allPoints.get(rounded) || {};
+        existing[displayName] = p.y;
+        allPoints.set(rounded, existing);
+      }
+    });
+
+    return Array.from(allPoints.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([ts, values]) => ({
+        time: new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        ...values,
+      }));
+  }, [isMultiSeries, series, cache, seriesDisplayMap]);
+
   const bufferRef = useRef<ChartPoint[]>([]);
   const lastBufferTsRef = useRef<number>(0);
   const [bufferVersion, setBufferVersion] = useState(0);
