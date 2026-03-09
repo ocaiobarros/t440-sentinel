@@ -151,7 +151,7 @@ export default function FlowDisponibilityView() {
                 <Loader2 className="w-8 h-8 text-primary animate-spin" />
               </div>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 gap-2.5">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6 4k:grid-cols-8 gap-2.5 3xl:gap-4">
                 {hosts.map((h, i) => (
                   <HostAvailCard key={h.hostId} host={h} index={i} />
                 ))}

@@ -636,7 +636,7 @@ export default function VirtualMachinesMonitor() {
         lastRefresh={lastRefresh}
       />
 
-      <div className={`${isKiosk ? "px-4 py-3" : ""} max-w-[1800px] mx-auto relative z-10`}>
+      <div className={`${isKiosk ? "px-4 py-3" : ""} max-w-[1800px] 3xl:max-w-[2800px] 4k:max-w-none mx-auto relative z-10`}>
 
         {/* Loading */}
         {dataLoading && !data && (

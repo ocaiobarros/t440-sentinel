@@ -117,7 +117,7 @@ function MapListView() {
     <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-green/5 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="max-w-[1200px] mx-auto relative z-10">
+      <div className="max-w-[1200px] 3xl:max-w-[2200px] 4k:max-w-none mx-auto relative z-10">
         <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between mb-8">
           <div>
             <h1 className="text-2xl font-display font-bold text-foreground flex items-center gap-3">

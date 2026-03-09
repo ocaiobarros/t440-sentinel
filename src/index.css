@@ -979,3 +979,122 @@
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   NOC / TV WALL — 4K & Large Display Scaling
+   Optimized for 65-85" displays viewed from 2-5 meters
+   ═══════════════════════════════════════════════════════════ */
+
+/* 2K / QHD displays (2560px+) — subtle bump */
+@media (min-width: 2560px) {
+  html {
+    font-size: 18px;
+  }
+
+  /* Bump tiny px-based font sizes for readability */
+  .text-\[9px\]  { font-size: 12px !important; }
+  .text-\[10px\] { font-size: 13px !important; }
+  .text-\[11px\] { font-size: 14px !important; }
+
+  /* Larger icons on NOC displays */
+  .noc-scale-icon { transform: scale(1.15); }
+}
+
+/* 4K UHD displays (3200px+ effective — covers 3840@125% scaling) */
+@media (min-width: 3200px) {
+  html {
+    font-size: 22px;
+  }
+
+  /* Force minimum readable sizes for micro text */
+  .text-\[9px\]  { font-size: 15px !important; line-height: 1.4 !important; }
+  .text-\[10px\] { font-size: 16px !important; line-height: 1.4 !important; }
+  .text-\[11px\] { font-size: 17px !important; line-height: 1.4 !important; }
+  .text-xs       { font-size: 16px !important; line-height: 1.4 !important; }
+  .text-sm       { font-size: 18px !important; line-height: 1.5 !important; }
+  .text-base     { font-size: 20px !important; line-height: 1.5 !important; }
+
+  /* Headings scale up */
+  .text-lg  { font-size: 24px !important; }
+  .text-xl  { font-size: 28px !important; }
+  .text-2xl { font-size: 34px !important; }
+  .text-3xl { font-size: 40px !important; }
+
+  /* Larger touch targets and spacing */
+  .h-7  { height: 2.5rem !important; }
+  .h-8  { height: 2.75rem !important; }
+  .w-3  { width: 1rem !important; }
+  .h-3  { height: 1rem !important; }
+  .w-4  { width: 1.25rem !important; }
+  .h-4  { height: 1.25rem !important; }
+
+  /* Reduce heavy animations for smoother rendering on TV */
+  .scanlines::after { display: none !important; }
+
+  /* More generous card padding */
+  .glass-card, .glass-card-elevated {
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+  }
+
+  .noc-scale-icon { transform: scale(1.35); }
+}
+
+/* Native 4K (3840px+) — full NOC wall optimization */
+@media (min-width: 3840px) {
+  html {
+    font-size: 26px;
+  }
+
+  .text-\[9px\]  { font-size: 18px !important; line-height: 1.4 !important; }
+  .text-\[10px\] { font-size: 19px !important; line-height: 1.4 !important; }
+  .text-\[11px\] { font-size: 20px !important; line-height: 1.4 !important; }
+  .text-xs       { font-size: 19px !important; line-height: 1.4 !important; }
+  .text-sm       { font-size: 22px !important; line-height: 1.5 !important; }
+  .text-base     { font-size: 24px !important; line-height: 1.5 !important; }
+
+  .text-lg  { font-size: 28px !important; }
+  .text-xl  { font-size: 34px !important; }
+  .text-2xl { font-size: 40px !important; }
+  .text-3xl { font-size: 48px !important; }
+
+  /* Even bigger interactive elements */
+  .h-7  { height: 3rem !important; }
+  .h-8  { height: 3.25rem !important; }
+  .w-3  { width: 1.25rem !important; }
+  .h-3  { height: 1.25rem !important; }
+  .w-4  { width: 1.5rem !important; }
+  .h-4  { height: 1.5rem !important; }
+  .w-6  { width: 2rem !important; }
+  .h-6  { height: 2rem !important; }
+
+  .gap-1\.5 { gap: 0.75rem !important; }
+  .gap-2    { gap: 1rem !important; }
+  .gap-3    { gap: 1.25rem !important; }
+  .gap-4    { gap: 1.5rem !important; }
+
+  .p-4 { padding: 1.75rem !important; }
+  .p-5 { padding: 2rem !important; }
+
+  /* Disable scanlines & reduce GPU load */
+  .scanlines::after,
+  .grid-pattern::before { display: none !important; }
+
+  /* Reduce blur for perf */
+  .backdrop-blur-sm  { backdrop-filter: blur(4px) !important; }
+  .backdrop-blur-lg  { backdrop-filter: blur(8px) !important; }
+  .backdrop-blur-xl  { backdrop-filter: blur(10px) !important; }
+
+  .noc-scale-icon { transform: scale(1.5); }
+}
+
+/* Reduce motion on large displays for performance */
+@media (min-width: 3200px) and (prefers-reduced-motion: no-preference) {
+  .react-grid-item {
+    transition: none !important;
+  }
+  /* Disable framer-motion stagger delays on TV */
+  [data-framer-appear-id] {
+    transition-delay: 0s !important;
+  }
+}

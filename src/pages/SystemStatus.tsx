@@ -76,7 +76,7 @@ export default function SystemStatus() {
   if (!data) return null;
 
   return (
-    <div className="p-4 md:p-6 max-w-[1200px] mx-auto space-y-6">
+    <div className="p-4 md:p-6 max-w-[1200px] 3xl:max-w-[2200px] 4k:max-w-none mx-auto space-y-6">
       <motion.div initial={{ opacity: 0, y: -12 }} animate={{ opacity: 1, y: 0 }} className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">

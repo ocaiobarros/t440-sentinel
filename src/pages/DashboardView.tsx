@@ -143,7 +143,7 @@ export default function DashboardView() {
     return (
       <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
         <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-green/5 rounded-full blur-[120px] pointer-events-none" />
-        <div className="max-w-[1600px] mx-auto relative z-10 flex flex-col items-center justify-center min-h-[60vh] gap-6">
+        <div className="max-w-[1600px] 3xl:max-w-none mx-auto relative z-10 flex flex-col items-center justify-center min-h-[60vh] gap-6">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

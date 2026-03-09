@@ -1049,7 +1049,7 @@ export default function PrinterIntelligence() {
         }
       />
 
-      <div className={`${isKiosk ? "px-4 py-3" : ""} max-w-[1600px] mx-auto relative z-10`}>
+      <div className={`${isKiosk ? "px-4 py-3" : ""} max-w-[1600px] 3xl:max-w-[2800px] 4k:max-w-none mx-auto relative z-10`}>
 
         <Tabs defaultValue="monitoring" className="space-y-4">
           <TabsList className="bg-card/50 border border-border/30">

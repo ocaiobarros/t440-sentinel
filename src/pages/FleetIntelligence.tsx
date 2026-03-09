@@ -319,7 +319,7 @@ export default function FleetIntelligence() {
         }
       />
 
-      <main className={`max-w-[1600px] mx-auto px-6 py-6 space-y-6`}>
+      <main className={`max-w-[1600px] 3xl:max-w-[2800px] 4k:max-w-none mx-auto px-6 py-6 space-y-6`}>
         {/* ── Loading ── */}
         {isLoading && (
           <div className="grid grid-cols-4 gap-4">
