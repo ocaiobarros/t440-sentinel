@@ -403,18 +403,22 @@ export default function DashboardBuilder() {
   });
 
   // Grid layout items — built from config (source of truth), never from onLayoutChange
-  const gridLayout: Layout[] = config.widgets.map((w) => ({
-    i: w.id,
-    x: w.x,
-    y: w.y,
-    w: w.w,
-    h: w.h,
-    minW: 1,
-    minH: 1,
-  }));
+  const baseCols = config.settings.cols || 24;
+
+  const gridLayout: Layout[] = useMemo(
+    () => config.widgets.map((w) => ({
+      i: w.id,
+      x: w.x,
+      y: w.y,
+      w: w.w,
+      h: w.h,
+      minW: 1,
+      minH: 1,
+    })),
+    [config.widgets],
+  );
 
   // Build responsive layouts by scaling base layout to each breakpoint's column count
-  const baseCols = config.settings.cols || 24;
   const responsiveLayouts = useMemo(() => {
     const result: Record<string, Layout[]> = {};
     for (const [bp, cols] of Object.entries(GRID_COLS_MAP)) {
