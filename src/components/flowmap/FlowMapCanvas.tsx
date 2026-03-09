@@ -449,18 +449,18 @@ export default function FlowMapCanvas({
         ? `<div style="color:#ff1744;font-size:9px;font-weight:700;margin-top:2px;">⚠ ${totalErrors} erros</div>`
         : "";
 
-      const ts = "text-shadow:0 0 3px #000,0 0 6px #000,0 1px 2px #000;";
+      const ts = "text-shadow:0 0 4px #000,0 0 8px #000,0 1px 3px #000;";
       const labelHtml = `
-        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.3;white-space:nowrap;text-align:center;">
-          <div style="font-size:11px;color:${qualityColor};font-weight:700;${ts}text-shadow:0 0 6px ${qualityColor}80,0 0 3px #000,0 1px 2px #000;">${qualityLabel}</div>
+        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.4;white-space:nowrap;text-align:center;">
+          <div style="font-size:15px;color:${qualityColor};font-weight:700;${ts}text-shadow:0 0 8px ${qualityColor}80,0 0 4px #000,0 1px 3px #000;">${qualityLabel}</div>
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:5px;justify-content:center;font-weight:600;font-size:10px;${ts}">
+            <div style="display:flex;align-items:center;gap:6px;justify-content:center;font-weight:700;font-size:14px;${ts}">
               <span style="color:#ff9100;">▲${fmtBps(ulBps)}</span>
               <span style="color:#00e5ff;">▼${fmtBps(dlBps)}</span>
             </div>
-            ${util != null ? `<div style="color:${utilColor};font-size:9px;font-weight:700;${ts}">${utilVal.toFixed(1)}%</div>` : ""}
+            ${util != null ? `<div style="color:${utilColor};font-size:12px;font-weight:700;${ts}">${utilVal.toFixed(1)}%</div>` : ""}
           ` : ""}
-          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:9px;font-weight:700;${ts}">⚠${totalErrors}</div>` : ""}
+          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:12px;font-weight:700;${ts}">⚠${totalErrors}</div>` : ""}
         </div>
       `;
 
