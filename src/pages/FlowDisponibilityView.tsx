@@ -22,23 +22,21 @@ export default function FlowDisponibilityView() {
   const [loadingConfig, setLoadingConfig] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  // Kiosk mode
-  const kioskFromUrl = searchParams.get("kiosk") === "true";
-  const [isKiosk, setIsKiosk] = useState(kioskFromUrl);
-  useEffect(() => {
-    if (kioskFromUrl) setIsKiosk(true);
-  }, [kioskFromUrl]);
-  const toggleKiosk = useCallback(() => setIsKiosk((k) => !k), []);
+  // Kiosk mode — synced with URL param so AppLayout hides sidebar+header
+  const isKiosk = searchParams.get("kiosk") === "true";
 
-  // Fullscreen API
-  const toggleFullscreen = useCallback(() => {
-    if (!document.fullscreenElement) {
+  const toggleKiosk = useCallback(() => {
+    const next = !isKiosk;
+    const sp = new URLSearchParams(searchParams);
+    if (next) {
+      sp.set("kiosk", "true");
       document.documentElement.requestFullscreen?.();
     } else {
+      sp.delete("kiosk");
       document.exitFullscreen?.();
     }
-    toggleKiosk();
-  }, [toggleKiosk]);
+    navigate(`?${sp.toString()}`, { replace: true });
+  }, [isKiosk, searchParams, navigate]);
 
   // Load dashboard config
   useEffect(() => {
@@ -191,7 +189,7 @@ export default function FlowDisponibilityView() {
                   <span className="text-xs hidden sm:inline">Reconfigurar</span>
                 </Button>
 
-                <Button onClick={toggleFullscreen} variant="outline" size="sm" className="gap-1.5 h-7">
+                <Button onClick={toggleKiosk} variant="outline" size="sm" className="gap-1.5 h-7">
                   <Maximize2 className="w-3 h-3" />
                   <span className="text-xs hidden sm:inline">Kiosk</span>
                 </Button>
@@ -252,7 +250,7 @@ export default function FlowDisponibilityView() {
             initial={{ opacity: 0, scale: 0.8 }}
             animate={{ opacity: 1, scale: 1 }}
             exit={{ opacity: 0, scale: 0.8 }}
-            onClick={toggleFullscreen}
+            onClick={toggleKiosk}
             className="fixed bottom-4 right-4 z-50 h-10 w-10 rounded-full
               bg-card/80 backdrop-blur-lg border border-border/30
               flex items-center justify-center

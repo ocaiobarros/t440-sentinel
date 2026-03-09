@@ -42,8 +42,20 @@ export default function AppLayout({ children }: AppLayoutProps) {
         </AnimatePresence>
 
         <div className="flex-1 flex flex-col min-w-0">
-          {/* Glass header */}
-          <GlassHeader isKiosk={isKiosk} onToggleKiosk={toggleKiosk} />
+          {/* Glass header — hidden in kiosk */}
+          <AnimatePresence>
+            {!isKiosk && (
+              <motion.div
+                initial={{ height: 0, opacity: 0 }}
+                animate={{ height: "auto", opacity: 1 }}
+                exit={{ height: 0, opacity: 0 }}
+                transition={{ duration: 0.25 }}
+                className="overflow-hidden"
+              >
+                <GlassHeader isKiosk={isKiosk} onToggleKiosk={toggleKiosk} />
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <main className="flex-1 overflow-auto">
             {children}
