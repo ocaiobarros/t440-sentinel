@@ -3,9 +3,10 @@ import { useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Loader2, Settings2, Server, Cpu, MemoryStick, HardDrive, Network,
-  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock, ArrowLeft, Save,
+  Loader2, Server, Cpu, MemoryStick, HardDrive, Network,
+  Activity, Zap, MonitorCheck, Box, ArrowDownToLine, ArrowUpFromLine, Clock,
 } from "lucide-react";
+import MonitoringHeader, { useKioskMode } from "@/components/layout/MonitoringHeader";
 import { useDashboardPersist } from "@/hooks/useDashboardPersist";
 import { useIdracLive } from "@/hooks/useIdracLive";
 import { extractVirtData } from "@/hooks/useVirtExtractors";
@@ -363,8 +364,10 @@ export default function VirtualizationMonitor() {
     ? /ok|up|200|1/i.test(virt.host.ping)
     : false;
 
+  const isKiosk = useKioskMode();
+
   return (
-    <div className="min-h-screen bg-background grid-pattern scanlines relative p-4 md:p-6 lg:p-8">
+    <div className={`min-h-screen bg-background grid-pattern scanlines relative ${isKiosk ? "" : "p-4 md:p-6 lg:p-8"}`}>
       {/* Ambient glow */}
       <div className="fixed top-0 left-1/3 w-[500px] h-[300px] rounded-full blur-[120px] pointer-events-none"
         style={{ background: accentGlow }}
@@ -373,63 +376,20 @@ export default function VirtualizationMonitor() {
         style={{ background: "hsl(265 80% 50% / 0.05)" }}
       />
 
-      <div className="max-w-[1600px] mx-auto relative z-10">
-        {/* Header */}
-        <motion.div
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between mb-6"
-        >
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <Box className="w-8 h-8" style={{ color: accentColor }} />
-              <motion.div
-                className="absolute inset-0 rounded-full"
-                animate={{ scale: [1, 1.4, 1], opacity: [0.5, 0, 0.5] }}
-                transition={{ duration: 3, repeat: Infinity }}
-                style={{ background: accentColor, filter: "blur(8px)" }}
-              />
-            </div>
-            <div>
-              <h1 className="font-display text-2xl md:text-3xl font-black tracking-wider leading-tight">
-                <span style={{ color: accentColor, textShadow: `0 0 20px ${accentColor}60` }}>
-                  {config?.hostName || "HOST"}
-                </span>
-              </h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[10px] font-mono text-muted-foreground/60 uppercase tracking-widest">
-                  {virt?.type === "vmware" ? "VMware ESXi" : virt?.type === "proxmox" ? "Proxmox VE" : "Virtualization"}
-                </span>
-                {virt?.host.version && (
-                  <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-muted/30 text-muted-foreground/50">
-                    v{virt.host.version}
-                  </span>
-                )}
-                {lastRefresh && (
-                  <span className="text-[9px] font-mono text-muted-foreground/40">
-                    • {lastRefresh.toLocaleTimeString()}
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <button onClick={() => navigate('/app/monitoring/virtualization')} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-              <ArrowLeft className="w-3 h-3" /> {t("common.back")}
-            </button>
-            {data && (
-              <button onClick={refresh} className="text-[9px] font-mono text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border/20 hover:border-border/40">
-                ↻ Refresh
-              </button>
-            )}
-            <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 text-[9px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50">
-              <Save className="w-3 h-3" /> {saving ? 'Salvando…' : 'Salvar'}
-            </button>
-            <button onClick={handleReconfigure} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-              <Settings2 className="w-3 h-3" /> Reconfigurar
-            </button>
-          </div>
-        </motion.div>
+      <MonitoringHeader
+        title={config?.hostName || "Virtualização"}
+        subtitle={`${virt?.type === "vmware" ? "VMware ESXi" : virt?.type === "proxmox" ? "Proxmox VE" : "Virtualization"}${virt?.host.version ? ` v${virt.host.version}` : ""}`}
+        icon={<Box className="w-5 h-5" style={{ color: accentColor }} />}
+        backPath="/app/monitoring/virtualization"
+        onRefresh={data ? refresh : undefined}
+        isRefreshing={dataLoading}
+        onSave={handleSave}
+        saving={saving}
+        onReconfigure={handleReconfigure}
+        lastRefresh={lastRefresh}
+      />
+
+      <div className={`${isKiosk ? "px-4 py-3" : ""} max-w-[1600px] mx-auto relative z-10`}>
 
         {/* Loading */}
         {dataLoading && !data && (

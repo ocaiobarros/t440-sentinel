@@ -2,10 +2,11 @@ import React, { useState, useCallback, useEffect, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import {
-  Printer, ArrowLeft, Save, Settings2, Loader2, Search,
+  Printer, Search, ArrowLeft, Save, Settings2,
   AlertTriangle, FileText, Eye, EyeOff, ExternalLink, Calendar, Edit2, Check, X,
-  BarChart3,
+  BarChart3, Loader2,
 } from "lucide-react";
+import MonitoringHeader, { useKioskMode } from "@/components/layout/MonitoringHeader";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import UsageHeatmap from "@/components/printer/UsageHeatmap";
 import { Button } from "@/components/ui/button";
@@ -799,8 +800,7 @@ async function exportPrinterCountersPdf(printers: PrinterData[]) {
 
 export default function PrinterIntelligence() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const isKiosk = searchParams.get("kiosk") === "true";
+  const isKiosk = useKioskMode();
   const { save: saveDashboard, saving, dashboardId, loadedConfig, loading: dbLoading } = useDashboardPersist<PrinterConfig>({
     category: "printer",
     listPath: "/app/monitoring/printers",
@@ -1015,60 +1015,41 @@ export default function PrinterIntelligence() {
 
 
   return (
-    <div className={`min-h-screen bg-background grid-pattern scanlines relative ${isKiosk ? "p-4" : "p-4 md:p-6 lg:p-8"}`}>
+    <div className={`min-h-screen bg-background grid-pattern scanlines relative ${isKiosk ? "" : "p-4 md:p-6 lg:p-8"}`}>
       <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-neon-cyan/5 rounded-full blur-[120px] pointer-events-none" />
 
-      <div className="max-w-[1600px] mx-auto relative z-10">
-        {/* Header */}
-        {!isKiosk && (
-          <motion.header initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-3">
-                <Printer className="w-6 h-6 text-neon-cyan" />
-                <div>
-                  <h1 className="text-lg font-display font-bold text-foreground">
-                    <span className="text-neon-cyan text-glow-cyan">PRINTER</span> INTELLIGENCE
-                  </h1>
-                  <p className="text-[10px] text-muted-foreground font-mono">
-                    {config?.hostgroupName} • {printerData.length} impressoras • Refresh: 30s
-                    {alertCount > 0 && <span className="text-red-400 ml-2">⚠ {alertCount} alerta(s)</span>}
-                  </p>
-                </div>
-              </div>
-            </div>
+      <MonitoringHeader
+        title="PRINTER INTELLIGENCE"
+        subtitle={`${config?.hostgroupName} • ${printerData.length} impressoras • Refresh: 30s${alertCount > 0 ? ` • ⚠ ${alertCount} alerta(s)` : ""}`}
+        icon={<Printer className="w-5 h-5 text-neon-cyan" />}
+        backPath="/app/monitoring/printers"
+        onSave={handleSave}
+        saving={saving}
+        onReconfigure={handleReconfigure}
+        extraRight={
+          <>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate("/app/monitoring/printers/billing")}
+              className="text-[10px] h-7 gap-1"
+            >
+              <Calendar className="w-3 h-3" /> Histórico
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportPrinterCountersPdf([...filteredPrinters])}
+              disabled={filteredPrinters.length === 0 || dataLoading}
+              className="text-[10px] h-7 gap-1"
+            >
+              <FileText className="w-3 h-3" /> Relatório PDF
+            </Button>
+          </>
+        }
+      />
 
-            <div className="flex justify-between items-center mt-3">
-              <button onClick={() => navigate("/app/monitoring/printers")} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                <ArrowLeft className="w-3 h-3" /> Voltar
-              </button>
-              <div className="flex items-center gap-3">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate("/app/monitoring/printers/billing")}
-                  className="text-[10px] h-7 gap-1"
-                >
-                  <Calendar className="w-3 h-3" /> Histórico
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => exportPrinterCountersPdf([...filteredPrinters])}
-                  disabled={filteredPrinters.length === 0 || dataLoading}
-                  className="text-[10px] h-7 gap-1"
-                >
-                  <FileText className="w-3 h-3" /> Relatório PDF
-                </Button>
-                <button onClick={handleSave} disabled={saving} className="flex items-center gap-1 text-[9px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50">
-                  <Save className="w-3 h-3" /> {saving ? "Salvando…" : "Salvar"}
-                </button>
-                <button onClick={handleReconfigure} className="flex items-center gap-1 text-[9px] font-mono text-muted-foreground/50 hover:text-muted-foreground transition-colors">
-                  <Settings2 className="w-3 h-3" /> Reconfigurar
-                </button>
-              </div>
-            </div>
-          </motion.header>
-        )}
+      <div className={`${isKiosk ? "px-4 py-3" : ""} max-w-[1600px] mx-auto relative z-10`}>
 
         <Tabs defaultValue="monitoring" className="space-y-4">
           <TabsList className="bg-card/50 border border-border/30">

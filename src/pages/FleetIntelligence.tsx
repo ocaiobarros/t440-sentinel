@@ -45,9 +45,9 @@ import {
   ChevronLeft,
   DollarSign,
   Cable,
-  Save,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import MonitoringHeader, { useKioskMode } from "@/components/layout/MonitoringHeader";
 
 function getDefaultDates() {
   const now = new Date();
@@ -270,102 +270,56 @@ export default function FleetIntelligence() {
     );
   }
 
+  const isKiosk = useKioskMode();
+
   return (
     <div
       className="min-h-screen"
       style={{ background: "linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%)" }}
     >
-      {/* ── HEADER ── */}
-      <header
-        className="sticky top-0 z-50 border-b"
-        style={{
-          background: "hsl(228 30% 5% / 0.85)",
-          backdropFilter: "blur(20px)",
-          borderColor: "hsl(222 15% 14% / 0.5)",
-        }}
-      >
-        <div className="max-w-[1600px] mx-auto px-6 py-4">
-          <div className="flex items-center gap-4 mb-4">
-            <button
-              onClick={() => navigate("/app/monitoring/fleet")}
-              className="p-1.5 rounded-lg hover:bg-secondary transition-colors"
-            >
-              <ChevronLeft className="w-5 h-5 text-muted-foreground" />
-            </button>
-            <button
-              onClick={() => setShowSetup(true)}
-              className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground hover:text-foreground transition-colors px-2 py-1 rounded border border-border/30"
-            >
-              Reconfigurar
-            </button>
-            <button
-              onClick={handleSave}
-              disabled={saving}
-              className="flex items-center gap-1 text-[10px] font-mono text-neon-green/70 hover:text-neon-green transition-colors disabled:opacity-50 px-2 py-1 rounded border border-neon-green/20"
-            >
-              <Save className="w-3 h-3" />
-              {saving ? 'Salvando…' : 'Salvar'}
-            </button>
-            <div>
-              <h1 className="font-['Orbitron'] text-xl font-bold tracking-wider text-glow-cyan" style={{ color: "hsl(186 100% 50%)" }}>
-                FLOWPULSE INTELLIGENCE
-              </h1>
-              <p className="text-[10px] text-muted-foreground uppercase tracking-[0.2em] font-['JetBrains_Mono']">
-                Diesel Performance Analytics
-              </p>
-            </div>
-          </div>
-
+      <MonitoringHeader
+        title="FLOWPULSE INTELLIGENCE"
+        subtitle="Diesel Performance Analytics"
+        icon={<Fuel className="w-5 h-5 text-primary" />}
+        backPath="/app/monitoring/fleet"
+        onSave={handleSave}
+        saving={saving}
+        onReconfigure={() => setShowSetup(true)}
+        extraRight={
           <div className="flex flex-wrap items-center gap-3">
             <div className="flex items-center gap-2">
-              <label className="text-[10px] uppercase text-muted-foreground font-['JetBrains_Mono']">Início</label>
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="glass-card rounded-lg px-3 py-1.5 text-xs font-['JetBrains_Mono'] text-foreground bg-transparent border-0 outline-none"
-              />
+              <label className="text-[10px] uppercase text-muted-foreground font-mono">Início</label>
+              <input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)}
+                className="glass-card rounded-lg px-3 py-1.5 text-xs font-mono text-foreground bg-transparent border-0 outline-none" />
             </div>
             <div className="flex items-center gap-2">
-              <label className="text-[10px] uppercase text-muted-foreground font-['JetBrains_Mono']">Fim</label>
-              <input
-                type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="glass-card rounded-lg px-3 py-1.5 text-xs font-['JetBrains_Mono'] text-foreground bg-transparent border-0 outline-none"
-              />
+              <label className="text-[10px] uppercase text-muted-foreground font-mono">Fim</label>
+              <input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)}
+                className="glass-card rounded-lg px-3 py-1.5 text-xs font-mono text-foreground bg-transparent border-0 outline-none" />
             </div>
-
             {summary && summary.model_clusters.length > 0 && (
               <Select value={modelFilter} onValueChange={setModelFilter}>
-                <SelectTrigger className="w-[200px] glass-card border-0 text-xs font-['JetBrains_Mono'] h-8">
+                <SelectTrigger className="w-[200px] glass-card border-0 text-xs font-mono h-8">
                   <SelectValue placeholder="Todos os Modelos" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos os Modelos</SelectItem>
                   {summary.model_clusters.map((m) => (
-                    <SelectItem key={m.model} value={m.model}>
-                      {m.model}
-                    </SelectItem>
+                    <SelectItem key={m.model} value={m.model}>{m.model}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             )}
-
-            <div className="relative ml-auto">
+            <div className="relative">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Buscar motorista..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 h-8 w-[200px] glass-card border-0 text-xs font-['JetBrains_Mono']"
-              />
+              <Input placeholder="Buscar motorista..." value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-8 h-8 w-[200px] glass-card border-0 text-xs font-mono" />
             </div>
           </div>
-        </div>
-      </header>
+        }
+      />
 
-      <main className="max-w-[1600px] mx-auto px-6 py-6 space-y-6">
+      <main className={`max-w-[1600px] mx-auto px-6 py-6 space-y-6`}>
         {/* ── Loading ── */}
         {isLoading && (
           <div className="grid grid-cols-4 gap-4">

@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { useDashboardData } from "@/hooks/useDashboardData";
 import WidgetRenderer from "@/components/dashboard/WidgetRenderer";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff, Timer, BellOff, AlertTriangle } from "lucide-react";
+import { RefreshCw, ArrowLeft, Settings, Wifi, WifiOff, Volume2, VolumeOff, Timer, BellOff, AlertTriangle, Maximize2, Minimize2 } from "lucide-react";
+import MonitoringHeader, { useKioskMode } from "@/components/layout/MonitoringHeader";
 import { motion, AnimatePresence } from "framer-motion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCallback, useState, useEffect, useMemo, useRef } from "react";
@@ -165,9 +166,11 @@ export default function DashboardView() {
   const themeCategory = (dashboard?.settings as any)?.category || "";
   const isLightTheme = themeCategory === "cameras";
 
+  const isKiosk = useKioskMode();
+
   return (
     <div
-      className={`min-h-screen grid-pattern scanlines relative px-2 py-2 ${isLightTheme ? 'text-foreground' : ''}`}
+      className={`min-h-screen grid-pattern scanlines relative ${isKiosk ? "" : "px-2 py-2"} ${isLightTheme ? 'text-foreground' : ''}`}
       data-theme-category={themeCategory}
       style={{
         background: 'var(--category-bg, linear-gradient(180deg, hsl(228 30% 4%) 0%, hsl(230 35% 2%) 100%))',
@@ -177,27 +180,17 @@ export default function DashboardView() {
         boxSizing: 'border-box',
       }}
     >
-      {/* ── Battery Crisis Overlays ── */}
       {isCrisis && (
         <>
           <div className="emergency-pulse-overlay" />
           <div className="emergency-vignette" />
         </>
       )}
-
-      {/* Sync progress bar */}
       {isPollingActive && (
         <div className="fixed top-0 left-0 right-0 h-[2px] z-50">
-          <motion.div
-            className="h-full bg-primary"
-            initial={{ width: "0%" }}
-            animate={{ width: "100%" }}
-            transition={{ duration: 1.5, ease: "easeInOut" }}
-          />
+          <motion.div className="h-full bg-primary" initial={{ width: "0%" }} animate={{ width: "100%" }} transition={{ duration: 1.5, ease: "easeInOut" }} />
         </div>
       )}
-
-      {/* Ambient glow — hidden for light themes */}
       {!isLightTheme && (
         <>
           <div className="fixed top-0 left-1/2 -translate-x-1/2 w-[700px] h-[350px] rounded-full blur-[140px] pointer-events-none opacity-60" style={{ background: 'hsl(var(--primary) / 0.15)' }} />
@@ -205,103 +198,45 @@ export default function DashboardView() {
         </>
       )}
 
-      <div className="w-full relative z-10" style={{ maxWidth: '100%', margin: 0 }}>
-        {/* Header */}
-        <motion.header
-          initial={{ opacity: 0, y: -10 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="flex items-center justify-between mb-6"
-        >
-          <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="text-muted-foreground hover:text-foreground">
-              <ArrowLeft className="w-4 h-4" />
-            </Button>
-            <div>
-              <h1 className="text-lg font-display font-bold text-foreground">
-                {isLoading ? <Skeleton className="h-5 w-48" /> : dashboard?.name || "Dashboard"}
-              </h1>
-              {dashboard?.description && (
-                <p className="text-[10px] text-muted-foreground">{dashboard.description}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="flex items-center gap-2">
-            {/* Emergency mode badge */}
+      <MonitoringHeader
+        title={isLoading ? "Carregando..." : dashboard?.name || "Dashboard"}
+        subtitle={dashboard?.description || undefined}
+        backPath="/app/monitoring/dashboards"
+        onRefresh={handlePoll}
+        isRefreshing={isPollingActive}
+        extraRight={
+          <>
             {isEmergencyMode && (
-              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/20 border border-destructive/40 text-[9px] font-mono text-destructive animate-pulse">
-                ⚡ 1s POLL
-              </span>
+              <span className="flex items-center gap-1 px-1.5 py-0.5 rounded bg-destructive/20 border border-destructive/40 text-[9px] font-mono text-destructive animate-pulse">⚡ 1s POLL</span>
             )}
-
-            {/* Zabbix Data Age */}
             {dataAgeSec !== null && (
-              <span className={`text-[9px] font-mono flex items-center gap-0.5 ${dataAgeSec > 5 ? "text-yellow-400 animate-pulse" : "text-muted-foreground/60"}`}>
-                Zabbix: {dataAgeSec}s ago
-              </span>
+              <span className={`text-[9px] font-mono flex items-center gap-0.5 ${dataAgeSec > 5 ? "text-yellow-400 animate-pulse" : "text-muted-foreground/60"}`}>Zabbix: {dataAgeSec}s ago</span>
             )}
-
-            {/* Poll RTT indicator */}
             {lastPollLatencyMs !== null && (
-              <span className={`text-[9px] font-mono ${lastPollLatencyMs > 3000 ? "text-yellow-400" : "text-muted-foreground/60"}`}>
-                Poll RTT {lastPollLatencyMs}ms
-              </span>
+              <span className={`text-[9px] font-mono ${lastPollLatencyMs > 3000 ? "text-yellow-400" : "text-muted-foreground/60"}`}>Poll RTT {lastPollLatencyMs}ms</span>
             )}
-
-            {/* Realtime Time-to-Glass indicator */}
             <RealtimeLatencyBadge telemetryCache={telemetryCache} />
-
-            {/* Realtime status */}
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
-              {hasData ? (
-                <Wifi className="w-3 h-3 text-primary" />
-              ) : (
-                <WifiOff className="w-3 h-3 text-muted-foreground/50" />
-              )}
+              {hasData ? <Wifi className="w-3 h-3 text-primary" /> : <WifiOff className="w-3 h-3 text-muted-foreground/50" />}
               <span className="font-mono">{telemetryCache.size} keys</span>
             </div>
-
-            {/* Poll interval selector */}
             <div className="flex items-center gap-0.5 border border-border/40 rounded-md px-1 py-0.5">
               <Timer className="w-3 h-3 text-muted-foreground mr-0.5" />
               {POLL_INTERVALS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => handleIntervalChange(opt.value)}
-                  className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-all ${
-                    pollInterval === opt.value
-                      ? "bg-primary/20 text-primary border border-primary/30"
-                      : "text-muted-foreground hover:text-foreground hover:bg-accent/30 border border-transparent"
-                  }`}
-                >
+                <button key={opt.value} onClick={() => handleIntervalChange(opt.value)}
+                  className={`px-1.5 py-0.5 rounded text-[9px] font-mono transition-all ${pollInterval === opt.value ? "bg-primary/20 text-primary border border-primary/30" : "text-muted-foreground hover:text-foreground hover:bg-accent/30 border border-transparent"}`}>
                   {opt.label}
                 </button>
               ))}
             </div>
-
-            {/* Audio control */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleMute}
-              className={`h-7 w-7 ${muted ? "text-muted-foreground" : "text-primary"}`}
-              title={muted ? "Ativar alertas sonoros" : "Silenciar alertas"}
-            >
+            <Button variant="ghost" size="icon" onClick={toggleMute} className={`h-7 w-7 ${muted ? "text-muted-foreground" : "text-primary"}`}>
               {muted ? <VolumeOff className="w-3.5 h-3.5" /> : <Volume2 className="w-3.5 h-3.5" />}
             </Button>
+          </>
+        }
+      />
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePoll}
-              disabled={isPollingActive || !dashboard?.zabbix_connection_id}
-              className="gap-1.5 text-xs"
-            >
-              <RefreshCw className={`w-3 h-3 ${isPollingActive ? "animate-spin" : ""}`} />
-              Poll
-            </Button>
-          </div>
-        </motion.header>
+      <div className="w-full relative z-10" style={{ maxWidth: '100%', margin: 0 }}>
 
         {/* Loading state */}
         {isLoading && (
