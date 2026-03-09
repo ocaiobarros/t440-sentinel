@@ -347,6 +347,8 @@ export default function VirtualizationMonitor() {
 
   const virt = useMemo(() => (data ? extractVirtData(data) : null), [data]);
 
+  const isKiosk = useKioskMode();
+
   if (showSetup) {
     return <IdracSetupWizard onComplete={handleConfigComplete} existingConfig={config} title="Virtualização" subtitle="Monitoramento de hypervisors VMware / Proxmox" icon={Box} />;
   }
@@ -363,8 +365,6 @@ export default function VirtualizationMonitor() {
   const isPingOk = virt?.host.ping
     ? /ok|up|200|1/i.test(virt.host.ping)
     : false;
-
-  const isKiosk = useKioskMode();
 
   return (
     <div className={`min-h-screen bg-background grid-pattern scanlines relative ${isKiosk ? "" : "p-4 md:p-6 lg:p-8"}`}>

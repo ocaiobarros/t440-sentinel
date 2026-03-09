@@ -268,8 +268,6 @@ export default function FleetIntelligence() {
         </div>
       </div>
     );
-  }
-
   const isKiosk = useKioskMode();
 
   return (
