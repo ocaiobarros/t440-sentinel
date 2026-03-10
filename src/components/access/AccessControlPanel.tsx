@@ -53,24 +53,37 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
     },
   });
 
-  // Load users and teams for selection
-  const { data: users = [] } = useQuery({
-    queryKey: ["tenant-profiles", resourceTenantId],
+  // Load users and teams for selection — uses edge function to bypass RLS cross-tenant issues
+  const { data: tenantData, isLoading: tenantDataLoading } = useQuery({
+    queryKey: ["tenant-users-teams", resourceTenantId],
     enabled: !!resourceTenantId,
     queryFn: async () => {
-      const { data } = await supabase.from("profiles").select("id, display_name, email").eq("tenant_id", resourceTenantId!);
-      return data ?? [];
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "tenant_users", tenant_id: resourceTenantId },
+      });
+      if (error) {
+        console.error("[AccessControlPanel] tenant_users error:", error);
+        // Fallback to direct query
+        const [usersRes, teamsRes] = await Promise.all([
+          supabase.from("profiles").select("id, display_name, email").eq("tenant_id", resourceTenantId!),
+          supabase.from("teams").select("id, name, color").eq("tenant_id", resourceTenantId!),
+        ]);
+        return { users: usersRes.data ?? [], teams: teamsRes.data ?? [] };
+      }
+      if (data?.error) {
+        console.error("[AccessControlPanel] tenant_users data error:", data.error);
+        const [usersRes, teamsRes] = await Promise.all([
+          supabase.from("profiles").select("id, display_name, email").eq("tenant_id", resourceTenantId!),
+          supabase.from("teams").select("id, name, color").eq("tenant_id", resourceTenantId!),
+        ]);
+        return { users: usersRes.data ?? [], teams: teamsRes.data ?? [] };
+      }
+      return { users: data?.users ?? [], teams: data?.teams ?? [] };
     },
   });
 
-  const { data: teams = [] } = useQuery({
-    queryKey: ["tenant-teams", resourceTenantId],
-    enabled: !!resourceTenantId,
-    queryFn: async () => {
-      const { data } = await supabase.from("teams").select("id, name, color").eq("tenant_id", resourceTenantId!);
-      return data ?? [];
-    },
-  });
+  const users = tenantData?.users ?? [];
+  const teams = tenantData?.teams ?? [];
 
   const handleAdd = async () => {
     if (!granteeId) return;
