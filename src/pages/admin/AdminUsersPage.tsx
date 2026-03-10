@@ -234,6 +234,7 @@ export default function AdminUsersPage() {
       setSearch("");
       setRoleFilter("all");
       setOrgFilter("all");
+      await refreshSession();
       await fetchData();
     } catch (err: any) {
       const desc = await getFunctionErrorMessage(err, "Falha ao convidar.");
