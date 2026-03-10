@@ -115,7 +115,7 @@ export default function AdminLayout() {
           supabase.from("profiles").select("*").order("created_at", { ascending: true }),
         ]);
         if (tRes.error || tRes.data?.error) {
-          const { data } = await supabase.from("tenants").select("id, name, slug, created_at").order("created_at", { ascending: true });
+          const { data } = await supabase.from("tenants").select("id, name, slug, plan, max_users, max_teams, max_dashboards, max_integrations, created_at").order("created_at", { ascending: true });
           allTenants = (data ?? []) as TenantInfo[];
         } else {
           allTenants = (tRes.data?.tenants ?? []) as TenantInfo[];
