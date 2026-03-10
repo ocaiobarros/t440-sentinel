@@ -258,6 +258,7 @@ export default function AdminUsersPage() {
       if (data?.error) throw new Error(data.error);
       toast({ title: "Acesso removido", description: `${removeDialog.name} removido da organização.` });
       setRemoveDialog({ open: false, userId: "", name: "", tenantId: "" });
+      await refreshSession();
       await fetchData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Erro", description: err.message });
