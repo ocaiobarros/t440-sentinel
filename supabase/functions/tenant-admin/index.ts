@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
       membersTenantScope = tenantToCheck;
     }
 
-    if (!isSuperAdmin && action !== "members" && action !== "tenant_users" && action !== "unlink" && action !== "tenant_teams" && action !== "create_team" && action !== "update_team" && action !== "delete_team" && action !== "add_team_member" && action !== "remove_team_member") {
+    if (!isSuperAdmin && !tenantAdminActions.includes(action)) {
       return new Response(JSON.stringify({ error: "Super admin role required", stage }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
