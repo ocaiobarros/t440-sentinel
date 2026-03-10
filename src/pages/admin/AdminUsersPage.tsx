@@ -618,8 +618,11 @@ export default function AdminUsersPage() {
               if (!unlinkTargetTenant) return;
               setRemoving(true);
               try {
-                const { error } = await supabase.from("user_roles").delete().eq("user_id", unlinkDialog.userId).eq("tenant_id", unlinkTargetTenant);
+                const { data, error } = await supabase.functions.invoke("tenant-admin", {
+                  body: { action: "unlink", user_id: unlinkDialog.userId, tenant_id: unlinkTargetTenant },
+                });
                 if (error) throw error;
+                if (data?.error) throw new Error(data.error);
                 const tName = tenants.find((t) => t.id === unlinkTargetTenant)?.name ?? "";
                 toast({ title: "Vínculo removido", description: `${unlinkDialog.name} desvinculado de "${tName}".` });
                 setUnlinkDialog({ open: false, userId: "", name: "", userTenantIds: [] });
