@@ -244,8 +244,11 @@ export default function AdminUsersPage() {
     if (!removeDialog.tenantId) return;
     setRemoving(true);
     try {
-      const { error } = await supabase.from("user_roles").delete().eq("user_id", removeDialog.userId).eq("tenant_id", removeDialog.tenantId);
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "unlink", user_id: removeDialog.userId, tenant_id: removeDialog.tenantId },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast({ title: "Acesso removido", description: `${removeDialog.name} removido da organização.` });
       setRemoveDialog({ open: false, userId: "", name: "", tenantId: "" });
       await fetchData();
@@ -615,8 +618,11 @@ export default function AdminUsersPage() {
               if (!unlinkTargetTenant) return;
               setRemoving(true);
               try {
-                const { error } = await supabase.from("user_roles").delete().eq("user_id", unlinkDialog.userId).eq("tenant_id", unlinkTargetTenant);
+                const { data, error } = await supabase.functions.invoke("tenant-admin", {
+                  body: { action: "unlink", user_id: unlinkDialog.userId, tenant_id: unlinkTargetTenant },
+                });
                 if (error) throw error;
+                if (data?.error) throw new Error(data.error);
                 const tName = tenants.find((t) => t.id === unlinkTargetTenant)?.name ?? "";
                 toast({ title: "Vínculo removido", description: `${unlinkDialog.name} desvinculado de "${tName}".` });
                 setUnlinkDialog({ open: false, userId: "", name: "", userTenantIds: [] });
