@@ -105,6 +105,7 @@ function timeAgo(dateStr: string): string {
 }
 
 export default function AuditLogPanel() {
+  const [source, setSource] = useState<"infra" | "admin">("infra");
   const [tableFilter, setTableFilter] = useState("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [userFilter, setUserFilter] = useState("all");
