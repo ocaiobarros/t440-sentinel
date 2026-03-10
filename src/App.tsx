@@ -205,6 +205,23 @@ const App = () => (
                 }
               />
 
+              {/* ── Platform Hub (independent layout, Platform Admins only) ── */}
+              <Route path="/platform" element={
+                <ProtectedRoute>
+                  <Suspense fallback={<LazyFallback />}>
+                    <PlatformLayout />
+                  </Suspense>
+                </ProtectedRoute>
+              }>
+                <Route index element={<PlatformLanding />} />
+                <Route path="tenants" element={<PlatformTenantsPage />} />
+                <Route path="billing" element={<PlatformBillingPage />} />
+                <Route path="health" element={<PlatformHealthPage />} />
+                <Route path="metrics" element={<PlatformMetricsPage />} />
+                <Route path="audit" element={<PlatformAuditPage />} />
+                <Route path="admins" element={<PlatformAdminsPage />} />
+              </Route>
+
               {/* ── Full-screen routes (outside sidebar) ── */}
               <Route path="/app/operations/flowmap/:mapId" element={
                 <ProtectedRoute><FlowMapPage /></ProtectedRoute>

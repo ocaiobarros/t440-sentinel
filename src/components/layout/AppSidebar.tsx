@@ -216,6 +216,30 @@ export function AppSidebar() {
           <NavGroup label={t("sidebar.settings")} items={settingsItems} collapsed={collapsed} />
           <NavGroup label={t("sidebar.system")} items={systemItems} collapsed={collapsed} />
         </RoleGate>
+
+        {isPlatformAdmin && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-[9px] font-display uppercase tracking-[0.2em] text-muted-foreground/60 px-3">
+              {!collapsed && "Platform"}
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to="/platform"
+                      className="flex items-center gap-2.5 px-3 py-1.5 rounded-md text-xs font-mono text-muted-foreground hover:text-foreground hover:bg-sidebar-accent transition-colors"
+                      activeClassName="bg-sidebar-accent text-primary font-medium"
+                    >
+                      <ShieldCheck className="w-3.5 h-3.5 shrink-0" />
+                      {!collapsed && <span>Platform Hub</span>}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SupportModal open={supportOpen} onOpenChange={setSupportOpen} />
