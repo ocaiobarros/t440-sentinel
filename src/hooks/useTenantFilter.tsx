@@ -24,6 +24,10 @@ interface TenantFilterContextType {
   activeTenantName: string | null;
   /** Clear the filter (show all — super admin only) */
   clearFilter: () => void;
+  /** The tenant_id from the JWT (primary source of truth) */
+  jwtTenantId: string | null;
+  /** Refresh the auth session to sync JWT after admin mutations */
+  refreshSession: () => Promise<void>;
 }
 
 const TenantFilterCtx = createContext<TenantFilterContextType>({
@@ -34,12 +38,14 @@ const TenantFilterCtx = createContext<TenantFilterContextType>({
   tenants: [],
   activeTenantName: null,
   clearFilter: () => {},
+  jwtTenantId: null,
+  refreshSession: async () => {},
 });
 
 const STORAGE_KEY = "fp_tenant_filter";
 
 export function TenantFilterProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const { user, session } = useAuth();
   const queryClient = useQueryClient();
   const [activeTenantId, setActiveTenantIdState] = useState<string | null>(() => {
     try {
@@ -50,6 +56,18 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
   });
   const [isSuperAdmin, setIsSuperAdmin] = useState(false);
   const [tenants, setTenants] = useState<TenantOption[]>([]);
+
+  // Primary source of truth: JWT app_metadata.tenant_id
+  const jwtTenantId = (session?.user?.app_metadata?.tenant_id as string) ?? null;
+
+  // Refresh session helper — call after tenant/role mutations
+  const refreshSession = useCallback(async () => {
+    try {
+      await supabase.auth.refreshSession();
+    } catch (err) {
+      console.warn("[TenantFilter] refreshSession failed:", err);
+    }
+  }, []);
 
   // Load tenants the user belongs to (via user_roles)
   useEffect(() => {
@@ -71,30 +89,18 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
       let tenantList: TenantOption[] = [];
 
       if (superAdmin) {
-        // Super admins prefer edge function list, but fallback to direct table for backward compatibility
         const { data, error } = await supabase.functions.invoke("tenant-admin", {
           body: { action: "list" },
         });
         if (cancelled) return;
 
-        const functionError =
-          (typeof data?.error === "string" && data.error) ||
-          (typeof error?.message === "string" && error.message) ||
-          "";
-
         if (error || data?.error) {
-          const { data: tenantRows, error: tenantRowsError } = await supabase
+          const { data: tenantRows } = await supabase
             .from("tenants")
             .select("id, name, slug")
             .order("name");
           if (cancelled) return;
-
-          if (tenantRowsError) {
-            console.error("[TenantFilter] Falha ao listar tenants:", functionError || tenantRowsError.message);
-            tenantList = [];
-          } else {
-            tenantList = (tenantRows ?? []) as TenantOption[];
-          }
+          tenantList = (tenantRows ?? []) as TenantOption[];
         } else {
           tenantList = (data?.tenants ?? []) as TenantOption[];
         }
@@ -128,18 +134,12 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
         setActiveTenantIdState(null);
       }
 
-      // Auto-select: use stored, or user's profile tenant, or first available
+      // Auto-select: use stored, or JWT tenant_id, or first available
       const currentStored = sessionStorage.getItem(STORAGE_KEY);
       if (!currentStored && tenantList.length > 0) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("tenant_id")
-          .eq("id", user.id)
-          .maybeSingle();
-        if (cancelled) return;
-
-        const defaultTenant = profile?.tenant_id && tenantList.some((t) => t.id === profile.tenant_id)
-          ? profile.tenant_id
+        // Prefer JWT tenant_id as the primary source
+        const defaultTenant = jwtTenantId && tenantList.some((t) => t.id === jwtTenantId)
+          ? jwtTenantId
           : tenantList[0].id;
 
         setActiveTenantIdState(defaultTenant);
@@ -148,7 +148,7 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
     })();
 
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [user?.id, jwtTenantId]);
 
   const setActiveTenantId = useCallback((id: string | null) => {
     setActiveTenantIdState(id);
@@ -180,6 +180,8 @@ export function TenantFilterProvider({ children }: { children: ReactNode }) {
         tenants,
         activeTenantName,
         clearFilter,
+        jwtTenantId,
+        refreshSession,
       }}
     >
       {children}

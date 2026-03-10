@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { useAuth } from "@/hooks/useAuth";
 import { useAdmin, getFunctionErrorMessage, type Profile, type UserRole } from "./AdminContext";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -29,6 +30,7 @@ export default function AdminUsersPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { profiles, roles, tenants, selectedTenantId, setSelectedTenantId, isSuperAdmin, fetchData, profileById, getRoleForUser, getRoleBadgeVariant } = useAdmin();
+  const { refreshSession } = useTenantFilter();
 
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
@@ -163,6 +165,7 @@ export default function AdminUsersPage() {
       if (data?.error) throw new Error(data.error);
 
       toast({ title: "Permissão atualizada", description: `Usuário agora é ${newRole}.` });
+      await refreshSession();
       await fetchData();
       return true;
     } catch (err: any) {
@@ -231,6 +234,7 @@ export default function AdminUsersPage() {
       setSearch("");
       setRoleFilter("all");
       setOrgFilter("all");
+      await refreshSession();
       await fetchData();
     } catch (err: any) {
       const desc = await getFunctionErrorMessage(err, "Falha ao convidar.");
@@ -254,6 +258,7 @@ export default function AdminUsersPage() {
       if (data?.error) throw new Error(data.error);
       toast({ title: "Acesso removido", description: `${removeDialog.name} removido da organização.` });
       setRemoveDialog({ open: false, userId: "", name: "", tenantId: "" });
+      await refreshSession();
       await fetchData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Erro", description: err.message });
@@ -277,6 +282,7 @@ export default function AdminUsersPage() {
       toast({ title: "Usuário vinculado", description: `${linkDialog.name} vinculado a "${tenants.find((t) => t.id === linkTargetTenant)?.name}".` });
       setLinkDialog({ open: false, userId: "", name: "", email: "" });
       setLinkTargetTenant(""); setLinkRole("viewer");
+      await refreshSession();
       await fetchData();
     } catch (err: any) {
       toast({ variant: "destructive", title: "Erro", description: err.message });

@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAdmin, getFunctionErrorMessage, type Profile } from "./AdminContext";
+import { useTenantFilter } from "@/hooks/useTenantFilter";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import AdminBreadcrumb from "./AdminBreadcrumb";
 export default function AdminOrgsPage() {
   const { toast } = useToast();
   const { profiles, roles, tenants, selectedTenantId, setSelectedTenantId, isSuperAdmin, fetchData, profileById, getRoleForUser, getRoleBadgeVariant } = useAdmin();
+  const { refreshSession } = useTenantFilter();
 
   const [editingTeam, setEditingTeam] = useState(false);
   const [teamName, setTeamName] = useState("");
@@ -57,8 +59,11 @@ export default function AdminOrgsPage() {
     try {
       const slug = teamSlug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
       if (!slug) { toast({ variant: "destructive", title: "Slug inválido" }); setSavingTeam(false); return; }
-      const { error } = await supabase.from("tenants").update({ name: teamName.trim(), slug }).eq("id", tenant.id);
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "update_tenant", tenant_id: tenant.id, name: teamName.trim(), slug },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast({ title: "Organização atualizada" });
       setEditingTeam(false);
       await fetchData();
@@ -117,6 +122,7 @@ export default function AdminOrgsPage() {
       toast({ title: data?.existing ? "Usuário vinculado" : "Usuário adicionado" });
       setInviteOpen(false);
       setInviteForm({ email: "", display_name: "", role: "viewer", password: "" });
+      await refreshSession();
       await fetchData();
     } catch (err: any) {
       const desc = await getFunctionErrorMessage(err, "Falha ao convidar.");
