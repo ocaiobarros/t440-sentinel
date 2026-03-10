@@ -192,6 +192,22 @@ export default function AuditLogPanel() {
     <div className="space-y-4">
       {/* Filters */}
       <div className="flex items-center gap-2 flex-wrap">
+        {/* Source Toggle */}
+        <div className="flex rounded-lg border border-border overflow-hidden">
+          <button
+            onClick={() => setSource("infra")}
+            className={`px-3 h-9 text-xs font-medium transition-colors ${source === "infra" ? "bg-primary text-primary-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
+          >
+            Infraestrutura
+          </button>
+          <button
+            onClick={() => setSource("admin")}
+            className={`px-3 h-9 text-xs font-medium transition-colors ${source === "admin" ? "bg-primary text-primary-foreground" : "bg-muted/50 text-muted-foreground hover:bg-muted"}`}
+          >
+            Admin
+          </button>
+        </div>
+
         <div className="relative flex-1 min-w-[200px]">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input
@@ -201,19 +217,21 @@ export default function AuditLogPanel() {
             className="pl-9 bg-muted/50 border-border text-sm h-9"
           />
         </div>
-        <Select value={tableFilter} onValueChange={setTableFilter}>
-          <SelectTrigger className="w-36 h-9 bg-muted/50 border-border text-xs">
-            <SelectValue placeholder="Tabela" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todas tabelas</SelectItem>
-            <SelectItem value="flow_map_ctos">CTOs</SelectItem>
-            <SelectItem value="flow_map_cables">Cabos</SelectItem>
-            <SelectItem value="flow_map_reservas">Reservas</SelectItem>
-            <SelectItem value="flow_map_hosts">Hosts</SelectItem>
-            <SelectItem value="flow_map_links">Links</SelectItem>
-          </SelectContent>
-        </Select>
+        {source === "infra" && (
+          <Select value={tableFilter} onValueChange={setTableFilter}>
+            <SelectTrigger className="w-36 h-9 bg-muted/50 border-border text-xs">
+              <SelectValue placeholder="Tabela" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todas tabelas</SelectItem>
+              <SelectItem value="flow_map_ctos">CTOs</SelectItem>
+              <SelectItem value="flow_map_cables">Cabos</SelectItem>
+              <SelectItem value="flow_map_reservas">Reservas</SelectItem>
+              <SelectItem value="flow_map_hosts">Hosts</SelectItem>
+              <SelectItem value="flow_map_links">Links</SelectItem>
+            </SelectContent>
+          </Select>
+        )}
         <Select value={actionFilter} onValueChange={setActionFilter}>
           <SelectTrigger className="w-32 h-9 bg-muted/50 border-border text-xs">
             <SelectValue placeholder="Ação" />
