@@ -123,8 +123,37 @@ export default function AuditLogPanel() {
   }, [periodFilter]);
 
   const { data: logs, isLoading, refetch, isFetching } = useQuery({
-    queryKey: ["audit-logs", tableFilter, actionFilter, periodFilter],
+    queryKey: ["audit-logs", source, tableFilter, actionFilter, periodFilter],
     queryFn: async () => {
+      const table = source === "admin" ? "audit_logs" : "flow_audit_logs";
+
+      if (source === "admin") {
+        let query = supabase
+          .from("audit_logs")
+          .select("*")
+          .gte("created_at", periodStart)
+          .order("created_at", { ascending: false })
+          .limit(200);
+
+        if (actionFilter !== "all") query = query.eq("action", actionFilter);
+
+        const { data, error } = await query;
+        if (error) throw error;
+        // Map audit_logs to AuditLogEntry shape
+        return (data ?? []).map((row: any) => ({
+          id: row.id,
+          tenant_id: row.tenant_id,
+          user_id: row.user_id,
+          user_email: null,
+          action: row.action,
+          table_name: row.entity_type ?? "—",
+          record_id: row.entity_id,
+          old_data: null,
+          new_data: row.details ?? null,
+          created_at: row.created_at,
+        })) as AuditLogEntry[];
+      }
+
       let query = supabase
         .from("flow_audit_logs")
         .select("*")
