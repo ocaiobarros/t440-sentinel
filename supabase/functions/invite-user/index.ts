@@ -260,6 +260,30 @@ Deno.serve(async (req) => {
       }
     };
 
+    /* ── Plan limit check ── */
+    stage = "plan_limit_check";
+    const { data: tenantLimits } = await adminClient
+      .from("tenants")
+      .select("plan, max_users")
+      .eq("id", targetTenant)
+      .single();
+
+    if (tenantLimits) {
+      const { count: currentUserCount } = await adminClient
+        .from("user_roles")
+        .select("id", { count: "exact", head: true })
+        .eq("tenant_id", targetTenant);
+
+      if ((currentUserCount ?? 0) >= tenantLimits.max_users) {
+        return new Response(JSON.stringify({
+          error: `Limite de usuários atingido (${tenantLimits.max_users}) para o plano "${tenantLimits.plan}". Faça upgrade para adicionar mais usuários.`,
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     stage = "profile_lookup";
     const { data: profilesByEmail, error: profilesByEmailError } = await adminClient
       .from("profiles")

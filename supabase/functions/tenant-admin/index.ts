@@ -115,7 +115,7 @@ Deno.serve(async (req) => {
       stage = "list_tenants";
       const { data: allTenants, error: listErr } = await adminClient
         .from("tenants")
-        .select("id, name, slug, created_at, updated_at")
+        .select("id, name, slug, plan, max_users, max_teams, max_dashboards, max_integrations, created_at, updated_at")
         .order("created_at", { ascending: false });
 
       if (listErr) {
