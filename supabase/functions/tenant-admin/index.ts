@@ -87,8 +87,17 @@ Deno.serve(async (req) => {
       membersTenantScope = tenantToCheck;
     }
 
-    if (!isSuperAdmin && !tenantAdminActions.includes(action)) {
+    // Platform admin actions require super admin
+    const platformAdminActions = ["add_platform_admin", "remove_platform_admin"];
+    if (!isSuperAdmin && !tenantAdminActions.includes(action) && !platformAdminActions.includes(action)) {
       return new Response(JSON.stringify({ error: "Super admin role required", stage }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (platformAdminActions.includes(action) && !isSuperAdmin) {
+      return new Response(JSON.stringify({ error: "Platform admin role required", stage }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -897,6 +906,83 @@ Deno.serve(async (req) => {
 
     if (callerTenant) {
       await writeAudit(String(callerTenant), "create_tenant", "tenant", persistedTenant.id, { name: persistedTenant.name, slug: persistedTenant.slug });
+    }
+
+    /* ── ADD PLATFORM ADMIN ── */
+    if (action === "add_platform_admin") {
+      stage = "add_platform_admin";
+      const targetEmail = String(body?.email || "").trim().toLowerCase();
+      if (!targetEmail) {
+        return new Response(JSON.stringify({ error: "email is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Find user by email in profiles
+      const { data: targetProfile } = await adminClient
+        .from("profiles")
+        .select("id")
+        .ilike("email", targetEmail)
+        .maybeSingle();
+
+      if (!targetProfile) {
+        return new Response(JSON.stringify({ error: `Usuário com email "${targetEmail}" não encontrado.` }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error: insertErr } = await adminClient
+        .from("platform_admins")
+        .insert({ user_id: targetProfile.id, role: "super_admin" });
+
+      if (insertErr) {
+        if (insertErr.code === "23505") {
+          return new Response(JSON.stringify({ error: "Usuário já é Platform Admin." }), {
+            status: 409,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        throw insertErr;
+      }
+
+      return new Response(JSON.stringify({ success: true, user_id: targetProfile.id }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── REMOVE PLATFORM ADMIN ── */
+    if (action === "remove_platform_admin") {
+      stage = "remove_platform_admin";
+      const targetUserId = String(body?.user_id || "").trim();
+      if (!targetUserId) {
+        return new Response(JSON.stringify({ error: "user_id is required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Prevent removing yourself
+      if (targetUserId === caller.id) {
+        return new Response(JSON.stringify({ error: "Você não pode remover a si mesmo." }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { error: delErr } = await adminClient
+        .from("platform_admins")
+        .delete()
+        .eq("user_id", targetUserId);
+
+      if (delErr) throw delErr;
+
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     return new Response(JSON.stringify({ success: true, tenant: persistedTenant }), {

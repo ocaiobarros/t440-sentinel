@@ -3,7 +3,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate, useLocation, Outlet } from "react-router-dom";
-import { Shield, ChevronLeft, Crown, Loader2 } from "lucide-react";
+import { Shield, ChevronLeft, Settings, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -235,18 +235,13 @@ export default function AdminLayout() {
             </Button>
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center">
-                <Crown className="w-5 h-5 text-primary" />
+                <Settings className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-lg font-bold font-[Orbitron] tracking-wider text-foreground">ADMINISTRATION</h1>
-                <p className="text-xs text-muted-foreground font-mono">FLOWPULSE INTELLIGENCE — Gerenciamento</p>
+                <h1 className="text-lg font-bold font-[Orbitron] tracking-wider text-foreground">TENANT ADMIN</h1>
+                <p className="text-xs text-muted-foreground font-mono">FLOWPULSE — Gerenciamento do Tenant</p>
               </div>
             </div>
-            {isSuperAdmin && (
-              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs font-mono">
-                <Crown className="w-3 h-3 mr-1" /> SUPER ADMIN
-              </Badge>
-            )}
           </div>
         </header>
 

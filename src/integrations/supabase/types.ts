@@ -1370,6 +1370,27 @@ export type Database = {
           },
         ]
       }
+      platform_admins: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       printer_configs: {
         Row: {
           base_counter: number
@@ -2200,6 +2221,7 @@ export type Database = {
         Args: { p_now: string; p_scope?: Json; p_tenant_id: string }
         Returns: string
       }
+      is_platform_admin: { Args: { p_user_id: string }; Returns: boolean }
       is_resource_creator: {
         Args: {
           p_resource_id: string
