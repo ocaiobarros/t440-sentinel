@@ -1,5 +1,5 @@
 import { useNavigate } from "react-router-dom";
-import { Users, Building2, Cable, Radio, Activity, Zap, Rocket, UsersRound, CreditCard } from "lucide-react";
+import { Users, Building2, Cable, Radio, Activity, Zap, CreditCard, FileSearch } from "lucide-react";
 
 interface AdminCard {
   title: string;
