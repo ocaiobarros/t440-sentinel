@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
     let membersTenantScope: string | null = String(body?.tenant_id || "").trim() || null;
 
-    if (action === "members" && !isSuperAdmin) {
+    if ((action === "members" || action === "tenant_users" || action === "unlink") && !isSuperAdmin) {
       const tenantToCheck = membersTenantScope || String(callerTenant || "");
 
       if (!tenantToCheck) {
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
         });
       }
 
-      // Tenant admin só pode listar membros do tenant autorizado.
+      // Tenant admin só pode operar no tenant autorizado.
       membersTenantScope = tenantToCheck;
     }
 
