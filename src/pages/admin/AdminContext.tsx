@@ -161,7 +161,6 @@ export default function AdminLayout() {
       setTenants(allTenants);
       setSelectedTenantId((cur) => {
         if (cur && allTenants.some((t) => t.id === cur)) return cur;
-        if (cur === null && hasInit.current && allTenants.length > 1) return null;
         return allTenants[0]?.id ?? null;
       });
       hasInit.current = allTenants.length > 0;

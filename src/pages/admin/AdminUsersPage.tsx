@@ -621,7 +621,10 @@ export default function AdminUsersPage() {
                 const { data, error } = await supabase.functions.invoke("tenant-admin", {
                   body: { action: "unlink", user_id: unlinkDialog.userId, tenant_id: unlinkTargetTenant },
                 });
-                if (error) throw error;
+                if (error) {
+                  const msg = await getFunctionErrorMessage(error, "Falha ao desvincular usuário.");
+                  throw new Error(msg);
+                }
                 if (data?.error) throw new Error(data.error);
                 const tName = tenants.find((t) => t.id === unlinkTargetTenant)?.name ?? "";
                 toast({ title: "Vínculo removido", description: `${unlinkDialog.name} desvinculado de "${tName}".` });
@@ -629,7 +632,7 @@ export default function AdminUsersPage() {
                 setUnlinkTargetTenant("");
                 await fetchData();
               } catch (err: any) {
-                toast({ variant: "destructive", title: "Erro", description: err.message });
+                toast({ variant: "destructive", title: "Erro", description: err.message || "Falha ao desvincular. Verifique se a Edge Function está atualizada." });
               } finally {
                 setRemoving(false);
               }
