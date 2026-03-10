@@ -44,6 +44,16 @@ const TABLE_LABELS: Record<string, { label: string; icon: typeof MapPin }> = {
   flow_map_reservas: { label: "Reserva", icon: Bookmark },
   flow_map_hosts: { label: "Host", icon: MapPin },
   flow_map_links: { label: "Link", icon: Cable },
+  dashboards: { label: "Dashboard", icon: MapPin },
+  teams: { label: "Time", icon: User },
+  profiles: { label: "Perfil", icon: User },
+  user_roles: { label: "Papel", icon: User },
+  resource_access: { label: "Permissão", icon: User },
+  tenants: { label: "Organização", icon: MapPin },
+  zabbix_connections: { label: "Conexão Zabbix", icon: Cable },
+  rms_connections: { label: "Conexão RMS", icon: Cable },
+  alert_rules: { label: "Regra de Alerta", icon: MapPin },
+  maintenance_windows: { label: "Manutenção", icon: Clock },
 };
 
 const ACTION_LABELS: Record<string, { label: string; color: string }> = {
