@@ -1,6 +1,7 @@
 -- ╔══════════════════════════════════════════════════════════════════╗
 -- ║  FLOWPULSE INTELLIGENCE — Schema On-Premise (PostgreSQL Puro)  ║
--- ║  © 2026 CBLabs — Versão 1.1                                    ║
+-- ║  © 2026 CBLabs — Versão 2.0                                    ║
+-- ║  Paridade total com Cloud — 2026-03-10                         ║
 -- ╚══════════════════════════════════════════════════════════════════╝
 
 -- Executar como superusuário no banco "postgres"
@@ -17,7 +18,7 @@ CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;
 
 -- ─── ENUMS ────────────────────────────────────────────────
 DO $$ BEGIN
-  CREATE TYPE app_role AS ENUM ('admin', 'editor', 'tech', 'sales', 'viewer');
+  CREATE TYPE app_role AS ENUM ('admin', 'editor', 'viewer', 'tech', 'sales');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -25,23 +26,23 @@ DO $$ BEGIN
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE severity_level AS ENUM ('info', 'low', 'medium', 'high', 'critical');
+  CREATE TYPE severity_level AS ENUM ('info', 'warning', 'average', 'high', 'disaster');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE link_status AS ENUM ('UP', 'DOWN', 'DEGRADED', 'UNKNOWN');
+  CREATE TYPE link_status AS ENUM ('UP', 'DOWN', 'UNKNOWN', 'DEGRADED', 'ISOLATED');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE cable_type AS ENUM ('ASU', 'ADSS', 'OPGW', 'AS', 'SUBAQUATICO');
+  CREATE TYPE cable_type AS ENUM ('ASU', 'CFOA', 'AS', 'DROP');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE cto_capacity AS ENUM ('4', '8', '16', '32');
+  CREATE TYPE cto_capacity AS ENUM ('8', '16', '32');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
-  CREATE TYPE cto_status AS ENUM ('ONLINE', 'DEGRADED', 'OFFLINE', 'UNKNOWN');
+  CREATE TYPE cto_status AS ENUM ('OK', 'WARNING', 'CRITICAL', 'UNKNOWN');
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 DO $$ BEGIN
@@ -53,9 +54,14 @@ DO $$ BEGIN
     'tenant_all', 'zabbix_connection', 'dashboard', 'trigger', 'host', 'hostgroup', 'tag'
   );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
--- ─── AUTH.USERS ───────────────────────────────────────────
--- GoTrue gerencia auth.users automaticamente.
--- Não criamos tabela shadow — referenciamos auth.users diretamente.
+
+DO $$ BEGIN
+  CREATE TYPE finance_scenario AS ENUM ('realizado', 'previsto');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+DO $$ BEGIN
+  CREATE TYPE finance_type AS ENUM ('receber', 'pagar');
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ─── TENANTS ──────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tenants (
@@ -69,7 +75,7 @@ CREATE TABLE IF NOT EXISTS tenants (
 -- ─── PROFILES ─────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   display_name TEXT,
   email TEXT,
   avatar_url TEXT,
@@ -84,16 +90,51 @@ CREATE TABLE IF NOT EXISTS profiles (
 CREATE TABLE IF NOT EXISTS user_roles (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   role app_role NOT NULL DEFAULT 'viewer',
   created_at TIMESTAMPTZ DEFAULT now(),
   UNIQUE (user_id, tenant_id, role)
 );
 
+-- ─── TEAMS ────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS teams (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  color TEXT,
+  created_by UUID,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ─── TEAM MEMBERS ─────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS team_members (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  team_id UUID NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ─── RESOURCE ACCESS ──────────────────────────────────────
+CREATE TABLE IF NOT EXISTS resource_access (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  resource_type TEXT NOT NULL,
+  resource_id UUID NOT NULL,
+  grantee_type TEXT NOT NULL,
+  grantee_id UUID NOT NULL,
+  access_level TEXT NOT NULL DEFAULT 'viewer',
+  granted_by UUID,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT resource_access_unique_grant UNIQUE (tenant_id, resource_type, resource_id, grantee_type, grantee_id)
+);
+
 -- ─── DASHBOARDS ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS dashboards (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL DEFAULT 'New Dashboard',
   description TEXT,
   category TEXT DEFAULT 'dashboard',
@@ -127,7 +168,7 @@ CREATE TABLE IF NOT EXISTS widgets (
 -- ─── ZABBIX CONNECTIONS ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS zabbix_connections (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   url TEXT NOT NULL,
   username TEXT NOT NULL DEFAULT '',
@@ -144,7 +185,7 @@ CREATE TABLE IF NOT EXISTS zabbix_connections (
 -- ─── FLOW MAPS ────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_maps (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   center_lat DOUBLE PRECISION DEFAULT -20.4630,
   center_lon DOUBLE PRECISION DEFAULT -54.6190,
@@ -159,8 +200,8 @@ CREATE TABLE IF NOT EXISTS flow_maps (
 -- ─── FLOW MAP HOSTS ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_hosts (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  map_id UUID NOT NULL REFERENCES flow_maps(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  map_id UUID NOT NULL,
+  tenant_id UUID NOT NULL,
   zabbix_host_id TEXT NOT NULL,
   host_name TEXT DEFAULT '',
   host_group TEXT DEFAULT '',
@@ -170,14 +211,22 @@ CREATE TABLE IF NOT EXISTS flow_map_hosts (
   is_critical BOOLEAN DEFAULT false,
   current_status link_status DEFAULT 'UNKNOWN',
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT fk_host_map FOREIGN KEY (map_id, tenant_id) REFERENCES flow_maps(id, tenant_id) ON DELETE CASCADE
 );
+-- Composite unique for FK references
+DO $$ BEGIN
+  ALTER TABLE flow_maps ADD CONSTRAINT flow_maps_id_tenant UNIQUE (id, tenant_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- REPLICA IDENTITY for realtime
+ALTER TABLE flow_map_hosts REPLICA IDENTITY FULL;
 
 -- ─── FLOW MAP LINKS ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_links (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  map_id UUID NOT NULL REFERENCES flow_maps(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  map_id UUID NOT NULL,
+  tenant_id UUID NOT NULL,
   origin_host_id UUID NOT NULL REFERENCES flow_map_hosts(id),
   dest_host_id UUID NOT NULL REFERENCES flow_map_hosts(id),
   origin_role TEXT DEFAULT 'CORE',
@@ -191,14 +240,19 @@ CREATE TABLE IF NOT EXISTS flow_map_links (
   status_strategy TEXT DEFAULT 'AUTO',
   geometry JSONB DEFAULT '{"type":"LineString","coordinates":[]}',
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT fk_link_map FOREIGN KEY (map_id, tenant_id) REFERENCES flow_maps(id, tenant_id) ON DELETE CASCADE
 );
+-- Composite unique for FK references
+DO $$ BEGIN
+  ALTER TABLE flow_map_links ADD CONSTRAINT flow_map_links_id_tenant UNIQUE (id, tenant_id);
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ─── FLOW MAP LINK ITEMS ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_link_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  link_id UUID NOT NULL REFERENCES flow_map_links(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  link_id UUID NOT NULL,
+  tenant_id UUID NOT NULL,
   zabbix_host_id TEXT NOT NULL,
   zabbix_item_id TEXT NOT NULL,
   name TEXT DEFAULT '',
@@ -206,26 +260,28 @@ CREATE TABLE IF NOT EXISTS flow_map_link_items (
   metric TEXT NOT NULL,
   side TEXT NOT NULL,
   direction TEXT NOT NULL,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT fk_fmli_link FOREIGN KEY (link_id, tenant_id) REFERENCES flow_map_links(id, tenant_id) ON DELETE CASCADE
 );
 
 -- ─── FLOW MAP LINK EVENTS ────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_link_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  link_id UUID NOT NULL REFERENCES flow_map_links(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  link_id UUID NOT NULL,
+  tenant_id UUID NOT NULL,
   status link_status DEFAULT 'UNKNOWN',
   started_at TIMESTAMPTZ DEFAULT now(),
   ended_at TIMESTAMPTZ,
   duration_seconds INT,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT fk_fmle_link FOREIGN KEY (link_id, tenant_id) REFERENCES flow_map_links(id, tenant_id) ON DELETE CASCADE
 );
 
 -- ─── FLOW MAP CTOS ───────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_ctos (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  map_id UUID NOT NULL REFERENCES flow_maps(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  map_id UUID NOT NULL,
+  tenant_id UUID NOT NULL,
   name TEXT DEFAULT '',
   description TEXT DEFAULT '',
   lat DOUBLE PRECISION NOT NULL,
@@ -238,14 +294,15 @@ CREATE TABLE IF NOT EXISTS flow_map_ctos (
   zabbix_host_ids TEXT[] DEFAULT '{}',
   metadata JSONB DEFAULT '{}',
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT fk_cto_map FOREIGN KEY (map_id, tenant_id) REFERENCES flow_maps(id, tenant_id) ON DELETE CASCADE
 );
 
 -- ─── FLOW MAP CABLES ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_cables (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  map_id UUID NOT NULL REFERENCES flow_maps(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  map_id UUID NOT NULL,
+  tenant_id UUID NOT NULL,
   source_node_id UUID NOT NULL,
   source_node_type TEXT DEFAULT 'host',
   target_node_id UUID NOT NULL,
@@ -257,14 +314,15 @@ CREATE TABLE IF NOT EXISTS flow_map_cables (
   color_override TEXT,
   geometry JSONB DEFAULT '{"type":"LineString","coordinates":[]}',
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT fk_cable_map FOREIGN KEY (map_id, tenant_id) REFERENCES flow_maps(id, tenant_id) ON DELETE CASCADE
 );
 
 -- ─── FLOW MAP RESERVAS ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_reservas (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  map_id UUID NOT NULL REFERENCES flow_maps(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  map_id UUID NOT NULL,
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   label TEXT DEFAULT '',
   lat DOUBLE PRECISION NOT NULL,
   lon DOUBLE PRECISION NOT NULL,
@@ -273,13 +331,14 @@ CREATE TABLE IF NOT EXISTS flow_map_reservas (
   status TEXT DEFAULT 'pendente',
   created_by UUID,
   created_at TIMESTAMPTZ DEFAULT now(),
-  updated_at TIMESTAMPTZ DEFAULT now()
+  updated_at TIMESTAMPTZ DEFAULT now(),
+  CONSTRAINT fk_reserva_map FOREIGN KEY (map_id, tenant_id) REFERENCES flow_maps(id, tenant_id) ON DELETE CASCADE
 );
 
 -- ─── FLOW MAP EFFECTIVE CACHE ────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_map_effective_cache (
   map_id UUID PRIMARY KEY REFERENCES flow_maps(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   payload JSONB DEFAULT '[]',
   computed_at TIMESTAMPTZ DEFAULT now(),
   rpc_duration_ms INT,
@@ -290,7 +349,7 @@ CREATE TABLE IF NOT EXISTS flow_map_effective_cache (
 -- ─── ALERT RULES ─────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS alert_rules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   source TEXT DEFAULT 'zabbix',
   severity severity_level DEFAULT 'high',
@@ -311,7 +370,7 @@ CREATE TABLE IF NOT EXISTS alert_rules (
 -- ─── ALERT INSTANCES ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS alert_instances (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   rule_id UUID REFERENCES alert_rules(id),
   title TEXT NOT NULL,
   summary TEXT,
@@ -320,7 +379,7 @@ CREATE TABLE IF NOT EXISTS alert_instances (
   dedupe_key TEXT NOT NULL,
   payload JSONB DEFAULT '{}',
   suppressed BOOLEAN DEFAULT false,
-  suppressed_by_maintenance_id UUID,
+  suppressed_by_maintenance_id UUID REFERENCES maintenance_windows(id),
   opened_at TIMESTAMPTZ DEFAULT now(),
   last_seen_at TIMESTAMPTZ DEFAULT now(),
   acknowledged_at TIMESTAMPTZ,
@@ -338,7 +397,7 @@ CREATE TABLE IF NOT EXISTS alert_instances (
 -- ─── ALERT EVENTS ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS alert_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   alert_id UUID NOT NULL REFERENCES alert_instances(id),
   event_type TEXT NOT NULL,
   from_status alert_status,
@@ -352,7 +411,7 @@ CREATE TABLE IF NOT EXISTS alert_events (
 -- ─── NOTIFICATION CHANNELS ───────────────────────────────
 CREATE TABLE IF NOT EXISTS notification_channels (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   channel notify_channel NOT NULL,
   config JSONB DEFAULT '{}',
@@ -365,7 +424,7 @@ CREATE TABLE IF NOT EXISTS notification_channels (
 -- ─── ALERT NOTIFICATIONS ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS alert_notifications (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   alert_id UUID NOT NULL REFERENCES alert_instances(id),
   channel_id UUID REFERENCES notification_channels(id),
   policy_id UUID,
@@ -383,7 +442,7 @@ CREATE TABLE IF NOT EXISTS alert_notifications (
 -- ─── ESCALATION POLICIES ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS escalation_policies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
   is_active BOOLEAN DEFAULT true,
@@ -396,7 +455,7 @@ CREATE TABLE IF NOT EXISTS escalation_policies (
 CREATE TABLE IF NOT EXISTS escalation_steps (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   policy_id UUID NOT NULL REFERENCES escalation_policies(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   channel_id UUID NOT NULL REFERENCES notification_channels(id),
   step_order INT NOT NULL,
   delay_seconds INT DEFAULT 0,
@@ -409,7 +468,7 @@ CREATE TABLE IF NOT EXISTS escalation_steps (
 -- ─── SLA POLICIES ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS sla_policies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
   ack_target_seconds INT DEFAULT 900,
@@ -423,7 +482,7 @@ CREATE TABLE IF NOT EXISTS sla_policies (
 -- ─── MAINTENANCE WINDOWS ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS maintenance_windows (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   description TEXT,
   starts_at TIMESTAMPTZ NOT NULL,
@@ -438,7 +497,7 @@ CREATE TABLE IF NOT EXISTS maintenance_windows (
 CREATE TABLE IF NOT EXISTS maintenance_scopes (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   maintenance_id UUID NOT NULL REFERENCES maintenance_windows(id) ON DELETE CASCADE,
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   scope_type maintenance_scope_type NOT NULL,
   scope_value TEXT,
   scope_meta JSONB DEFAULT '{}',
@@ -448,7 +507,7 @@ CREATE TABLE IF NOT EXISTS maintenance_scopes (
 -- ─── AUDIT LOGS ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS audit_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID,
   action TEXT NOT NULL,
   entity_type TEXT,
@@ -460,7 +519,7 @@ CREATE TABLE IF NOT EXISTS audit_logs (
 -- ─── FLOW AUDIT LOGS ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS flow_audit_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   user_id UUID,
   user_email TEXT,
   action TEXT NOT NULL,
@@ -475,7 +534,7 @@ CREATE TABLE IF NOT EXISTS flow_audit_logs (
 -- ─── WEBHOOK TOKENS ──────────────────────────────────────
 CREATE TABLE IF NOT EXISTS webhook_tokens (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   token_hash TEXT NOT NULL,
   label TEXT DEFAULT 'default',
   is_active BOOLEAN DEFAULT true,
@@ -487,7 +546,7 @@ CREATE TABLE IF NOT EXISTS webhook_tokens (
 -- ─── TELEMETRY CONFIG ────────────────────────────────────
 CREATE TABLE IF NOT EXISTS telemetry_config (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   config_key TEXT NOT NULL,
   config_value TEXT NOT NULL,
   iv TEXT,
@@ -498,7 +557,7 @@ CREATE TABLE IF NOT EXISTS telemetry_config (
 
 -- ─── TELEMETRY HEARTBEAT ─────────────────────────────────
 CREATE TABLE IF NOT EXISTS telemetry_heartbeat (
-  tenant_id UUID PRIMARY KEY REFERENCES tenants(id),
+  tenant_id UUID PRIMARY KEY REFERENCES tenants(id) ON DELETE CASCADE,
   last_webhook_at TIMESTAMPTZ,
   last_webhook_source TEXT,
   event_count BIGINT DEFAULT 0,
@@ -508,7 +567,7 @@ CREATE TABLE IF NOT EXISTS telemetry_heartbeat (
 -- ─── PRINTER CONFIGS ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS printer_configs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   dashboard_id UUID REFERENCES dashboards(id),
   zabbix_host_id TEXT NOT NULL,
   host_name TEXT DEFAULT '',
@@ -520,7 +579,7 @@ CREATE TABLE IF NOT EXISTS printer_configs (
 -- ─── BILLING LOGS ────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS billing_logs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   period TEXT NOT NULL,
   total_pages BIGINT DEFAULT 0,
   entries JSONB DEFAULT '[]',
@@ -531,7 +590,7 @@ CREATE TABLE IF NOT EXISTS billing_logs (
 -- ─── RMS CONNECTIONS ─────────────────────────────────────
 CREATE TABLE IF NOT EXISTS rms_connections (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  tenant_id UUID NOT NULL REFERENCES tenants(id),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
   name TEXT NOT NULL,
   url TEXT NOT NULL,
   token_ciphertext TEXT NOT NULL,
@@ -543,6 +602,55 @@ CREATE TABLE IF NOT EXISTS rms_connections (
   created_at TIMESTAMPTZ DEFAULT now(),
   updated_at TIMESTAMPTZ DEFAULT now()
 );
+
+-- ─── FINANCIAL TRANSACTIONS ──────────────────────────────
+CREATE TABLE IF NOT EXISTS financial_transactions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  transaction_date DATE NOT NULL,
+  scenario finance_scenario NOT NULL,
+  type finance_type NOT NULL,
+  amount NUMERIC NOT NULL DEFAULT 0,
+  description TEXT DEFAULT '',
+  category TEXT DEFAULT '',
+  month_reference DATE NOT NULL,
+  created_by UUID,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- ─── SYSTEM STATUS SNAPSHOTS ─────────────────────────────
+CREATE TABLE IF NOT EXISTS system_status_snapshots (
+  tenant_id UUID NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  payload JSONB NOT NULL DEFAULT '{}',
+  collected_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id)
+);
+
+-- ═══════════════════════════════════════════════════
+-- ─── FINANCIAL VIEW ───────────────────────────────
+-- ═══════════════════════════════════════════════════
+CREATE OR REPLACE VIEW vw_financial_daily_performance AS
+WITH daily AS (
+  SELECT
+    tenant_id,
+    transaction_date AS date,
+    scenario,
+    SUM(CASE WHEN type = 'receber' THEN amount ELSE 0 END) AS total_receber,
+    SUM(CASE WHEN type = 'pagar' THEN amount ELSE 0 END) AS total_pagar
+  FROM financial_transactions
+  GROUP BY tenant_id, transaction_date, scenario
+)
+SELECT
+  tenant_id,
+  date,
+  scenario,
+  total_receber,
+  total_pagar,
+  (total_receber - total_pagar) AS daily_net_flow,
+  SUM(total_receber - total_pagar) OVER (PARTITION BY tenant_id, scenario ORDER BY date) AS running_balance,
+  0::numeric AS variance
+FROM daily;
 
 -- ═══════════════════════════════════════════════════
 -- ─── ÍNDICES ──────────────────────────────────────
@@ -561,18 +669,24 @@ CREATE INDEX IF NOT EXISTS idx_alert_events_alert ON alert_events(alert_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_tenant ON audit_logs(tenant_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_printer_configs_tenant ON printer_configs(tenant_id);
 CREATE INDEX IF NOT EXISTS idx_billing_logs_tenant ON billing_logs(tenant_id, period);
+CREATE INDEX IF NOT EXISTS idx_teams_tenant ON teams(tenant_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_team ON team_members(team_id);
+CREATE INDEX IF NOT EXISTS idx_team_members_user ON team_members(user_id);
+CREATE INDEX IF NOT EXISTS idx_resource_access_resource ON resource_access(resource_type, resource_id);
+CREATE INDEX IF NOT EXISTS idx_resource_access_grantee ON resource_access(grantee_type, grantee_id);
+CREATE INDEX IF NOT EXISTS idx_financial_transactions_tenant ON financial_transactions(tenant_id, month_reference);
 
 -- ═══════════════════════════════════════════════════
 -- ─── FUNÇÕES UTILITÁRIAS ──────────────────────────
 -- ═══════════════════════════════════════════════════
 
-CREATE OR REPLACE FUNCTION update_updated_at()
+CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
   NEW.updated_at = now();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SET search_path TO public, pg_temp;
 
 -- Apply updated_at triggers
 DO $$
@@ -584,10 +698,10 @@ BEGIN
     'flow_map_links','flow_map_ctos','flow_map_cables','alert_rules',
     'alert_instances','zabbix_connections','rms_connections',
     'maintenance_windows','sla_policies','escalation_policies',
-    'printer_configs'
+    'printer_configs','teams','financial_transactions','flow_map_reservas'
   ]) LOOP
     EXECUTE format(
-      'DROP TRIGGER IF EXISTS trg_updated_at ON %I; CREATE TRIGGER trg_updated_at BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION update_updated_at()',
+      'DROP TRIGGER IF EXISTS trg_updated_at ON %I; CREATE TRIGGER trg_updated_at BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION update_updated_at_column()',
       t, t
     );
   END LOOP;
@@ -614,7 +728,7 @@ LANGUAGE sql STABLE
 SET search_path = public, pg_temp
 AS $$
   SELECT COALESCE(
-    NULLIF(current_setting('request.jwt.claims', true)::jsonb -> 'app_metadata' ->> 'tenant_id', '')::uuid,
+    NULLIF(auth.jwt() -> 'app_metadata' ->> 'tenant_id', '')::uuid,
     public.get_user_tenant_id(auth.uid())
   )
 $$;
@@ -656,6 +770,115 @@ AS $$
   );
 $$;
 
+-- Resource access check (RBAC granular)
+CREATE OR REPLACE FUNCTION is_resource_creator(p_user_id UUID, p_resource_type TEXT, p_resource_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+  SELECT CASE p_resource_type
+    WHEN 'dashboard' THEN EXISTS (SELECT 1 FROM public.dashboards WHERE id = p_resource_id AND created_by = p_user_id)
+    WHEN 'flow_map' THEN EXISTS (SELECT 1 FROM public.flow_maps WHERE id = p_resource_id AND created_by = p_user_id)
+    ELSE false
+  END
+$$;
+
+CREATE OR REPLACE FUNCTION has_resource_access(p_user_id UUID, p_tenant_id UUID, p_resource_type TEXT, p_resource_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql STABLE SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+  SELECT
+    public.has_role(p_user_id, p_tenant_id, 'admin'::app_role)
+    OR public.is_super_admin(p_user_id)
+    OR EXISTS (
+      SELECT 1
+      FROM public.resource_access ra
+      WHERE ra.tenant_id = p_tenant_id
+        AND ra.resource_type = p_resource_type
+        AND ra.resource_id = p_resource_id
+        AND ra.grantee_type = 'user'
+        AND ra.grantee_id = p_user_id
+    )
+    OR EXISTS (
+      SELECT 1
+      FROM public.resource_access ra
+      JOIN public.teams t
+        ON t.id = ra.grantee_id
+       AND t.tenant_id = ra.tenant_id
+      JOIN public.team_members tm
+        ON tm.team_id = t.id
+       AND tm.user_id = p_user_id
+      WHERE ra.tenant_id = p_tenant_id
+        AND ra.resource_type = p_resource_type
+        AND ra.resource_id = p_resource_id
+        AND ra.grantee_type = 'team'
+    );
+$$;
+
+-- Diagnostic helper
+CREATE OR REPLACE FUNCTION diagnose_resource_access(p_user_id UUID, p_resource_type TEXT, p_resource_id UUID)
+RETURNS JSONB
+LANGUAGE plpgsql STABLE SECURITY DEFINER
+SET search_path = public
+SET row_security = off
+AS $$
+DECLARE
+  v_tenant_id uuid;
+  v_result jsonb;
+  v_direct_grants jsonb;
+  v_team_grants jsonb;
+  v_user_teams jsonb;
+BEGIN
+  SELECT tenant_id INTO v_tenant_id FROM public.profiles WHERE id = p_user_id;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'id', ra.id, 'grantee_type', ra.grantee_type, 'grantee_id', ra.grantee_id,
+    'access_level', ra.access_level, 'tenant_id', ra.tenant_id
+  )), '[]'::jsonb)
+  INTO v_direct_grants
+  FROM public.resource_access ra
+  WHERE ra.resource_type = p_resource_type AND ra.resource_id = p_resource_id
+    AND ra.grantee_type = 'user' AND ra.grantee_id = p_user_id;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'team_id', tm.team_id, 'team_name', t.name, 'tenant_id', tm.tenant_id
+  )), '[]'::jsonb)
+  INTO v_user_teams
+  FROM public.team_members tm
+  JOIN public.teams t ON t.id = tm.team_id
+  WHERE tm.user_id = p_user_id;
+
+  SELECT COALESCE(jsonb_agg(jsonb_build_object(
+    'id', ra.id, 'grantee_type', ra.grantee_type, 'grantee_id', ra.grantee_id,
+    'access_level', ra.access_level, 'team_name', t.name
+  )), '[]'::jsonb)
+  INTO v_team_grants
+  FROM public.resource_access ra
+  JOIN public.teams t ON t.id = ra.grantee_id
+  WHERE ra.resource_type = p_resource_type AND ra.resource_id = p_resource_id
+    AND ra.grantee_type = 'team';
+
+  v_result := jsonb_build_object(
+    'user_id', p_user_id,
+    'user_tenant_id', v_tenant_id,
+    'is_admin', public.has_role(p_user_id, v_tenant_id, 'admin'::app_role),
+    'is_super_admin', public.is_super_admin(p_user_id),
+    'is_creator', public.is_resource_creator(p_user_id, p_resource_type, p_resource_id),
+    'has_resource_access_result', public.has_resource_access(p_user_id, v_tenant_id, p_resource_type, p_resource_id),
+    'direct_user_grants', v_direct_grants,
+    'user_teams', v_user_teams,
+    'team_grants_for_resource', v_team_grants,
+    'resource_type', p_resource_type,
+    'resource_id', p_resource_id
+  );
+
+  RETURN v_result;
+END;
+$$;
+
 -- ═══════════════════════════════════════════════════
 -- ─── TRIGGER: AUTO-PROVISION ON SIGNUP ────────────
 -- ═══════════════════════════════════════════════════
@@ -669,12 +892,35 @@ DECLARE
   new_tenant_id UUID;
   user_slug TEXT;
   user_name TEXT;
+  existing_tenant_id UUID;
 BEGIN
   user_name := COALESCE(
     NEW.raw_user_meta_data->>'display_name',
     NEW.raw_user_meta_data->>'full_name',
     split_part(NEW.email, '@', 1)
   );
+
+  -- Check if a valid tenant_id was already provided via app_metadata (e.g. by invite-user edge function)
+  existing_tenant_id := NULLIF(TRIM(COALESCE(NEW.raw_app_meta_data->>'tenant_id', '')), '')::UUID;
+
+  IF existing_tenant_id IS NOT NULL THEN
+    PERFORM 1 FROM public.tenants WHERE id = existing_tenant_id;
+    IF FOUND THEN
+      new_tenant_id := existing_tenant_id;
+      INSERT INTO public.profiles (id, tenant_id, display_name, email)
+      VALUES (NEW.id, new_tenant_id, user_name, NEW.email)
+      ON CONFLICT (id) DO UPDATE SET
+        tenant_id = EXCLUDED.tenant_id,
+        display_name = EXCLUDED.display_name,
+        email = EXCLUDED.email;
+      INSERT INTO public.user_roles (user_id, tenant_id, role)
+      VALUES (NEW.id, new_tenant_id, 'viewer')
+      ON CONFLICT DO NOTHING;
+      RETURN NEW;
+    END IF;
+  END IF;
+
+  -- Default behavior: create a new tenant for self-signup users
   user_slug := lower(regexp_replace(user_name, '[^a-zA-Z0-9]+', '-', 'g'));
 
   INSERT INTO public.tenants (name, slug)
@@ -706,13 +952,6 @@ CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW
   EXECUTE FUNCTION handle_new_user();
-
--- ═══════════════════════════════════════════════════
--- ─── SEED: ADMIN PADRÃO ──────────────────────────
--- Seed é criado via GoTrue Admin API no onprem-up.sh
--- O trigger handle_new_user cuida de criar tenant,
--- profile e role automaticamente.
--- ═══════════════════════════════════════════════════
 
 -- ═══════════════════════════════════════════════════
 -- ─── FUNÇÕES AVANÇADAS ───────────────────────────
@@ -747,6 +986,24 @@ BEGIN
 END;
 $$;
 
+-- Apply prevent_tenant_change triggers
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY[
+    'profiles','user_roles','dashboards','flow_maps','flow_map_hosts',
+    'flow_map_links','flow_map_ctos','flow_map_cables','alert_rules',
+    'alert_instances','zabbix_connections','rms_connections','teams',
+    'team_members','resource_access','financial_transactions'
+  ]) LOOP
+    EXECUTE format(
+      'DROP TRIGGER IF EXISTS prevent_tenant_change ON %I; CREATE TRIGGER prevent_tenant_change BEFORE UPDATE ON %I FOR EACH ROW EXECUTE FUNCTION prevent_tenant_change()',
+      t, t
+    );
+  END LOOP;
+END $$;
+
 -- Flow audit trigger function
 CREATE OR REPLACE FUNCTION flow_audit_trigger()
 RETURNS TRIGGER
@@ -775,6 +1032,21 @@ BEGIN
   RETURN COALESCE(NEW, OLD);
 END;
 $$;
+
+-- Apply flow audit triggers
+DO $$
+DECLARE
+  t TEXT;
+BEGIN
+  FOR t IN SELECT unnest(ARRAY[
+    'flow_map_hosts','flow_map_links','flow_map_ctos','flow_map_cables'
+  ]) LOOP
+    EXECUTE format(
+      'DROP TRIGGER IF EXISTS flow_audit_%s ON %I; CREATE TRIGGER flow_audit_%s AFTER INSERT OR UPDATE OR DELETE ON %I FOR EACH ROW EXECUTE FUNCTION flow_audit_trigger()',
+      t, t, t, t
+    );
+  END LOOP;
+END $$;
 
 -- Bump telemetry heartbeat
 CREATE OR REPLACE FUNCTION bump_telemetry_heartbeat(p_tenant_id UUID, p_source TEXT DEFAULT 'zabbix-webhook')
@@ -807,6 +1079,10 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS validate_mw ON maintenance_windows;
+CREATE TRIGGER validate_mw BEFORE INSERT OR UPDATE ON maintenance_windows
+  FOR EACH ROW EXECUTE FUNCTION validate_maintenance_window();
+
 -- Touch dashboard on widget change
 CREATE OR REPLACE FUNCTION touch_dashboard_on_widget_change()
 RETURNS TRIGGER
@@ -820,6 +1096,10 @@ BEGIN
   RETURN COALESCE(NEW, OLD);
 END;
 $$;
+
+DROP TRIGGER IF EXISTS touch_dashboard_ts ON widgets;
+CREATE TRIGGER touch_dashboard_ts AFTER INSERT OR UPDATE OR DELETE ON widgets
+  FOR EACH ROW EXECUTE FUNCTION touch_dashboard_on_widget_change();
 
 -- Check viability (find nearest CTOs)
 CREATE OR REPLACE FUNCTION check_viability(p_lat DOUBLE PRECISION, p_lon DOUBLE PRECISION, p_tenant_id UUID, p_map_id UUID)
@@ -894,6 +1174,10 @@ BEGIN
 END;
 $$;
 
+DROP TRIGGER IF EXISTS apply_sla ON alert_instances;
+CREATE TRIGGER apply_sla BEFORE INSERT ON alert_instances
+  FOR EACH ROW EXECUTE FUNCTION alert_apply_sla();
+
 -- SLA breach sweep
 CREATE OR REPLACE FUNCTION sla_sweep_breaches(p_tenant_id UUID DEFAULT NULL)
 RETURNS INTEGER
@@ -949,7 +1233,12 @@ AS $$
 WITH
 guard AS (
   SELECT m.id FROM public.flow_maps m
-  WHERE m.id = p_map_id AND m.tenant_id = public.jwt_tenant_id()
+  WHERE m.id = p_map_id
+    AND (
+      m.tenant_id = public.jwt_tenant_id()
+      OR public.is_super_admin(auth.uid())
+      OR public.has_resource_access(auth.uid(), m.tenant_id, 'flow_map'::text, m.id)
+    )
 ),
 map_nodes AS (
   SELECT h.id, h.current_status
@@ -1010,25 +1299,15 @@ FROM map_nodes n
 LEFT JOIN reachable r ON r.id = n.id;
 $$;
 
--- ─── System Status Snapshots (agent-collected host metrics) ──
-CREATE TABLE IF NOT EXISTS system_status_snapshots (
-  tenant_id uuid NOT NULL REFERENCES tenants(id),
-  payload jsonb NOT NULL DEFAULT '{}'::jsonb,
-  collected_at timestamptz NOT NULL DEFAULT now(),
-  PRIMARY KEY (tenant_id)
-);
-ALTER TABLE system_status_snapshots ENABLE ROW LEVEL SECURITY;
-DO $$ BEGIN
-  CREATE POLICY ss_select ON system_status_snapshots
-    FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
-EXCEPTION WHEN duplicate_object THEN NULL; END $$;
-
 -- ═══════════════════════════════════════════════════════════════
 -- ENABLE ROW LEVEL SECURITY — ALL TABLES
 -- ═══════════════════════════════════════════════════════════════
 ALTER TABLE tenants              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE profiles             ENABLE ROW LEVEL SECURITY;
 ALTER TABLE user_roles           ENABLE ROW LEVEL SECURITY;
+ALTER TABLE teams                ENABLE ROW LEVEL SECURITY;
+ALTER TABLE team_members         ENABLE ROW LEVEL SECURITY;
+ALTER TABLE resource_access      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE dashboards           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE widgets              ENABLE ROW LEVEL SECURITY;
 ALTER TABLE zabbix_connections   ENABLE ROW LEVEL SECURITY;
@@ -1059,10 +1338,14 @@ ALTER TABLE audit_logs           ENABLE ROW LEVEL SECURITY;
 ALTER TABLE billing_logs         ENABLE ROW LEVEL SECURITY;
 ALTER TABLE printer_configs      ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rms_connections      ENABLE ROW LEVEL SECURITY;
+ALTER TABLE financial_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE system_status_snapshots ENABLE ROW LEVEL SECURITY;
 
 -- ═══════════════════════════════════════════════════════════════
--- RLS POLICIES — TENANTS
+-- RLS POLICIES
 -- ═══════════════════════════════════════════════════════════════
+
+-- ═══ TENANTS ═══
 DO $$ BEGIN
   CREATE POLICY tenants_select ON tenants FOR SELECT USING (id = jwt_tenant_id() OR is_super_admin(auth.uid()));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
@@ -1109,9 +1392,52 @@ DO $$ BEGIN
   CREATE POLICY user_roles_delete ON user_roles FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- ═══ TEAMS ═══
+DO $$ BEGIN
+  CREATE POLICY teams_select ON teams FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY teams_insert ON teams FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY teams_update ON teams FOR UPDATE USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY teams_delete ON teams FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ TEAM MEMBERS ═══
+DO $$ BEGIN
+  CREATE POLICY team_members_select ON team_members FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY team_members_manage ON team_members FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ RESOURCE ACCESS ═══
+DO $$ BEGIN
+  CREATE POLICY ra_select ON resource_access FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ra_insert ON resource_access FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ra_update ON resource_access FOR UPDATE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()))
+    WITH CHECK ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ra_delete ON resource_access FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- ═══ DASHBOARDS ═══
 DO $$ BEGIN
-  CREATE POLICY dashboards_select ON dashboards FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY dashboards_select ON dashboards FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid())
+    OR ((tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), tenant_id, 'admin') OR created_by = auth.uid() OR has_resource_access(auth.uid(), tenant_id, 'dashboard', id)))
+    OR has_resource_access(auth.uid(), tenant_id, 'dashboard', id)
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY dashboards_insert ON dashboards FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
@@ -1147,7 +1473,8 @@ DO $$ BEGIN
   CREATE POLICY widgets_insert ON widgets FOR INSERT WITH CHECK (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), jwt_tenant_id(), 'admin') OR has_role(auth.uid(), jwt_tenant_id(), 'editor')));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY widgets_update ON widgets FOR UPDATE USING (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), jwt_tenant_id(), 'admin') OR has_role(auth.uid(), jwt_tenant_id(), 'editor')));
+  CREATE POLICY widgets_update ON widgets FOR UPDATE USING (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), jwt_tenant_id(), 'admin') OR has_role(auth.uid(), jwt_tenant_id(), 'editor')))
+    WITH CHECK (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY widgets_delete ON widgets FOR DELETE USING (EXISTS (SELECT 1 FROM dashboards d WHERE d.id = widgets.dashboard_id AND d.tenant_id = jwt_tenant_id()) AND (has_role(auth.uid(), jwt_tenant_id(), 'admin') OR has_role(auth.uid(), jwt_tenant_id(), 'editor')));
@@ -1155,7 +1482,11 @@ EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ═══ FLOW MAPS ═══
 DO $$ BEGIN
-  CREATE POLICY fm_select ON flow_maps FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY fm_select ON flow_maps FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid())
+    OR tenant_id = jwt_tenant_id()
+    OR has_resource_access(auth.uid(), tenant_id, 'flow_map', id)
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY fm_insert ON flow_maps FOR INSERT WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
@@ -1168,59 +1499,140 @@ DO $$ BEGIN
   CREATE POLICY fm_delete ON flow_maps FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ═══ FLOW MAP HOSTS ═══
+-- ═══ FLOW MAP HOSTS (granular policies with has_resource_access) ═══
 DO $$ BEGIN
-  CREATE POLICY fmh_select ON flow_map_hosts FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY fmh_select ON flow_map_hosts FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid()) OR tenant_id = jwt_tenant_id() OR has_resource_access(auth.uid(), tenant_id, 'flow_map', map_id)
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY fmh_manage ON flow_map_hosts FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
-    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+  CREATE POLICY fmh_insert ON flow_map_hosts FOR INSERT TO authenticated WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fmh_update ON flow_map_hosts FOR UPDATE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  ) WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fmh_delete ON flow_map_hosts FOR DELETE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ═══ FLOW MAP LINKS ═══
+-- ═══ FLOW MAP LINKS (granular) ═══
 DO $$ BEGIN
-  CREATE POLICY fml_select ON flow_map_links FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY fml_select ON flow_map_links FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid()) OR tenant_id = jwt_tenant_id() OR has_resource_access(auth.uid(), tenant_id, 'flow_map', map_id)
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY fml_manage ON flow_map_links FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
-    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+  CREATE POLICY fml_insert ON flow_map_links FOR INSERT TO authenticated WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fml_update ON flow_map_links FOR UPDATE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  ) WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fml_delete ON flow_map_links FOR DELETE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ═══ FLOW MAP LINK ITEMS ═══
+-- ═══ FLOW MAP LINK ITEMS (granular) ═══
 DO $$ BEGIN
-  CREATE POLICY fmli_select ON flow_map_link_items FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY fmli_select ON flow_map_link_items FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid()) OR tenant_id = jwt_tenant_id()
+    OR EXISTS (SELECT 1 FROM flow_map_links l WHERE l.id = flow_map_link_items.link_id AND l.tenant_id = l.tenant_id AND has_resource_access(auth.uid(), l.tenant_id, 'flow_map', l.map_id))
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY fmli_manage ON flow_map_link_items FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
-    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+  CREATE POLICY fmli_insert ON flow_map_link_items FOR INSERT TO authenticated WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fmli_update ON flow_map_link_items FOR UPDATE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  ) WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY fmli_delete ON flow_map_link_items FOR DELETE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ═══ FLOW MAP LINK EVENTS ═══
 DO $$ BEGIN
-  CREATE POLICY fmle_select ON flow_map_link_events FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY fmle_select ON flow_map_link_events FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid()) OR tenant_id = jwt_tenant_id()
+    OR EXISTS (SELECT 1 FROM flow_map_links l WHERE l.id = flow_map_link_events.link_id AND l.tenant_id = l.tenant_id AND has_resource_access(auth.uid(), l.tenant_id, 'flow_map', l.map_id))
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ═══ FLOW MAP CTOS ═══
+-- ═══ FLOW MAP CTOS (granular) ═══
 DO $$ BEGIN
-  CREATE POLICY cto_select ON flow_map_ctos FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY cto_select ON flow_map_ctos FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid()) OR tenant_id = jwt_tenant_id() OR has_resource_access(auth.uid(), tenant_id, 'flow_map', map_id)
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY cto_manage ON flow_map_ctos FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
-    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+  CREATE POLICY cto_insert ON flow_map_ctos FOR INSERT TO authenticated WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY cto_update ON flow_map_ctos FOR UPDATE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  ) WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY cto_delete ON flow_map_ctos FOR DELETE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ═══ FLOW MAP CABLES ═══
+-- ═══ FLOW MAP CABLES (granular) ═══
 DO $$ BEGIN
-  CREATE POLICY cable_select ON flow_map_cables FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+  CREATE POLICY cable_select ON flow_map_cables FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid()) OR tenant_id = jwt_tenant_id() OR has_resource_access(auth.uid(), tenant_id, 'flow_map', map_id)
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
-  CREATE POLICY cable_manage ON flow_map_cables FOR ALL USING ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()))
-    WITH CHECK ((tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid()));
+  CREATE POLICY cable_insert ON flow_map_cables FOR INSERT TO authenticated WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY cable_update ON flow_map_cables FOR UPDATE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  ) WITH CHECK (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY cable_delete ON flow_map_cables FOR DELETE TO authenticated USING (
+    (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor'))) OR is_super_admin(auth.uid())
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
 -- ═══ FLOW MAP RESERVAS ═══
 DO $$ BEGIN
-  CREATE POLICY reservas_select ON flow_map_reservas FOR SELECT USING (tenant_id = jwt_tenant_id());
+  CREATE POLICY reservas_select ON flow_map_reservas FOR SELECT TO authenticated USING (
+    is_super_admin(auth.uid()) OR tenant_id = jwt_tenant_id() OR has_resource_access(auth.uid(), tenant_id, 'flow_map', map_id)
+  );
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 DO $$ BEGIN
   CREATE POLICY reservas_insert ON flow_map_reservas FOR INSERT WITH CHECK (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
@@ -1365,11 +1777,39 @@ DO $$ BEGIN
   CREATE POLICY rms_delete ON rms_connections FOR DELETE USING ((tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin')) OR is_super_admin(auth.uid()));
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
--- ═══ ZABBIX CONNECTIONS (no RLS policies — managed via edge function with service_role) ═══
+-- ═══ FINANCIAL TRANSACTIONS ═══
+DO $$ BEGIN
+  CREATE POLICY ft_select ON financial_transactions FOR SELECT TO authenticated USING (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ft_insert ON financial_transactions FOR INSERT TO authenticated WITH CHECK (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ft_update ON financial_transactions FOR UPDATE TO authenticated USING (tenant_id = jwt_tenant_id() AND (has_role(auth.uid(), tenant_id, 'admin') OR has_role(auth.uid(), tenant_id, 'editor')))
+    WITH CHECK (tenant_id = jwt_tenant_id());
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+DO $$ BEGIN
+  CREATE POLICY ft_delete ON financial_transactions FOR DELETE TO authenticated USING (tenant_id = jwt_tenant_id() AND has_role(auth.uid(), tenant_id, 'admin'));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══ SYSTEM STATUS SNAPSHOTS ═══
+DO $$ BEGIN
+  CREATE POLICY ss_select ON system_status_snapshots FOR SELECT USING (tenant_id = jwt_tenant_id() OR is_super_admin(auth.uid()));
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
+-- ═══════════════════════════════════════════════════════════════
+-- REALTIME PUBLICATIONS
+-- ═══════════════════════════════════════════════════════════════
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.alert_instances;
+EXCEPTION WHEN duplicate_object THEN NULL; WHEN undefined_object THEN NULL; END $$;
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE public.flow_map_hosts;
+EXCEPTION WHEN duplicate_object THEN NULL; WHEN undefined_object THEN NULL; END $$;
 
 COMMIT;
 
 -- ═══════════════════════════════════════════════════
--- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v1.3
+-- FIM DO SCHEMA — FLOWPULSE INTELLIGENCE v2.0
 -- © 2026 CBLabs
 -- ═══════════════════════════════════════════════════
