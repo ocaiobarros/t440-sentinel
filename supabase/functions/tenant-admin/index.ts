@@ -94,6 +94,22 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ── Audit helper ── */
+    const writeAudit = async (tenantId: string, auditAction: string, entityType: string | null, entityId: string | null, details: Record<string, unknown> = {}) => {
+      try {
+        await adminClient.from("audit_logs").insert({
+          tenant_id: tenantId,
+          user_id: caller.id,
+          action: auditAction,
+          entity_type: entityType,
+          entity_id: entityId,
+          details,
+        });
+      } catch (e) {
+        console.warn("[tenant-admin] audit write failed:", e);
+      }
+    };
+
     /* ── LIST ── */
     if (action === "list") {
       stage = "list_tenants";
@@ -308,6 +324,8 @@ Deno.serve(async (req) => {
         });
       }
 
+      await writeAudit(tenantId, "unlink_user", "user", userId, { removed_roles: count ?? 0 });
+
       return new Response(JSON.stringify({ success: true, removed: count ?? 0 }), {
         status: 200,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -448,6 +466,7 @@ Deno.serve(async (req) => {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      await writeAudit(tenantId, "create_team", "team", team.id, { name: teamName });
       return new Response(JSON.stringify({ success: true, team }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -486,13 +505,23 @@ Deno.serve(async (req) => {
         });
       }
       stage = "delete_team";
+
+      // Fetch team info for audit before deletion
+      const { data: teamInfo } = await adminClient.from("teams").select("tenant_id, name").eq("id", teamId).maybeSingle();
+      const teamTenantId = teamInfo?.tenant_id ?? membersTenantScope ?? String(callerTenant || "");
+
+      // Clean up resource_access grants referencing this team
+      await adminClient.from("resource_access").delete().eq("grantee_type", "team").eq("grantee_id", teamId);
+      // Clean up team members
       await adminClient.from("team_members").delete().eq("team_id", teamId);
+      // Delete team
       const { error: delErr } = await adminClient.from("teams").delete().eq("id", teamId);
       if (delErr) {
         return new Response(JSON.stringify({ error: delErr.message, stage }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      await writeAudit(teamTenantId, "delete_team", "team", teamId, { name: teamInfo?.name ?? "" });
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -517,6 +546,7 @@ Deno.serve(async (req) => {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      await writeAudit(tenantId, "add_team_member", "team", teamId, { user_id: userId });
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -531,11 +561,18 @@ Deno.serve(async (req) => {
         });
       }
       stage = "remove_team_member";
+
+      // Fetch member info for audit before deletion
+      const { data: memberInfo } = await adminClient.from("team_members").select("tenant_id, team_id, user_id").eq("id", memberId).maybeSingle();
+
       const { error: rmErr } = await adminClient.from("team_members").delete().eq("id", memberId);
       if (rmErr) {
         return new Response(JSON.stringify({ error: rmErr.message, stage }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      if (memberInfo?.tenant_id) {
+        await writeAudit(memberInfo.tenant_id, "remove_team_member", "team", memberInfo.team_id, { user_id: memberInfo.user_id });
       }
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -560,6 +597,7 @@ Deno.serve(async (req) => {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      await writeAudit(tenantId, "update_tenant", "tenant", tenantId, updates);
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -582,29 +620,33 @@ Deno.serve(async (req) => {
         });
       }
       stage = "set_user_role";
-      // Upsert: update if exists, insert if not
-      const { data: existing } = await adminClient
-        .from("user_roles")
-        .select("id")
-        .eq("user_id", userId)
-        .eq("tenant_id", tenantId)
-        .maybeSingle();
 
-      if (existing?.id) {
-        const { error } = await adminClient.from("user_roles").update({ role }).eq("id", existing.id);
-        if (error) {
-          return new Response(JSON.stringify({ error: error.message, stage }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
-      } else {
-        const { error } = await adminClient.from("user_roles").insert({ user_id: userId, tenant_id: tenantId, role });
-        if (error) {
-          return new Response(JSON.stringify({ error: error.message, stage }), {
-            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
-          });
-        }
+      // Delete ALL existing roles for this user+tenant, then insert the new one.
+      // This avoids .maybeSingle() crash when user has multiple roles per tenant
+      // (unique constraint is on user_id,tenant_id,role — not user_id,tenant_id).
+      const { error: delErr } = await adminClient
+        .from("user_roles")
+        .delete()
+        .eq("user_id", userId)
+        .eq("tenant_id", tenantId);
+
+      if (delErr) {
+        return new Response(JSON.stringify({ error: delErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
+
+      const { error: insErr } = await adminClient
+        .from("user_roles")
+        .insert({ user_id: userId, tenant_id: tenantId, role });
+
+      if (insErr) {
+        return new Response(JSON.stringify({ error: insErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      await writeAudit(tenantId, "set_user_role", "user", userId, { role });
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -638,6 +680,7 @@ Deno.serve(async (req) => {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+      await writeAudit(tenantId, "grant_access", resourceType, resourceId, { grantee_type: granteeType, grantee_id: granteeId, access_level: accessLevel });
       return new Response(JSON.stringify({ success: true, id: data?.id }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
@@ -651,11 +694,18 @@ Deno.serve(async (req) => {
         });
       }
       stage = "revoke_access";
+
+      // Fetch grant info for audit before deletion
+      const { data: grantInfo } = await adminClient.from("resource_access").select("tenant_id, resource_type, resource_id, grantee_type, grantee_id").eq("id", grantId).maybeSingle();
+
       const { error: revokeErr } = await adminClient.from("resource_access").delete().eq("id", grantId);
       if (revokeErr) {
         return new Response(JSON.stringify({ error: revokeErr.message, stage }), {
           status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+      if (grantInfo?.tenant_id) {
+        await writeAudit(grantInfo.tenant_id, "revoke_access", grantInfo.resource_type, grantInfo.resource_id, { grantee_type: grantInfo.grantee_type, grantee_id: grantInfo.grantee_id });
       }
       return new Response(JSON.stringify({ success: true }), {
         status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -693,6 +743,10 @@ Deno.serve(async (req) => {
       }
 
       stage = "delete_tenant";
+
+      // Fetch tenant name for audit
+      const { data: tenantInfo } = await adminClient.from("tenants").select("name").eq("id", tenantId).maybeSingle();
+
       const { error: delErr } = await adminClient
         .from("tenants")
         .delete()
@@ -703,6 +757,11 @@ Deno.serve(async (req) => {
           status: 500,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
+      }
+
+      // Audit log written to caller's tenant since deleted tenant no longer exists
+      if (callerTenant) {
+        await writeAudit(String(callerTenant), "delete_tenant", "tenant", tenantId, { name: tenantInfo?.name ?? "" });
       }
 
       return new Response(JSON.stringify({ success: true, deleted: tenantId }), {
@@ -783,6 +842,10 @@ Deno.serve(async (req) => {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    if (callerTenant) {
+      await writeAudit(String(callerTenant), "create_tenant", "tenant", persistedTenant.id, { name: persistedTenant.name, slug: persistedTenant.slug });
     }
 
     return new Response(JSON.stringify({ success: true, tenant: persistedTenant }), {

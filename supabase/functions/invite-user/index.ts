@@ -121,29 +121,22 @@ Deno.serve(async (req) => {
     };
 
     const ensureRoleForTenant = async (userId: string) => {
-      const { data: existingTenantRole, error: existingTenantRoleError } = await adminClient
+      // Delete all existing roles for this user+tenant, then insert the new one.
+      // This avoids .maybeSingle() crash when user has multiple roles per tenant
+      // (unique constraint is on user_id,tenant_id,role — not user_id,tenant_id).
+      const { error: delErr } = await adminClient
         .from("user_roles")
-        .select("id")
+        .delete()
         .eq("user_id", userId)
-        .eq("tenant_id", targetTenant)
-        .maybeSingle();
+        .eq("tenant_id", targetTenant);
 
-      if (existingTenantRoleError) throw existingTenantRoleError;
+      if (delErr) throw delErr;
 
-      if (existingTenantRole?.id) {
-        const { error: roleUpdateError } = await adminClient
-          .from("user_roles")
-          .update({ role })
-          .eq("id", existingTenantRole.id);
+      const { error: insErr } = await adminClient
+        .from("user_roles")
+        .insert({ user_id: userId, tenant_id: targetTenant, role });
 
-        if (roleUpdateError) throw roleUpdateError;
-      } else {
-        const { error: roleInsertError } = await adminClient
-          .from("user_roles")
-          .insert({ user_id: userId, tenant_id: targetTenant, role });
-
-        if (roleInsertError) throw roleInsertError;
-      }
+      if (insErr) throw insErr;
 
       if (mode === "link") return;
 
@@ -250,6 +243,22 @@ Deno.serve(async (req) => {
       if (profileDeleteError) throw profileDeleteError;
     };
 
+    /* ── Audit helper ── */
+    const writeAudit = async (tenantId: string, auditAction: string, entityType: string | null, entityId: string | null, details: Record<string, unknown> = {}) => {
+      try {
+        await adminClient.from("audit_logs").insert({
+          tenant_id: tenantId,
+          user_id: caller.id,
+          action: auditAction,
+          entity_type: entityType,
+          entity_id: entityId,
+          details,
+        });
+      } catch (e) {
+        console.warn("[invite-user] audit write failed:", e);
+      }
+    };
+
     stage = "profile_lookup";
     const { data: profilesByEmail, error: profilesByEmailError } = await adminClient
       .from("profiles")
@@ -333,6 +342,14 @@ Deno.serve(async (req) => {
       await cleanupTenantIfEmpty(autoTenantId);
       await cleanupTenantIfEmpty(previousTenantId);
     }
+
+    // Write audit log
+    await writeAudit(targetTenant, existingAuthUser ? "link_user" : "invite_user", "user", userId, {
+      email,
+      role,
+      mode,
+      display_name: displayName,
+    });
 
     return new Response(JSON.stringify({
       success: true,
