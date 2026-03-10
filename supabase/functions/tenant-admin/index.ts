@@ -282,6 +282,104 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ── UNLINK ── */
+    if (action === "unlink") {
+      const userId = String(body?.user_id || "").trim();
+      const tenantId = String(body?.tenant_id || "").trim();
+      if (!userId || !tenantId) {
+        return new Response(JSON.stringify({ error: "user_id and tenant_id are required", stage }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      stage = "unlink_user_role";
+      const { error: unlinkErr, count } = await adminClient
+        .from("user_roles")
+        .delete({ count: "exact" })
+        .eq("user_id", userId)
+        .eq("tenant_id", tenantId);
+
+      if (unlinkErr) {
+        return new Response(JSON.stringify({ error: unlinkErr.message, stage }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify({ success: true, removed: count ?? 0 }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── TENANT_USERS (list users+teams for a specific tenant — bypasses RLS) ── */
+    if (action === "tenant_users") {
+      const tenantId = String(body?.tenant_id || "").trim();
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: "tenant_id is required", stage }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Verify caller has access (super admin or admin of the tenant)
+      if (!isSuperAdmin) {
+        const { data: isTenantAdmin } = await adminClient.rpc("has_role", {
+          p_user_id: caller.id,
+          p_tenant_id: tenantId,
+          p_role: "admin",
+        });
+        if (!isTenantAdmin) {
+          return new Response(JSON.stringify({ error: "Admin role required for this tenant", stage }), {
+            status: 403,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+
+      stage = "fetch_tenant_users";
+      const [rolesRes, profilesRes, teamsRes] = await Promise.all([
+        adminClient.from("user_roles").select("user_id").eq("tenant_id", tenantId),
+        adminClient.from("profiles").select("id, display_name, email").eq("tenant_id", tenantId),
+        adminClient.from("teams").select("id, name, color").eq("tenant_id", tenantId),
+      ]);
+
+      if (rolesRes.error) {
+        return new Response(JSON.stringify({ error: rolesRes.error.message, stage }), {
+          status: 500,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Get profiles for users who have roles but may have a different profile tenant_id
+      const roleUserIds = [...new Set((rolesRes.data ?? []).map((r) => r.user_id))];
+      const profileMap = new Map((profilesRes.data ?? []).map((p) => [p.id, p]));
+
+      // Fetch missing profiles (users linked via roles but profile in another tenant)
+      const missingIds = roleUserIds.filter((uid) => !profileMap.has(uid));
+      if (missingIds.length > 0) {
+        const { data: extraProfiles } = await adminClient
+          .from("profiles")
+          .select("id, display_name, email")
+          .in("id", missingIds);
+        (extraProfiles ?? []).forEach((p) => profileMap.set(p.id, p));
+      }
+
+      const users = roleUserIds.map((uid) => {
+        const p = profileMap.get(uid);
+        return { id: uid, display_name: p?.display_name ?? null, email: p?.email ?? null };
+      });
+
+      return new Response(JSON.stringify({
+        users,
+        teams: teamsRes.data ?? [],
+      }), {
+        status: 200,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     /* ── DELETE ── */
     if (action === "delete") {
       const tenantId = String(body?.tenant_id || "").trim();
