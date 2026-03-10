@@ -426,6 +426,121 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ── CREATE_TEAM ── */
+    if (action === "create_team") {
+      const tenantId = String(body?.tenant_id || "").trim();
+      const teamName = String(body?.name || "").trim();
+      if (!tenantId || !teamName) {
+        return new Response(JSON.stringify({ error: "tenant_id and name are required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "create_team";
+      const { data: team, error: teamErr } = await adminClient.from("teams").insert({
+        tenant_id: tenantId,
+        name: teamName,
+        description: String(body?.description || "").trim(),
+        color: String(body?.color || "#10b981").trim(),
+      }).select("*").single();
+      if (teamErr) {
+        return new Response(JSON.stringify({ error: teamErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true, team }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── UPDATE_TEAM ── */
+    if (action === "update_team") {
+      const teamId = String(body?.team_id || "").trim();
+      if (!teamId) {
+        return new Response(JSON.stringify({ error: "team_id is required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "update_team";
+      const updates: Record<string, string> = {};
+      if (body?.name !== undefined) updates.name = String(body.name).trim();
+      if (body?.description !== undefined) updates.description = String(body.description).trim();
+      if (body?.color !== undefined) updates.color = String(body.color).trim();
+      const { error: upErr } = await adminClient.from("teams").update(updates).eq("id", teamId);
+      if (upErr) {
+        return new Response(JSON.stringify({ error: upErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── DELETE_TEAM ── */
+    if (action === "delete_team") {
+      const teamId = String(body?.team_id || "").trim();
+      if (!teamId) {
+        return new Response(JSON.stringify({ error: "team_id is required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "delete_team";
+      await adminClient.from("team_members").delete().eq("team_id", teamId);
+      const { error: delErr } = await adminClient.from("teams").delete().eq("id", teamId);
+      if (delErr) {
+        return new Response(JSON.stringify({ error: delErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── ADD_TEAM_MEMBER ── */
+    if (action === "add_team_member") {
+      const tenantId = String(body?.tenant_id || "").trim();
+      const teamId = String(body?.team_id || "").trim();
+      const userId = String(body?.user_id || "").trim();
+      if (!tenantId || !teamId || !userId) {
+        return new Response(JSON.stringify({ error: "tenant_id, team_id and user_id are required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "add_team_member";
+      const { error: addErr } = await adminClient.from("team_members").insert({
+        tenant_id: tenantId, team_id: teamId, user_id: userId,
+      });
+      if (addErr) {
+        return new Response(JSON.stringify({ error: addErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── REMOVE_TEAM_MEMBER ── */
+    if (action === "remove_team_member") {
+      const memberId = String(body?.member_id || "").trim();
+      if (!memberId) {
+        return new Response(JSON.stringify({ error: "member_id is required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "remove_team_member";
+      const { error: rmErr } = await adminClient.from("team_members").delete().eq("id", memberId);
+      if (rmErr) {
+        return new Response(JSON.stringify({ error: rmErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     /* ── DELETE ── */
     if (action === "delete") {
       const tenantId = String(body?.tenant_id || "").trim();
