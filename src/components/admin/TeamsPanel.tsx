@@ -58,12 +58,33 @@ export default function TeamsPanel({ tenantId, profiles }: Props) {
   const fetchTeams = useCallback(async () => {
     if (!tenantId) return;
     setLoading(true);
-    const [teamsRes, membersRes] = await Promise.all([
-      supabase.from("teams").select("*").eq("tenant_id", tenantId).order("name"),
-      supabase.from("team_members").select("*").eq("tenant_id", tenantId),
-    ]);
-    setTeams((teamsRes.data as Team[]) ?? []);
-    setMembers((membersRes.data as TeamMember[]) ?? []);
+    try {
+      // Try edge function first (bypasses RLS for cross-tenant Super Admin access)
+      const { data: efData, error: efErr } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "tenant_teams", tenant_id: tenantId },
+      });
+
+      if (!efErr && !efData?.error && efData?.teams) {
+        setTeams((efData.teams as Team[]) ?? []);
+        setMembers((efData.members as TeamMember[]) ?? []);
+      } else {
+        // Fallback to direct query (works when JWT tenant matches)
+        const [teamsRes, membersRes] = await Promise.all([
+          supabase.from("teams").select("*").eq("tenant_id", tenantId).order("name"),
+          supabase.from("team_members").select("*").eq("tenant_id", tenantId),
+        ]);
+        setTeams((teamsRes.data as Team[]) ?? []);
+        setMembers((membersRes.data as TeamMember[]) ?? []);
+      }
+    } catch {
+      // Fallback to direct query
+      const [teamsRes, membersRes] = await Promise.all([
+        supabase.from("teams").select("*").eq("tenant_id", tenantId).order("name"),
+        supabase.from("team_members").select("*").eq("tenant_id", tenantId),
+      ]);
+      setTeams((teamsRes.data as Team[]) ?? []);
+      setMembers((membersRes.data as TeamMember[]) ?? []);
+    }
     setLoading(false);
   }, [tenantId]);
 
