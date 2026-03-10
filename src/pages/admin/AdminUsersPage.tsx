@@ -165,6 +165,7 @@ export default function AdminUsersPage() {
       if (data?.error) throw new Error(data.error);
 
       toast({ title: "Permissão atualizada", description: `Usuário agora é ${newRole}.` });
+      await refreshSession();
       await fetchData();
       return true;
     } catch (err: any) {
