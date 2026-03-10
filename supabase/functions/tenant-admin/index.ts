@@ -454,6 +454,19 @@ Deno.serve(async (req) => {
           status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
+
+      // Plan limit check
+      stage = "plan_limit_check_team";
+      const { data: teamLimits } = await adminClient.from("tenants").select("plan, max_teams").eq("id", tenantId).single();
+      if (teamLimits) {
+        const { count: currentTeamCount } = await adminClient.from("teams").select("id", { count: "exact", head: true }).eq("tenant_id", tenantId);
+        if ((currentTeamCount ?? 0) >= teamLimits.max_teams) {
+          return new Response(JSON.stringify({
+            error: `Limite de times atingido (${teamLimits.max_teams}) para o plano "${teamLimits.plan}". Faça upgrade para criar mais times.`,
+          }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+        }
+      }
+
       stage = "create_team";
       const { data: team, error: teamErr } = await adminClient.from("teams").insert({
         tenant_id: tenantId,
