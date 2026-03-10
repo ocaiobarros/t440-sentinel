@@ -541,6 +541,146 @@ Deno.serve(async (req) => {
       });
     }
 
+    /* ── UPDATE_TENANT ── */
+    if (action === "update_tenant") {
+      const tenantId = String(body?.tenant_id || "").trim();
+      if (!tenantId) {
+        return new Response(JSON.stringify({ error: "tenant_id is required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "update_tenant";
+      const updates: Record<string, string> = {};
+      if (body?.name !== undefined) updates.name = String(body.name).trim();
+      if (body?.slug !== undefined) updates.slug = String(body.slug).trim();
+      const { error: upErr } = await adminClient.from("tenants").update(updates).eq("id", tenantId);
+      if (upErr) {
+        return new Response(JSON.stringify({ error: upErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── SET_USER_ROLE ── */
+    if (action === "set_user_role") {
+      const userId = String(body?.user_id || "").trim();
+      const tenantId = String(body?.tenant_id || "").trim();
+      const role = String(body?.role || "").trim();
+      const validRoles = ["admin", "editor", "viewer", "tech", "sales"];
+      if (!userId || !tenantId || !role) {
+        return new Response(JSON.stringify({ error: "user_id, tenant_id and role are required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (!validRoles.includes(role)) {
+        return new Response(JSON.stringify({ error: "Invalid role", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "set_user_role";
+      // Upsert: update if exists, insert if not
+      const { data: existing } = await adminClient
+        .from("user_roles")
+        .select("id")
+        .eq("user_id", userId)
+        .eq("tenant_id", tenantId)
+        .maybeSingle();
+
+      if (existing?.id) {
+        const { error } = await adminClient.from("user_roles").update({ role }).eq("id", existing.id);
+        if (error) {
+          return new Response(JSON.stringify({ error: error.message, stage }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      } else {
+        const { error } = await adminClient.from("user_roles").insert({ user_id: userId, tenant_id: tenantId, role });
+        if (error) {
+          return new Response(JSON.stringify({ error: error.message, stage }), {
+            status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    /* ── MANAGE_RESOURCE_ACCESS ── */
+    if (action === "grant_access") {
+      const tenantId = String(body?.tenant_id || "").trim();
+      const resourceType = String(body?.resource_type || "").trim();
+      const resourceId = String(body?.resource_id || "").trim();
+      const granteeType = String(body?.grantee_type || "").trim();
+      const granteeId = String(body?.grantee_id || "").trim();
+      const accessLevel = String(body?.access_level || "viewer").trim();
+      if (!tenantId || !resourceType || !resourceId || !granteeType || !granteeId) {
+        return new Response(JSON.stringify({ error: "tenant_id, resource_type, resource_id, grantee_type and grantee_id are required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "grant_access";
+      const { data, error: grantErr } = await adminClient.from("resource_access").upsert({
+        tenant_id: tenantId,
+        resource_type: resourceType,
+        resource_id: resourceId,
+        grantee_type: granteeType,
+        grantee_id: granteeId,
+        access_level: accessLevel,
+        granted_by: caller.id,
+      }, { onConflict: "tenant_id,resource_type,resource_id,grantee_type,grantee_id" }).select("id").single();
+      if (grantErr) {
+        return new Response(JSON.stringify({ error: grantErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true, id: data?.id }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "revoke_access") {
+      const grantId = String(body?.grant_id || "").trim();
+      if (!grantId) {
+        return new Response(JSON.stringify({ error: "grant_id is required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "revoke_access";
+      const { error: revokeErr } = await adminClient.from("resource_access").delete().eq("id", grantId);
+      if (revokeErr) {
+        return new Response(JSON.stringify({ error: revokeErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (action === "update_access_level") {
+      const grantId = String(body?.grant_id || "").trim();
+      const accessLevel = String(body?.access_level || "").trim();
+      if (!grantId || !accessLevel) {
+        return new Response(JSON.stringify({ error: "grant_id and access_level are required", stage }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      stage = "update_access_level";
+      const { error: upErr } = await adminClient.from("resource_access").update({ access_level: accessLevel }).eq("id", grantId);
+      if (upErr) {
+        return new Response(JSON.stringify({ error: upErr.message, stage }), {
+          status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      return new Response(JSON.stringify({ success: true }), {
+        status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     /* ── DELETE ── */
     if (action === "delete") {
       const tenantId = String(body?.tenant_id || "").trim();
