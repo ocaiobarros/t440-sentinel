@@ -174,10 +174,11 @@ Deno.serve(async (req) => {
         return;
       }
 
+      // Never update tenant_id — it is immutable via DB trigger.
+      // Only update mutable fields (display_name, email).
       const { error: updateProfileError } = await adminClient
         .from("profiles")
         .update({
-          tenant_id: targetTenant,
           display_name: displayName,
           email,
         })
