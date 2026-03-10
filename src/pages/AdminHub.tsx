@@ -502,8 +502,11 @@ export default function AdminHub() {
         setSavingTeam(false);
         return;
       }
-      const { error } = await supabase.from("tenants").update({ name: teamName.trim(), slug: slugValue }).eq("id", tenant.id);
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "update_tenant", tenant_id: tenant.id, name: teamName.trim(), slug: slugValue },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast({ title: "Organização atualizada", description: "Nome e slug salvos." });
       setEditingTeam(false);
       await fetchData();

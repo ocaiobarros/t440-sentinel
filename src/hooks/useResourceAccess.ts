@@ -73,44 +73,46 @@ export function useResourceAccess(
   const addGrant = useMutation({
     mutationFn: async (params: { grantee_type: "user" | "team"; grantee_id: string; access_level: "viewer" | "editor" }) => {
       if (!resourceId) throw new Error("Contexto ausente: resourceId não definido");
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) throw new Error("Usuário não autenticado");
 
       const resolvedTenantId = await resolveResourceTenantId();
       if (!resolvedTenantId) throw new Error("Tenant do recurso não identificado");
 
-      const { data, error } = await supabase.from("resource_access").upsert({
-        tenant_id: resolvedTenantId,
-        resource_type: resourceType,
-        resource_id: resourceId,
-        grantee_type: params.grantee_type,
-        grantee_id: params.grantee_id,
-        access_level: params.access_level,
-        granted_by: user.id,
-      }, { onConflict: "tenant_id,resource_type,resource_id,grantee_type,grantee_id" })
-        .select("id")
-        .single();
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: {
+          action: "grant_access",
+          tenant_id: resolvedTenantId,
+          resource_type: resourceType,
+          resource_id: resourceId,
+          grantee_type: params.grantee_type,
+          grantee_id: params.grantee_id,
+          access_level: params.access_level,
+        },
+      });
 
-      if (error) {
-        console.error("[ResourceAccess] Grant failed:", error);
-        throw new Error(`Falha ao conceder acesso: ${error.message}`);
-      }
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });
 
   const removeGrant = useMutation({
     mutationFn: async (grantId: string) => {
-      const { error } = await supabase.from("resource_access").delete().eq("id", grantId);
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "revoke_access", grant_id: grantId },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });
 
   const updateLevel = useMutation({
     mutationFn: async (params: { grantId: string; access_level: "viewer" | "editor" }) => {
-      const { error } = await supabase.from("resource_access").update({ access_level: params.access_level }).eq("id", params.grantId);
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "update_access_level", grant_id: params.grantId, access_level: params.access_level },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });

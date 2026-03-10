@@ -57,8 +57,11 @@ export default function AdminOrgsPage() {
     try {
       const slug = teamSlug.trim().toLowerCase().replace(/[^a-z0-9-]+/g, "-").replace(/^-|-$/g, "");
       if (!slug) { toast({ variant: "destructive", title: "Slug inválido" }); setSavingTeam(false); return; }
-      const { error } = await supabase.from("tenants").update({ name: teamName.trim(), slug }).eq("id", tenant.id);
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "update_tenant", tenant_id: tenant.id, name: teamName.trim(), slug },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
       toast({ title: "Organização atualizada" });
       setEditingTeam(false);
       await fetchData();

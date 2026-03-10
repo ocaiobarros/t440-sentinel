@@ -136,8 +136,11 @@ export default function TenantsPage() {
   /* ── mutations ── */
   const updateTenant = useMutation({
     mutationFn: async ({ id, name, slug }: { id: string; name: string; slug: string }) => {
-      const { error } = await supabase.from("tenants").update({ name, slug }).eq("id", id);
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
+        body: { action: "update_tenant", tenant_id: id, name, slug },
+      });
       if (error) throw error;
+      if (data?.error) throw new Error(data.error);
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tenants-admin"] });
