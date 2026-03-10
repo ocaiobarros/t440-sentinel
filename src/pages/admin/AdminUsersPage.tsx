@@ -137,24 +137,17 @@ export default function AdminUsersPage() {
   }, [activeTab, orgFilter]);
 
   /* ── Handlers ── */
-  const handleRoleChange = async (userId: string, newRole: string, tenantId: string, emailHint?: string | null, nameHint?: string | null) => {
+  const handleRoleChange = async (userId: string, newRole: string, tenantId: string, _emailHint?: string | null, _nameHint?: string | null) => {
     const changeKey = `${userId}:${tenantId}`;
     setChangingRole(changeKey);
 
     try {
-      const profile = profileById.get(userId);
-      const email = (emailHint ?? profile?.email ?? "").trim().toLowerCase();
-      if (!email) throw new Error("Usuário sem e-mail válido para atualizar permissões.");
-
-      const displayName = (nameHint ?? profile?.display_name ?? email.split("@")[0] ?? "").trim();
-
-      const { data, error } = await supabase.functions.invoke("invite-user", {
+      const { data, error } = await supabase.functions.invoke("tenant-admin", {
         body: {
-          email,
-          display_name: displayName,
+          action: "set_user_role",
+          user_id: userId,
+          tenant_id: tenantId,
           role: newRole,
-          target_tenant_id: tenantId,
-          mode: "link",
         },
       });
 
