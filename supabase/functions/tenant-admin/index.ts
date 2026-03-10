@@ -59,7 +59,8 @@ Deno.serve(async (req) => {
 
     let membersTenantScope: string | null = String(body?.tenant_id || "").trim() || null;
 
-    if ((action === "members" || action === "tenant_users" || action === "unlink" || action === "tenant_teams" || action === "create_team" || action === "update_team" || action === "delete_team" || action === "add_team_member" || action === "remove_team_member") && !isSuperAdmin) {
+    const tenantAdminActions = ["members", "tenant_users", "unlink", "tenant_teams", "create_team", "update_team", "delete_team", "add_team_member", "remove_team_member", "update_tenant", "set_user_role", "grant_access", "revoke_access", "update_access_level"];
+    if (tenantAdminActions.includes(action) && !isSuperAdmin) {
       const tenantToCheck = membersTenantScope || String(callerTenant || "");
 
       if (!tenantToCheck) {
