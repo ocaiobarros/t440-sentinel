@@ -211,7 +211,21 @@ export default function AdminLayout() {
         {/* Header */}
         <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-30">
           <div className="max-w-7xl mx-auto px-4 py-4 flex items-center gap-4">
-            <Button variant="ghost" size="icon" onClick={() => navigate("/app/operations/home")}>
+            <Button variant="ghost" size="icon" onClick={() => {
+              const adminBase = "/app/settings/admin";
+              const isSubPage = location.pathname !== adminBase && location.pathname.startsWith(adminBase + "/");
+              if (isSubPage) {
+                // Go to parent admin section (e.g., /admin/users → /admin/access, /admin/teams → /admin/access)
+                const segments = location.pathname.replace(adminBase + "/", "").split("/");
+                if (["users", "teams"].includes(segments[0])) {
+                  navigate(adminBase + "/access");
+                } else {
+                  navigate(adminBase);
+                }
+              } else {
+                navigate("/app/operations/home");
+              }
+            }}>
               <ChevronLeft className="w-5 h-5" />
             </Button>
             <div className="flex items-center gap-3">
