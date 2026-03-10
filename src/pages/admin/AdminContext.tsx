@@ -238,15 +238,10 @@ export default function AdminLayout() {
                 <Crown className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h1 className="text-lg font-bold font-[Orbitron] tracking-wider text-foreground">ADMINISTRATION</h1>
-                <p className="text-xs text-muted-foreground font-mono">FLOWPULSE INTELLIGENCE — Gerenciamento</p>
+                <h1 className="text-lg font-bold font-[Orbitron] tracking-wider text-foreground">TENANT ADMIN</h1>
+                <p className="text-xs text-muted-foreground font-mono">FLOWPULSE — Gerenciamento do Tenant</p>
               </div>
             </div>
-            {isSuperAdmin && (
-              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 text-xs font-mono">
-                <Crown className="w-3 h-3 mr-1" /> SUPER ADMIN
-              </Badge>
-            )}
           </div>
         </header>
 
