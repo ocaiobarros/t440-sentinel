@@ -1,0 +1,1 @@
+DELETE FROM public.resource_access WHERE grantee_type = 'user' AND NOT EXISTS (SELECT 1 FROM auth.users u WHERE u.id = resource_access.grantee_id);

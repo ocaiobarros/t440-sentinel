@@ -11,11 +11,16 @@ export interface ResourceGrant {
   access_level: "viewer" | "editor";
   granted_by: string | null;
   created_at: string;
-  // joined
+  // joined externally
   grantee_name?: string;
 }
 
-export function useResourceAccess(resourceType: string, resourceId: string | undefined) {
+export function useResourceAccess(
+  resourceType: string,
+  resourceId: string | undefined,
+  /** Optional name map (id → displayName) to resolve grantee names without extra queries */
+  nameMap?: Record<string, string>,
+) {
   const queryClient = useQueryClient();
   const { tenantId } = useUserRole();
 
@@ -55,27 +60,15 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
         .eq("resource_type", resourceType)
         .eq("resource_id", resourceId!);
       if (error) throw error;
-
-      // Enrich with names
-      const userIds = data.filter(g => g.grantee_type === "user").map(g => g.grantee_id);
-      const teamIds = data.filter(g => g.grantee_type === "team").map(g => g.grantee_id);
-
-      const [profiles, teams] = await Promise.all([
-        userIds.length > 0
-          ? supabase.from("profiles").select("id, display_name, email").in("id", userIds).then(r => r.data ?? [])
-          : Promise.resolve([]),
-        teamIds.length > 0
-          ? supabase.from("teams").select("id, name").in("id", teamIds).then(r => r.data ?? [])
-          : Promise.resolve([]),
-      ]);
-
-      const nameMap: Record<string, string> = {};
-      profiles.forEach(p => { nameMap[p.id] = p.display_name || p.email || p.id; });
-      teams.forEach(t => { nameMap[t.id] = t.name; });
-
-      return data.map(g => ({ ...g, grantee_name: nameMap[g.grantee_id] || g.grantee_id })) as ResourceGrant[];
+      return (data ?? []) as ResourceGrant[];
     },
   });
+
+  // Enrich grants with names from the external nameMap
+  const enrichedGrants: ResourceGrant[] = grants.map((g) => ({
+    ...g,
+    grantee_name: nameMap?.[g.grantee_id] || g.grantee_id,
+  }));
 
   const addGrant = useMutation({
     mutationFn: async (params: { grantee_type: "user" | "team"; grantee_id: string; access_level: "viewer" | "editor" }) => {
@@ -85,8 +78,6 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
 
       const resolvedTenantId = await resolveResourceTenantId();
       if (!resolvedTenantId) throw new Error("Tenant do recurso não identificado");
-
-      
 
       const { data, error } = await supabase.from("resource_access").upsert({
         tenant_id: resolvedTenantId,
@@ -104,7 +95,6 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
         console.error("[ResourceAccess] Grant failed:", error);
         throw new Error(`Falha ao conceder acesso: ${error.message}`);
       }
-      
     },
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });
@@ -125,5 +115,5 @@ export function useResourceAccess(resourceType: string, resourceId: string | und
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["resource-access", resourceType, resourceId] }),
   });
 
-  return { grants, isLoading, addGrant, removeGrant, updateLevel };
+  return { grants: enrichedGrants, isLoading, addGrant, removeGrant, updateLevel };
 }

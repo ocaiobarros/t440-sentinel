@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useResourceAccess } from "@/hooks/useResourceAccess";
@@ -13,18 +13,29 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 interface AccessControlPanelProps {
   resourceType: string;
   resourceId: string | undefined;
-  /** Compact mode shows just a button that opens a dialog */
   compact?: boolean;
 }
 
+interface TenantUser {
+  id: string;
+  display_name: string | null;
+  email: string | null;
+}
+
+interface TenantTeam {
+  id: string;
+  name: string;
+  color?: string;
+}
+
 function AccessControlContent({ resourceType, resourceId }: { resourceType: string; resourceId: string }) {
-  const { grants, isLoading, addGrant, removeGrant, updateLevel } = useResourceAccess(resourceType, resourceId);
   const { tenantId: fallbackTenantId } = useUserRole();
   const { toast } = useToast();
   const [granteeType, setGranteeType] = useState<"user" | "team">("user");
   const [granteeId, setGranteeId] = useState("");
   const [accessLevel, setAccessLevel] = useState<"viewer" | "editor">("viewer");
 
+  // Resolve tenant_id of the resource
   const { data: resourceTenantId = fallbackTenantId } = useQuery({
     queryKey: ["resource-tenant", resourceType, resourceId, fallbackTenantId],
     enabled: !!resourceId,
@@ -38,7 +49,6 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
         if (error) throw error;
         return data?.tenant_id ?? fallbackTenantId;
       }
-
       if (resourceType === "flow_map") {
         const { data, error } = await supabase
           .from("flow_maps")
@@ -48,12 +58,11 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
         if (error) throw error;
         return data?.tenant_id ?? fallbackTenantId;
       }
-
       return fallbackTenantId;
     },
   });
 
-  // Load users and teams for selection — uses edge function to bypass RLS cross-tenant issues
+  // Load users and teams via edge function (bypasses RLS)
   const { data: tenantData, isLoading: tenantDataLoading } = useQuery({
     queryKey: ["tenant-users-teams", resourceTenantId],
     enabled: !!resourceTenantId,
@@ -61,29 +70,53 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
       const { data, error } = await supabase.functions.invoke("tenant-admin", {
         body: { action: "tenant_users", tenant_id: resourceTenantId },
       });
-      if (error) {
-        console.error("[AccessControlPanel] tenant_users error:", error);
+
+      if (error || data?.error) {
+        console.error("[AccessControlPanel] tenant_users error:", error || data?.error);
         // Fallback to direct query
         const [usersRes, teamsRes] = await Promise.all([
           supabase.from("profiles").select("id, display_name, email").eq("tenant_id", resourceTenantId!),
           supabase.from("teams").select("id, name, color").eq("tenant_id", resourceTenantId!),
         ]);
-        return { users: usersRes.data ?? [], teams: teamsRes.data ?? [] };
+        return {
+          users: (usersRes.data ?? []) as TenantUser[],
+          teams: (teamsRes.data ?? []) as TenantTeam[],
+        };
       }
-      if (data?.error) {
-        console.error("[AccessControlPanel] tenant_users data error:", data.error);
-        const [usersRes, teamsRes] = await Promise.all([
-          supabase.from("profiles").select("id, display_name, email").eq("tenant_id", resourceTenantId!),
-          supabase.from("teams").select("id, name, color").eq("tenant_id", resourceTenantId!),
-        ]);
-        return { users: usersRes.data ?? [], teams: teamsRes.data ?? [] };
-      }
-      return { users: data?.users ?? [], teams: data?.teams ?? [] };
+
+      return {
+        users: (data?.users ?? []) as TenantUser[],
+        teams: (data?.teams ?? []) as TenantTeam[],
+      };
     },
   });
 
   const users = tenantData?.users ?? [];
   const teams = tenantData?.teams ?? [];
+
+  // Build name map from tenantData for grant name resolution
+  const nameMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    users.forEach((u) => {
+      map[u.id] = u.display_name || u.email || u.id;
+    });
+    teams.forEach((t) => {
+      map[t.id] = t.name;
+    });
+    return map;
+  }, [users, teams]);
+
+  // Filter out users without name AND email (phantom users)
+  const validUsers = useMemo(
+    () => users.filter((u) => u.display_name || u.email),
+    [users],
+  );
+
+  const { grants, isLoading, addGrant, removeGrant, updateLevel } = useResourceAccess(
+    resourceType,
+    resourceId,
+    nameMap,
+  );
 
   const handleAdd = async () => {
     if (!granteeId) return;
@@ -101,9 +134,9 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
     }
   };
 
-  const options = granteeType === "user" ? users : teams;
-  const alreadyGranted = new Set(grants.filter(g => g.grantee_type === granteeType).map(g => g.grantee_id));
-  const available = options.filter(o => !alreadyGranted.has(o.id));
+  const options = granteeType === "user" ? validUsers : teams;
+  const alreadyGranted = new Set(grants.filter((g) => g.grantee_type === granteeType).map((g) => g.grantee_id));
+  const available = options.filter((o) => !alreadyGranted.has(o.id));
 
   return (
     <div className="space-y-4">
@@ -127,7 +160,7 @@ function AccessControlContent({ resourceType, resourceId }: { resourceType: stri
             <SelectContent>
               {available.map((o) => (
                 <SelectItem key={o.id} value={o.id}>
-                  {"display_name" in o ? (o.display_name || o.email || o.id) : o.name}
+                  {"display_name" in o ? (o.display_name || o.email || o.id) : (o as TenantTeam).name}
                 </SelectItem>
               ))}
               {available.length === 0 && (
