@@ -426,7 +426,7 @@ export default function FlowMapCanvas({
 
       polyline.addTo(linesLayer);
 
-      // ── Persistent traffic label at TRUE center between hosts ──
+      // ── Callout box with leader line for link traffic ──
       const midLat = (originHost.lat + destHost.lat) / 2;
       const midLon = (originHost.lon + destHost.lon) / 2;
       const midPoint: [number, number] = [midLat, midLon];
@@ -443,18 +443,46 @@ export default function FlowMapCanvas({
       const utilVal = util ?? 0;
       const utilColor = utilVal > 80 ? "#ff1744" : utilVal > 50 ? "#ff9100" : "#00e676";
 
-      const ts = "text-shadow:0 0 4px #000,0 0 8px #000,0 1px 3px #000;";
+      // Calculate perpendicular offset for callout position
+      const dLat = destHost.lat - originHost.lat;
+      const dLon = destHost.lon - originHost.lon;
+      const linkLen = Math.sqrt(dLat * dLat + dLon * dLon);
+      // Perpendicular unit vector (rotated 90°), scaled by offset factor
+      const offsetFactor = Math.max(0.12, Math.min(0.35, linkLen * 0.4));
+      // Alternate sides for even/odd links to reduce overlap
+      const side = linkIdx % 2 === 0 ? 1 : -1;
+      const perpLat = side * (-dLon / (linkLen || 1)) * offsetFactor;
+      const perpLon = side * (dLat / (linkLen || 1)) * offsetFactor;
+      const calloutLat = midLat + perpLat;
+      const calloutLon = midLon + perpLon;
+      const calloutPoint: [number, number] = [calloutLat, calloutLon];
+
+      // Origin & dest names for callout header
+      const oName = originHost.host_name || originHost.zabbix_host_id;
+      const dName = destHost.host_name || destHost.zabbix_host_id;
+
       const labelHtml = `
-        <div class="fm-label-content" style="font-family:'JetBrains Mono',monospace;line-height:1.4;white-space:nowrap;text-align:center;">
-          <div style="font-size:14px;color:${qualityColor};font-weight:700;${ts}text-shadow:0 0 8px ${qualityColor}80,0 0 4px #000,0 1px 3px #000;">${qualityLabel}</div>
+        <div class="fm-callout-box" style="
+          font-family:'JetBrains Mono',monospace;
+          background:rgba(10,12,28,0.88);
+          border:1px dashed ${qualityColor}90;
+          border-radius:6px;
+          padding:6px 10px;
+          white-space:nowrap;
+          min-width:120px;
+          box-shadow:0 0 12px rgba(0,0,0,0.6),0 0 4px ${qualityColor}30;
+          pointer-events:none;
+        ">
+          <div style="font-size:9px;color:#888;line-height:1.3;margin-bottom:3px;text-align:center;max-width:200px;overflow:hidden;text-overflow:ellipsis;">${oName} ⟷ ${dName}</div>
+          <div style="font-size:13px;color:${qualityColor};font-weight:700;text-align:center;text-shadow:0 0 6px ${qualityColor}60;">${qualityLabel}</div>
           ${hasTelemetry ? `
-            <div style="display:flex;align-items:center;gap:6px;justify-content:center;font-weight:700;font-size:13px;${ts}">
-              <span style="color:#ff9100;">▲${fmtBps(ulBps)}</span>
-              <span style="color:#00e5ff;">▼${fmtBps(dlBps)}</span>
+            <div style="display:flex;align-items:center;gap:6px;justify-content:center;font-weight:700;font-size:12px;margin-top:3px;">
+              <span style="color:#ff9100;">▲ ${fmtBps(ulBps)}</span>
+              <span style="color:#00e5ff;">▼ ${fmtBps(dlBps)}</span>
             </div>
-            ${util != null ? `<div style="color:${utilColor};font-size:12px;font-weight:700;${ts}">${utilVal.toFixed(1)}%</div>` : ""}
+            ${util != null ? `<div style="color:${utilColor};font-size:11px;font-weight:700;text-align:center;margin-top:1px;">${utilVal.toFixed(1)}%</div>` : ""}
           ` : ""}
-          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:12px;font-weight:700;${ts}">⚠${totalErrors}</div>` : ""}
+          ${totalErrors > 0 ? `<div style="color:#ff1744;font-size:11px;font-weight:700;text-align:center;margin-top:1px;">⚠ ${totalErrors} erros</div>` : ""}
         </div>
       `;
 
@@ -465,8 +493,17 @@ export default function FlowMapCanvas({
         iconAnchor: L.point(0, 0),
       });
 
-      const labelMarker = L.marker(midPoint, { icon: labelIcon, interactive: false });
+      const labelMarker = L.marker(calloutPoint, { icon: labelIcon, interactive: false });
       labelMarker.addTo(labelsLayer);
+
+      // Leader line from callout box to link midpoint
+      const leaderLine = L.polyline([calloutPoint, midPoint], {
+        color: qualityColor,
+        weight: 1,
+        opacity: 0.5,
+        dashArray: "4, 4",
+      });
+      leaderLine.addTo(labelsLayer);
     });
 
     // Hosts — clickable markers
