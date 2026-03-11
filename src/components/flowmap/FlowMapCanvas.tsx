@@ -512,8 +512,22 @@ export default function FlowMapCanvas({
 
     // ── COLLISION DETECTION: Force Y-axis separation for nearby callouts ──
     const map = mapRef.current!;
-    const CALLOUT_W = 120;
-    const CALLOUT_H = 36;
+    const CALLOUT_W = 220;
+    const CALLOUT_H = 60;
+
+    // ── VIEWPORT CLAMPING: keep callouts within visible area ──
+    const mapSize = map.getSize();
+    const CLAMP_PAD = 12;
+    function clampToViewport(latlng: [number, number]): [number, number] {
+      const pt = map.latLngToContainerPoint(latlng);
+      const cx = Math.max(CLAMP_PAD + CALLOUT_W / 2, Math.min(mapSize.x - CLAMP_PAD - CALLOUT_W / 2, pt.x));
+      const cy = Math.max(CLAMP_PAD + CALLOUT_H / 2, Math.min(mapSize.y - CLAMP_PAD - CALLOUT_H / 2, pt.y));
+      if (cx !== pt.x || cy !== pt.y) {
+        const clamped = map.containerPointToLatLng(L.point(cx, cy));
+        return [clamped.lat, clamped.lng];
+      }
+      return latlng;
+    }
 
     function getPixelRect(latlng: [number, number]): { x: number; y: number; w: number; h: number } {
       const pt = map.latLngToContainerPoint(latlng);
@@ -532,14 +546,16 @@ export default function FlowMapCanvas({
     const hiddenCalloutIdxs = new Set<number>();
 
     for (const c of sortedCallouts) {
+      // Clamp initial position to viewport
+      c.calloutPoint = clampToViewport(c.calloutPoint);
       let rect = getPixelRect(c.calloutPoint);
       let resolved = false;
 
-      // Try nudging in Y-axis (up/down) first, then X
+      // Bigger nudge steps for larger boxes
       const nudgeSteps = [
-        [0, -35], [0, 35], [0, -65], [0, 65],     // Y nudge
-        [-50, -20], [50, -20], [-50, 20], [50, 20], // diagonal
-        [0, -100], [0, 100],                         // far Y
+        [0, -55], [0, 55], [0, -100], [0, 100],       // Y nudge
+        [-80, -40], [80, -40], [-80, 40], [80, 40],    // diagonal
+        [0, -150], [0, 150], [-120, 0], [120, 0],      // far
       ];
 
       for (const [dx, dy] of nudgeSteps) {
@@ -550,7 +566,7 @@ export default function FlowMapCanvas({
         const pt = map.latLngToContainerPoint(c.calloutPoint);
         const newPt = L.point(pt.x + dx, pt.y + dy);
         const newLatLng = map.containerPointToLatLng(newPt);
-        c.calloutPoint = [newLatLng.lat, newLatLng.lng];
+        c.calloutPoint = clampToViewport([newLatLng.lat, newLatLng.lng]);
         rect = getPixelRect(c.calloutPoint);
       }
 
@@ -591,24 +607,25 @@ export default function FlowMapCanvas({
       const labelHtml = `
         <div class="fm-callout-box${isHidden ? " fm-callout-hidden" : ""}" style="
           font-family:'JetBrains Mono',monospace;
-          background:rgba(8,10,24,0.88);
-          border-left:2px solid ${qualityColor};
-          border-radius:4px;
-          padding:3px 6px;
+          background:rgba(8,10,24,0.92);
+          border-left:3px solid ${qualityColor};
+          border-radius:6px;
+          padding:8px 12px;
           white-space:nowrap;
-          line-height:1.3;
-          backdrop-filter:blur(4px);
+          line-height:1.4;
+          backdrop-filter:blur(6px);
           z-index:${zIdx};
-          box-shadow:0 2px 8px rgba(0,0,0,0.5);
+          box-shadow:0 4px 16px rgba(0,0,0,0.6),0 0 6px ${qualityColor}33;
+          min-width:140px;
         ">
-          <div style="font-size:8px;color:#888;overflow:hidden;text-overflow:ellipsis;max-width:160px;">${shortName(oName)}⟷${shortName(dName)}</div>
-          <div style="display:flex;align-items:center;gap:4px;margin-top:1px;">
-            <span style="width:5px;height:5px;border-radius:50%;background:${statusDot};box-shadow:0 0 4px ${statusDot};display:inline-block;flex-shrink:0;"></span>
-            <span style="font-size:9px;color:${qualityColor};font-weight:700;">${statusText}</span>
-            <span style="font-size:8px;color:#ff9100;margin-left:auto;">▲${ulStr}</span>
-            <span style="font-size:8px;color:#00e5ff;">▼${dlStr}</span>
+          <div style="font-size:13px;color:#bbb;overflow:hidden;text-overflow:ellipsis;max-width:260px;font-weight:500;">${shortName(oName)} ⟷ ${shortName(dName)}</div>
+          <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+            <span style="width:8px;height:8px;border-radius:50%;background:${statusDot};box-shadow:0 0 6px ${statusDot};display:inline-block;flex-shrink:0;"></span>
+            <span style="font-size:14px;color:${qualityColor};font-weight:700;">${statusText}</span>
+            <span style="font-size:13px;color:#ff9100;margin-left:auto;font-weight:600;">▲${ulStr}</span>
+            <span style="font-size:13px;color:#00e5ff;font-weight:600;">▼${dlStr}</span>
           </div>
-          ${util != null || totalErrors > 0 ? `<div style="display:flex;gap:6px;font-size:7px;color:#666;margin-top:1px;">${util != null ? `<span style="color:${utilColor};">${utilVal.toFixed(0)}%</span>` : ""}${totalErrors > 0 ? `<span style="color:#ff1744;">⚠${totalErrors}err</span>` : ""}</div>` : ""}
+          ${util != null || totalErrors > 0 ? `<div style="display:flex;gap:8px;font-size:11px;color:#777;margin-top:3px;">${util != null ? `<span style="color:${utilColor};font-weight:600;">${utilVal.toFixed(0)}% util</span>` : ""}${totalErrors > 0 ? `<span style="color:#ff1744;font-weight:600;">⚠ ${totalErrors} err</span>` : ""}</div>` : ""}
         </div>
       `;
 
