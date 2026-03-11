@@ -517,9 +517,10 @@ export default function FlowMapCanvas({
 
       polyline.addTo(linesLayer);
 
-      // ── Collect callout data ──
-      const midLat = (originHost.lat + destHost.lat) / 2;
-      const midLon = (originHost.lon + destHost.lon) / 2;
+      // ── Collect callout data (use offset midpoint for parallel links) ──
+      const midIdx = Math.floor(coords.length / 2);
+      const midLat = coords[midIdx][0];
+      const midLon = coords[midIdx][1];
       const midPoint: [number, number] = [midLat, midLon];
 
       const ulBps = traffic?.sideA?.out_bps ?? traffic?.sideB?.out_bps;
