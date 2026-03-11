@@ -150,10 +150,9 @@ function ensurePulseStyle() {
     .fm-traffic-label.fm-zoom-mid{opacity:1;}
     .fm-traffic-label.fm-zoom-close{opacity:1;}
     .fm-traffic-label.fm-zoom-detail{opacity:1;}
-    .fm-callout-box{transition:opacity 0.3s ease,transform 0.2s ease;}
-    .fm-callout-box .fm-detail-row{max-height:0;overflow:hidden;opacity:0;transition:max-height 0.25s ease,opacity 0.2s ease;}
-    .fm-callout-box:hover .fm-detail-row,.fm-callout-box.fm-expanded .fm-detail-row{max-height:80px;opacity:1;}
-    .fm-callout-box:hover{transform:scale(1.05);z-index:9000!important;}
+    .fm-callout-box{transition:opacity 0.3s ease,transform 0.15s ease;}
+    .fm-callout-box:hover{transform:scale(1.08);z-index:9000!important;}
+    .fm-callout-hidden{opacity:0!important;pointer-events:none!important;}
     .fm-leader-line{pointer-events:none;}
     .fm-cluster-badge{cursor:default;transition:transform 0.2s ease;}
     .fm-cluster-badge:hover{transform:scale(1.15);}
