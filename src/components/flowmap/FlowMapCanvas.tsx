@@ -145,13 +145,21 @@ function ensurePulseStyle() {
     .fm-traffic-glow{animation:fmGlow 2s ease-in-out infinite}
     .flowmap-tooltip{background:#0d0e1a!important;border:1px solid #00e67650!important;border-radius:10px!important;padding:12px 14px!important;box-shadow:0 8px 32px rgba(0,0,0,0.7),0 0 15px rgba(0,230,118,0.1)!important;}
     .flowmap-tooltip::before{border-top-color:#00e67650!important;}
-    .fm-traffic-label,.fm-traffic-label.leaflet-div-icon{background:none!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:none!important;transition:opacity 0.3s ease;margin:0!important;width:auto!important;height:auto!important;outline:none!important;overflow:visible!important;}
+    .fm-traffic-label,.fm-traffic-label.leaflet-div-icon{background:none!important;border:none!important;padding:0!important;box-shadow:none!important;transition:opacity 0.3s ease;margin:0!important;width:auto!important;height:auto!important;outline:none!important;overflow:visible!important;}
     .fm-traffic-label.fm-zoom-far{display:none!important;}
-    .fm-traffic-label.fm-zoom-mid .fm-callout-box{transform:scale(0.75);transform-origin:top left;}
+    .fm-traffic-label.fm-zoom-mid{opacity:1;}
     .fm-traffic-label.fm-zoom-close{opacity:1;}
     .fm-traffic-label.fm-zoom-detail{opacity:1;}
     .fm-callout-box{transition:opacity 0.3s ease,transform 0.2s ease;}
+    .fm-callout-box .fm-detail-row{max-height:0;overflow:hidden;opacity:0;transition:max-height 0.25s ease,opacity 0.2s ease;}
+    .fm-callout-box:hover .fm-detail-row,.fm-callout-box.fm-expanded .fm-detail-row{max-height:80px;opacity:1;}
+    .fm-callout-box:hover{transform:scale(1.05);z-index:9000!important;}
     .fm-leader-line{pointer-events:none;}
+    .fm-cluster-badge{cursor:default;transition:transform 0.2s ease;}
+    .fm-cluster-badge:hover{transform:scale(1.15);}
+    .fm-link-layer-up{z-index:400!important;}
+    .fm-link-layer-degraded{z-index:600!important;}
+    .fm-link-layer-down{z-index:800!important;}
   `;
   document.head.appendChild(s);
 }
