@@ -512,8 +512,22 @@ export default function FlowMapCanvas({
 
     // ── COLLISION DETECTION: Force Y-axis separation for nearby callouts ──
     const map = mapRef.current!;
-    const CALLOUT_W = 120;
-    const CALLOUT_H = 36;
+    const CALLOUT_W = 220;
+    const CALLOUT_H = 60;
+
+    // ── VIEWPORT CLAMPING: keep callouts within visible area ──
+    const mapSize = map.getSize();
+    const CLAMP_PAD = 12;
+    function clampToViewport(latlng: [number, number]): [number, number] {
+      const pt = map.latLngToContainerPoint(latlng);
+      const cx = Math.max(CLAMP_PAD + CALLOUT_W / 2, Math.min(mapSize.x - CLAMP_PAD - CALLOUT_W / 2, pt.x));
+      const cy = Math.max(CLAMP_PAD + CALLOUT_H / 2, Math.min(mapSize.y - CLAMP_PAD - CALLOUT_H / 2, pt.y));
+      if (cx !== pt.x || cy !== pt.y) {
+        const clamped = map.containerPointToLatLng(L.point(cx, cy));
+        return [clamped.lat, clamped.lng];
+      }
+      return latlng;
+    }
 
     function getPixelRect(latlng: [number, number]): { x: number; y: number; w: number; h: number } {
       const pt = map.latLngToContainerPoint(latlng);
