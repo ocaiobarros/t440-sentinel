@@ -302,7 +302,7 @@ export default function FlowMapCanvas({
     });
   }, [focusHost]);
 
-  /* Zoom-responsive label sizing */
+  /* Zoom-responsive label sizing + clustering */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -314,6 +314,13 @@ export default function FlowMapCanvas({
       labels.forEach((el) => {
         el.classList.remove("fm-zoom-far", "fm-zoom-mid", "fm-zoom-close", "fm-zoom-detail");
         el.classList.add(cls);
+      });
+      // Show/hide cluster badges vs individual callouts
+      document.querySelectorAll(".fm-cluster-marker").forEach((el) => {
+        (el as HTMLElement).style.display = zoom <= 9 ? "" : "none";
+      });
+      document.querySelectorAll(".fm-individual-callout").forEach((el) => {
+        (el as HTMLElement).style.display = zoom > 9 ? "" : "none";
       });
     }
 
