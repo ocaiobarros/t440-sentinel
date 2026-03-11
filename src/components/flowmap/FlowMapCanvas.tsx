@@ -145,13 +145,21 @@ function ensurePulseStyle() {
     .fm-traffic-glow{animation:fmGlow 2s ease-in-out infinite}
     .flowmap-tooltip{background:#0d0e1a!important;border:1px solid #00e67650!important;border-radius:10px!important;padding:12px 14px!important;box-shadow:0 8px 32px rgba(0,0,0,0.7),0 0 15px rgba(0,230,118,0.1)!important;}
     .flowmap-tooltip::before{border-top-color:#00e67650!important;}
-    .fm-traffic-label,.fm-traffic-label.leaflet-div-icon{background:none!important;border:none!important;padding:0!important;box-shadow:none!important;pointer-events:none!important;transition:opacity 0.3s ease;margin:0!important;width:auto!important;height:auto!important;outline:none!important;overflow:visible!important;}
+    .fm-traffic-label,.fm-traffic-label.leaflet-div-icon{background:none!important;border:none!important;padding:0!important;box-shadow:none!important;transition:opacity 0.3s ease;margin:0!important;width:auto!important;height:auto!important;outline:none!important;overflow:visible!important;}
     .fm-traffic-label.fm-zoom-far{display:none!important;}
-    .fm-traffic-label.fm-zoom-mid .fm-callout-box{transform:scale(0.75);transform-origin:top left;}
+    .fm-traffic-label.fm-zoom-mid{opacity:1;}
     .fm-traffic-label.fm-zoom-close{opacity:1;}
     .fm-traffic-label.fm-zoom-detail{opacity:1;}
     .fm-callout-box{transition:opacity 0.3s ease,transform 0.2s ease;}
+    .fm-callout-box .fm-detail-row{max-height:0;overflow:hidden;opacity:0;transition:max-height 0.25s ease,opacity 0.2s ease;}
+    .fm-callout-box:hover .fm-detail-row,.fm-callout-box.fm-expanded .fm-detail-row{max-height:80px;opacity:1;}
+    .fm-callout-box:hover{transform:scale(1.05);z-index:9000!important;}
     .fm-leader-line{pointer-events:none;}
+    .fm-cluster-badge{cursor:default;transition:transform 0.2s ease;}
+    .fm-cluster-badge:hover{transform:scale(1.15);}
+    .fm-link-layer-up{z-index:400!important;}
+    .fm-link-layer-degraded{z-index:600!important;}
+    .fm-link-layer-down{z-index:800!important;}
   `;
   document.head.appendChild(s);
 }
@@ -294,7 +302,7 @@ export default function FlowMapCanvas({
     });
   }, [focusHost]);
 
-  /* Zoom-responsive label sizing */
+  /* Zoom-responsive label sizing + clustering */
   useEffect(() => {
     const map = mapRef.current;
     if (!map) return;
@@ -306,6 +314,13 @@ export default function FlowMapCanvas({
       labels.forEach((el) => {
         el.classList.remove("fm-zoom-far", "fm-zoom-mid", "fm-zoom-close", "fm-zoom-detail");
         el.classList.add(cls);
+      });
+      // Show/hide cluster badges vs individual callouts
+      document.querySelectorAll(".fm-cluster-marker").forEach((el) => {
+        (el as HTMLElement).style.display = zoom <= 9 ? "" : "none";
+      });
+      document.querySelectorAll(".fm-individual-callout").forEach((el) => {
+        (el as HTMLElement).style.display = zoom > 9 ? "" : "none";
       });
     }
 
@@ -352,8 +367,32 @@ export default function FlowMapCanvas({
       return `${bps.toFixed(0)} bps`;
     };
 
-    // Links
-    links.forEach((link, linkIdx) => {
+    // ── 🅰️ Z-INDEX PRIORITIZATION: Sort links so DOWN/DEGRADED render LAST (on top) ──
+    const linkPriority = (st: string) => st === "DOWN" ? 2 : st === "DEGRADED" ? 1 : 0;
+    const sortedLinks = [...links].sort((a, b) => {
+      const sa = linkStatuses[a.id]?.status ?? "UNKNOWN";
+      const sb = linkStatuses[b.id]?.status ?? "UNKNOWN";
+      return linkPriority(sa) - linkPriority(sb);
+    });
+
+    // ── Collect callout data for collision detection ──
+    interface CalloutData {
+      midPoint: [number, number];
+      calloutPoint: [number, number];
+      linkSt: string;
+      qualityColor: string;
+      oName: string;
+      dName: string;
+      ulBps: number | null;
+      dlBps: number | null;
+      util: number | null;
+      totalErrors: number;
+      linkIdx: number;
+    }
+    const callouts: CalloutData[] = [];
+
+    // Links rendering
+    sortedLinks.forEach((link, sortedIdx) => {
       const originHost = hosts.find((h) => h.id === link.origin_host_id);
       const destHost = hosts.find((h) => h.id === link.dest_host_id);
       if (!originHost || !destHost) return;
@@ -372,6 +411,8 @@ export default function FlowMapCanvas({
       const weight = linkSt === "DOWN" ? 10 : linkSt === "DEGRADED" ? 9 : isImpacted ? 10 : link.is_ring ? 8 : 7;
       const dashArray = linkSt === "DOWN" ? "10, 6" : linkSt === "DEGRADED" ? "6, 4" : isImpacted ? "8, 4" : undefined;
       const pulseClass = linkSt === "DOWN" ? "fm-link-pulse" : linkSt === "DEGRADED" ? "fm-link-pulse-slow" : "fm-traffic-glow";
+      // Z-index CSS class for layering
+      const zClass = linkSt === "DOWN" ? "fm-link-layer-down" : linkSt === "DEGRADED" ? "fm-link-layer-degraded" : "fm-link-layer-up";
       const opacity = hasIncident && !isAffected ? 0.25 : 0.9;
 
       const coords =
@@ -382,11 +423,12 @@ export default function FlowMapCanvas({
               [destHost.lat, destHost.lon] as [number, number],
             ];
 
-      // Glow underlay for visibility
+      // Glow underlay
       const glowLine = L.polyline(coords, {
         color,
         weight: weight + 4,
         opacity: 0.15,
+        className: zClass,
       });
       glowLine.addTo(linesLayer);
 
@@ -396,17 +438,17 @@ export default function FlowMapCanvas({
         weight,
         opacity,
         dashArray,
-        className: pulseClass,
+        className: `${pulseClass} ${zClass}`,
       });
 
-      // Traffic flow animation overlay — bold dashes
+      // Traffic flow animation (only for UP links)
       if (linkSt === "UP" || linkSt === "UNKNOWN") {
         const flowLine = L.polyline(coords, {
           color: "#00e5ff",
           weight: weight + 2,
           opacity: 0.45,
           dashArray: "8, 32",
-          className: "fm-traffic-flow",
+          className: `fm-traffic-flow ${zClass}`,
         });
         flowLine.addTo(linesLayer);
       }
@@ -427,7 +469,7 @@ export default function FlowMapCanvas({
 
       polyline.addTo(linesLayer);
 
-      // ── Callout box with leader line for link traffic ──
+      // ── Collect callout data ──
       const midLat = (originHost.lat + destHost.lat) / 2;
       const midLon = (originHost.lon + destHost.lon) / 2;
       const midPoint: [number, number] = [midLat, midLon];
@@ -435,41 +477,144 @@ export default function FlowMapCanvas({
       const ulBps = traffic?.sideA?.out_bps ?? traffic?.sideB?.out_bps;
       const dlBps = traffic?.sideA?.in_bps ?? traffic?.sideB?.in_bps;
       const util = traffic?.sideA?.utilization ?? traffic?.sideB?.utilization;
-      const hasTelemetry = dlBps != null || ulBps != null;
       const totalErrors = (traffic?.sideA?.errors_in ?? 0) + (traffic?.sideA?.errors_out ?? 0) + (traffic?.sideB?.errors_in ?? 0) + (traffic?.sideB?.errors_out ?? 0);
 
       const qualityColor = linkSt === "DOWN" ? "#ff1744" : linkSt === "DEGRADED" ? "#ff9100" : "#00e676";
-      const qualityLabel = linkSt === "DOWN" ? "⛔ DOWN" : linkSt === "DEGRADED" ? "⚠ DEGRADED" : "✔ UP";
+      const oName = originHost.host_name || originHost.zabbix_host_id;
+      const dName = destHost.host_name || destHost.zabbix_host_id;
 
-      const utilVal = util ?? 0;
-      const utilColor = utilVal > 80 ? "#ff1744" : utilVal > 50 ? "#ff9100" : "#00e676";
-
-      // Calculate perpendicular offset for callout position
+      // Calculate perpendicular offset
       const dLat = destHost.lat - originHost.lat;
       const dLon = destHost.lon - originHost.lon;
       const linkLen = Math.sqrt(dLat * dLat + dLon * dLon);
       const offsetFactor = Math.max(0.08, Math.min(0.25, linkLen * 0.3));
-      const side = linkIdx % 2 === 0 ? 1 : -1;
+      const side = sortedIdx % 2 === 0 ? 1 : -1;
       const perpLat = side * (-dLon / (linkLen || 1)) * offsetFactor;
       const perpLon = side * (dLat / (linkLen || 1)) * offsetFactor;
-      const calloutLat = midLat + perpLat;
-      const calloutLon = midLon + perpLon;
-      const calloutPoint: [number, number] = [calloutLat, calloutLon];
 
-      // Origin & dest names
-      const oName = originHost.host_name || originHost.zabbix_host_id;
-      const dName = destHost.host_name || destHost.zabbix_host_id;
+      callouts.push({
+        midPoint,
+        calloutPoint: [midLat + perpLat, midLon + perpLon],
+        linkSt,
+        qualityColor,
+        oName,
+        dName,
+        ulBps,
+        dlBps,
+        util,
+        totalErrors,
+        linkIdx: sortedIdx,
+      });
+    });
 
-      // Status badge colors
+    // ── 🅱️ COLLISION DETECTION: Nudge overlapping callout positions in pixel space ──
+    const map = mapRef.current!;
+    const CALLOUT_W = 160; // estimated callout width in pixels
+    const CALLOUT_H = 50;  // estimated callout height in pixels
+
+    function getPixelRect(latlng: [number, number]): { x: number; y: number; w: number; h: number } {
+      const pt = map.latLngToContainerPoint(latlng);
+      return { x: pt.x - CALLOUT_W / 2, y: pt.y - CALLOUT_H / 2, w: CALLOUT_W, h: CALLOUT_H };
+    }
+
+    function rectsOverlap(a: ReturnType<typeof getPixelRect>, b: ReturnType<typeof getPixelRect>): boolean {
+      return !(a.x + a.w < b.x || b.x + b.w < a.x || a.y + a.h < b.y || b.y + b.h < a.y);
+    }
+
+    // Nudge overlapping callouts
+    const placedRects: Array<ReturnType<typeof getPixelRect>> = [];
+    for (const c of callouts) {
+      let rect = getPixelRect(c.calloutPoint);
+      let attempts = 0;
+      while (attempts < 8 && placedRects.some((pr) => rectsOverlap(rect, pr))) {
+        // Nudge away from midpoint in alternating directions
+        const nudgeDir = attempts % 4;
+        const nudgePx = 30 + attempts * 15;
+        const nudgePt = map.latLngToContainerPoint(c.calloutPoint);
+        const newPt = L.point(
+          nudgePt.x + (nudgeDir === 0 ? nudgePx : nudgeDir === 2 ? -nudgePx : 0),
+          nudgePt.y + (nudgeDir === 1 ? nudgePx : nudgeDir === 3 ? -nudgePx : 0),
+        );
+        const newLatLng = map.containerPointToLatLng(newPt);
+        c.calloutPoint = [newLatLng.lat, newLatLng.lng];
+        rect = getPixelRect(c.calloutPoint);
+        attempts++;
+      }
+      placedRects.push(rect);
+    }
+
+    // ── 🅲 ZOOM CLUSTERING: At mid-zoom, group nearby links into summary badges ──
+    const currentZoom = map.getZoom();
+    if (currentZoom <= 9 && callouts.length > 0) {
+      // Cluster callouts by geographic proximity (grid-based)
+      const gridSize = 0.5; // degrees
+      const clusters = new Map<string, { lats: number[]; lons: number[]; up: number; degraded: number; down: number }>();
+
+      for (const c of callouts) {
+        const gx = Math.floor(c.midPoint[0] / gridSize);
+        const gy = Math.floor(c.midPoint[1] / gridSize);
+        const key = `${gx}:${gy}`;
+        if (!clusters.has(key)) clusters.set(key, { lats: [], lons: [], up: 0, degraded: 0, down: 0 });
+        const cl = clusters.get(key)!;
+        cl.lats.push(c.midPoint[0]);
+        cl.lons.push(c.midPoint[1]);
+        if (c.linkSt === "DOWN") cl.down++;
+        else if (c.linkSt === "DEGRADED") cl.degraded++;
+        else cl.up++;
+      }
+
+      clusters.forEach((cl) => {
+        const avgLat = cl.lats.reduce((a, b) => a + b, 0) / cl.lats.length;
+        const avgLon = cl.lons.reduce((a, b) => a + b, 0) / cl.lons.length;
+        const total = cl.up + cl.degraded + cl.down;
+        const worstColor = cl.down > 0 ? "#ff1744" : cl.degraded > 0 ? "#ff9100" : "#00e676";
+        const borderGlow = cl.down > 0 ? "box-shadow:0 0 12px #ff174460;" : cl.degraded > 0 ? "box-shadow:0 0 10px #ff910040;" : "";
+
+        const badgeHtml = `
+          <div class="fm-cluster-badge" style="
+            font-family:'JetBrains Mono',monospace;
+            background:rgba(8,10,24,0.94);
+            border:2px solid ${worstColor}60;
+            border-radius:12px;
+            padding:5px 10px;
+            text-align:center;
+            ${borderGlow}
+            backdrop-filter:blur(4px);
+          ">
+            <div style="font-size:16px;font-weight:800;color:${worstColor};">${total}</div>
+            <div style="font-size:8px;color:#888;text-transform:uppercase;letter-spacing:1px;">enlaces</div>
+            <div style="display:flex;gap:4px;justify-content:center;margin-top:3px;">
+              ${cl.up > 0 ? `<span style="font-size:9px;color:#00e676;font-weight:700;">${cl.up}✔</span>` : ""}
+              ${cl.degraded > 0 ? `<span style="font-size:9px;color:#ff9100;font-weight:700;">${cl.degraded}⚠</span>` : ""}
+              ${cl.down > 0 ? `<span style="font-size:9px;color:#ff1744;font-weight:700;">${cl.down}⛔</span>` : ""}
+            </div>
+          </div>`;
+
+        const clusterIcon = L.divIcon({
+          className: "fm-traffic-label fm-cluster-marker",
+          html: badgeHtml,
+          iconSize: L.point(0, 0),
+          iconAnchor: L.point(0, 0),
+        });
+        L.marker([avgLat, avgLon], { icon: clusterIcon, interactive: false }).addTo(labelsLayer);
+      });
+    }
+
+    // ── 🅳 INDIVIDUAL CALLOUT BOXES (hover-expand, visible at zoom > 9) ──
+    callouts.forEach((c) => {
+      const { calloutPoint, midPoint, qualityColor, oName, dName, linkSt, ulBps, dlBps, util, totalErrors } = c;
+      const hasTelemetry = dlBps != null || ulBps != null;
+      const utilVal = util ?? 0;
+      const utilColor = utilVal > 80 ? "#ff1744" : utilVal > 50 ? "#ff9100" : "#00e676";
       const statusBg = linkSt === "DOWN" ? "rgba(255,23,68,0.15)" : linkSt === "DEGRADED" ? "rgba(255,145,0,0.15)" : "rgba(0,230,118,0.12)";
-      const statusDot = linkSt === "DOWN" ? "#ff1744" : linkSt === "DEGRADED" ? "#ff9100" : "#00e676";
+      const statusDot = qualityColor;
       const statusText = linkSt === "DOWN" ? "DOWN" : linkSt === "DEGRADED" ? "DEGRADED" : "UP";
 
-      // Build rows
-      let trafficRows = "";
+      // Detail rows hidden by default, shown on hover via CSS
+      let detailRows = "";
       if (hasTelemetry) {
-        trafficRows += `
-          <div style="display:flex;gap:10px;justify-content:space-between;margin-top:5px;">
+        detailRows += `
+          <div class="fm-detail-row" style="display:flex;gap:10px;justify-content:space-between;margin-top:5px;">
             <div style="display:flex;align-items:center;gap:3px;">
               <span style="color:#ff9100;font-size:10px;">▲</span>
               <span style="color:#ff9100;font-weight:700;font-size:12px;">${fmtBps(ulBps)}</span>
@@ -480,17 +625,18 @@ export default function FlowMapCanvas({
             </div>
           </div>`;
       }
-
-      let metaRow = "";
       if (util != null || totalErrors > 0) {
         const parts: string[] = [];
         if (util != null) parts.push(`<span style="color:${utilColor};font-weight:600;">${utilVal.toFixed(1)}%</span>`);
         if (totalErrors > 0) parts.push(`<span style="color:#ff1744;font-weight:600;">⚠ ${totalErrors} err</span>`);
-        metaRow = `<div style="display:flex;gap:8px;justify-content:center;font-size:10px;margin-top:3px;padding-top:3px;border-top:1px solid rgba(255,255,255,0.06);">${parts.join("")}</div>`;
+        detailRows += `<div class="fm-detail-row" style="display:flex;gap:8px;justify-content:center;font-size:10px;margin-top:3px;padding-top:3px;border-top:1px solid rgba(255,255,255,0.06);">${parts.join("")}</div>`;
       }
 
+      // For DOWN/DEGRADED, always show details (expanded)
+      const autoExpand = linkSt === "DOWN" || linkSt === "DEGRADED" ? " fm-expanded" : "";
+
       const labelHtml = `
-        <div class="fm-callout-box" style="
+        <div class="fm-callout-box${autoExpand}" style="
           font-family:'JetBrains Mono',monospace;
           background:rgba(8,10,24,0.92);
           border:1px solid ${qualityColor}40;
@@ -501,28 +647,29 @@ export default function FlowMapCanvas({
           min-width:140px;
           box-shadow:0 4px 20px rgba(0,0,0,0.65), 0 0 8px ${qualityColor}15;
           backdrop-filter:blur(6px);
+          cursor:default;
         ">
           <div style="font-size:9px;color:#aaa;line-height:1.2;text-align:center;max-width:220px;overflow:hidden;text-overflow:ellipsis;letter-spacing:0.3px;">${oName} ⟷ ${dName}</div>
           <div style="display:flex;align-items:center;justify-content:center;gap:5px;margin-top:4px;padding:2px 6px;border-radius:4px;background:${statusBg};">
             <span style="width:7px;height:7px;border-radius:50%;background:${statusDot};box-shadow:0 0 6px ${statusDot}80;display:inline-block;"></span>
             <span style="font-size:11px;color:${qualityColor};font-weight:700;letter-spacing:0.5px;">${statusText}</span>
           </div>
-          ${trafficRows}
-          ${metaRow}
+          ${detailRows}
         </div>
       `;
 
       const labelIcon = L.divIcon({
-        className: "fm-traffic-label",
+        className: "fm-traffic-label fm-individual-callout",
         html: labelHtml,
         iconSize: L.point(0, 0),
         iconAnchor: L.point(0, 0),
       });
 
-      const labelMarker = L.marker(calloutPoint, { icon: labelIcon, interactive: false });
+      // Enable pointer events for hover interaction
+      const labelMarker = L.marker(calloutPoint, { icon: labelIcon, interactive: true });
       labelMarker.addTo(labelsLayer);
 
-      // Leader line (dashed connector from callout to link center)
+      // Leader line
       const leaderLine = L.polyline([calloutPoint, midPoint], {
         color: qualityColor,
         weight: 1.2,
