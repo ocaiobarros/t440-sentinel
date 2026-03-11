@@ -388,6 +388,45 @@ export default function FlowMapCanvas({
     }
     const callouts: CalloutData[] = [];
 
+    // ── PARALLEL LINK DETECTION: group links by host pair ──
+    const pairKey = (a: string, b: string) => [a, b].sort().join("::");
+    const pairGroups = new Map<string, FlowMapLink[]>();
+    for (const link of sortedLinks) {
+      const key = pairKey(link.origin_host_id, link.dest_host_id);
+      if (!pairGroups.has(key)) pairGroups.set(key, []);
+      pairGroups.get(key)!.push(link);
+    }
+
+    /** Offset polyline coords laterally for parallel links */
+    function offsetCoords(
+      coords: [number, number][],
+      offsetPx: number,
+    ): [number, number][] {
+      if (offsetPx === 0 || coords.length < 2) return coords;
+      // Convert offset from pixels to approximate lat/lng at current zoom
+      const zoom = mapRef.current!.getZoom();
+      // ~1px in degrees at equator for given zoom
+      const pxDeg = 360 / (256 * Math.pow(2, zoom));
+      const result: [number, number][] = [];
+      for (let i = 0; i < coords.length; i++) {
+        // Compute perpendicular direction from segment
+        let dx = 0, dy = 0;
+        if (i < coords.length - 1) {
+          dy = coords[i + 1][0] - coords[i][0];
+          dx = coords[i + 1][1] - coords[i][1];
+        } else {
+          dy = coords[i][0] - coords[i - 1][0];
+          dx = coords[i][1] - coords[i - 1][1];
+        }
+        const len = Math.sqrt(dx * dx + dy * dy) || 1;
+        // Perpendicular: rotate 90° → (-dy, dx) normalized
+        const perpLat = (-dx / len) * offsetPx * pxDeg;
+        const perpLon = (dy / len) * offsetPx * pxDeg;
+        result.push([coords[i][0] + perpLat, coords[i][1] + perpLon]);
+      }
+      return result;
+    }
+
     // Links rendering
     sortedLinks.forEach((link, sortedIdx) => {
       const originHost = hosts.find((h) => h.id === link.origin_host_id);
@@ -411,13 +450,26 @@ export default function FlowMapCanvas({
       const zClass = linkSt === "DOWN" ? "fm-link-layer-down" : linkSt === "DEGRADED" ? "fm-link-layer-degraded" : "fm-link-layer-up";
       const opacity = hasIncident && !isAffected ? 0.25 : 0.9;
 
-      const coords =
+      // ── PARALLEL OFFSET: shift coords for duplicate links on same pair ──
+      const pk = pairKey(link.origin_host_id, link.dest_host_id);
+      const siblings = pairGroups.get(pk) ?? [link];
+      const sibIdx = siblings.indexOf(link);
+      const sibCount = siblings.length;
+      // Offset in pixels: spread evenly around center. E.g. 2 links → -8px, +8px
+      const PARALLEL_GAP_PX = 16;
+      const parallelOffset = sibCount > 1
+        ? (sibIdx - (sibCount - 1) / 2) * PARALLEL_GAP_PX
+        : 0;
+
+      const rawCoords =
         link.geometry?.coordinates?.length >= 2
           ? link.geometry.coordinates.map(([lon, lat]) => [lat, lon] as [number, number])
           : [
               [originHost.lat, originHost.lon] as [number, number],
               [destHost.lat, destHost.lon] as [number, number],
             ];
+
+      const coords = offsetCoords(rawCoords, parallelOffset);
 
       // Glow underlay
       const glowLine = L.polyline(coords, {
@@ -465,9 +517,10 @@ export default function FlowMapCanvas({
 
       polyline.addTo(linesLayer);
 
-      // ── Collect callout data ──
-      const midLat = (originHost.lat + destHost.lat) / 2;
-      const midLon = (originHost.lon + destHost.lon) / 2;
+      // ── Collect callout data (use offset midpoint for parallel links) ──
+      const midIdx = Math.floor(coords.length / 2);
+      const midLat = coords[midIdx][0];
+      const midLon = coords[midIdx][1];
       const midPoint: [number, number] = [midLat, midLon];
 
       const ulBps = traffic?.sideA?.out_bps ?? traffic?.sideB?.out_bps;
